@@ -141,28 +141,30 @@ flowchart TB
 
 ### Gateway & Auth Flow
 
-```mermaid
-sequenceDiagram
+```sequenceDiagram
     autonumber
-    actor User as User / Browser
-    participant GW as API Gateway (:8000)
-    participant Redis as Shared Redis (:6379)
-    participant Auth as Auth Service (:8001)
-    participant Downstream as Downstream Service (:8002 - :8005)
 
-    User->>Auth: POST /api/auth/login { token: FirebaseIdToken }
-    Auth->>Auth: Verify Token via firebase-admin
+    actor User as User Browser
+    participant GW as API Gateway
+    participant Redis as Redis Session Store
+    participant Auth as Auth Service
+    participant DS as Downstream Services
+
+    User->>Auth: POST Login with Firebase ID Token
+    Auth->>Auth: Verify Firebase Token
     Auth->>Auth: Find or Create User in MongoDB
-    Auth->>Redis: SET session:${uuid} -> { userId, name, email, interviewCoin }
-    Auth-->>User: Set-Cookie: session=${uuid}; HttpOnly; Secure; SameSite=None
+    Auth->>Redis: Create User Session
+    Auth-->>User: Return Session Cookie
 
-    Note over User,GW: Subsequent Protected Requests (e.g. /api/interview/start)
-    User->>GW: POST /api/interview/start (Cookie: session=${uuid})
-    GW->>Redis: GET session:${uuid}
-    Redis-->>GW: User session JSON
-    GW->>Downstream: Forward request with Header: "x-user-id: ${userId}"
-    Downstream-->>GW: Response Payload
-    GW-->>User: Response Payload
+    Note over User,GW: Subsequent Protected Requests
+
+    User->>GW: Send API Request with Session Cookie
+    GW->>Redis: Validate Session
+    Redis-->>GW: Return User Session Data
+    GW->>GW: Extract Authenticated User ID
+    GW->>DS: Forward Request with User ID Header
+    DS-->>GW: Return Response
+    GW-->>User: Send API Response
 ```
 
 ### AI Agent StateGraph Architecture
