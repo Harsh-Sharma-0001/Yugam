@@ -141,7 +141,10 @@ flowchart TB
 
 ### Gateway & Auth Flow
 
-```sequenceDiagram
+### Gateway & Auth Flow
+
+```mermaid
+sequenceDiagram
     autonumber
 
     actor User as User Browser
