@@ -141,8 +141,6 @@ flowchart TB
 
 ### Gateway & Auth Flow
 
-### Gateway & Auth Flow
-
 ```mermaid
 sequenceDiagram
     autonumber
