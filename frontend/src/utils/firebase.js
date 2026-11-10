@@ -3,11 +3,11 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_APIKEY,
-  authDomain: "yugam-c4c5f.firebaseapp.com",
-  projectId: "yugam-c4c5f",
-  storageBucket: "yugam-c4c5f.firebasestorage.app",
-  messagingSenderId: "496047137605",
-  appId: "1:496047137605:web:5f20dea2d8b3d354b4942c",
+  authDomain: "yugaminterviewplatform.firebaseapp.com",
+  projectId: "yugaminterviewplatform",
+  storageBucket: "yugaminterviewplatform.firebasestorage.app",
+  messagingSenderId: "298314443648",
+  appId: "1:298314443648:web:89e64b994919ae1b876f65"
 };
 
 const app = initializeApp(firebaseConfig);
