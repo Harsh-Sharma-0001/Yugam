@@ -20,18 +20,30 @@ export const generateRoadmap =async (req,res)=> {
         message: "Role and Target Package are required.",
       });}
 
-      if(useResume && !resume){
-         return res.status(400).json({
-        success: false,
-        message: "Resume data is required.",
-      });
+      let activeResume = resume;
+      if (useResume && (!activeResume || !activeResume.skills || activeResume.skills.length === 0)) {
+        try {
+          const cached = await redis.get(`resume:${userId}`);
+          if (cached) {
+            activeResume = JSON.parse(cached);
+          }
+        } catch (cacheErr) {
+          console.error("Roadmap redis resume fetch error:", cacheErr);
+        }
+      }
+
+      if (useResume && (!activeResume || !activeResume.skills)) {
+        return res.status(400).json({
+          success: false,
+          message: "No analyzed resume found for your account. Please upload your resume first or disable the resume option.",
+        });
       }
 
       const result = await graph.invoke({
         role,
-      targetPackage,
-      useResume,
-      resume,
+        targetPackage,
+        useResume: Boolean(useResume && activeResume),
+        resume: activeResume || null,
       })
 
       const roadmap = await Roadmap.create({

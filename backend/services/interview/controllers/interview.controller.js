@@ -7,25 +7,37 @@ import Interview from "../models/interview.model.js";
 export const startInterview = async (req, res) => {
     try {
         const userId = req.headers["x-user-id"]
-        const {
+        let {
             type,
             role,
             useResume = false,
             resume = {}, } = req.body;
 
-        if (!type && !role) {
+        if (!type || !role) {
             return res.status(400).json({
                 success: false,
                 message: "Interview type and role are required",
             });
         }
 
+        let activeResume = resume;
+        if (useResume && (!activeResume || !activeResume.skills || activeResume.skills.length === 0)) {
+            try {
+                const cached = await redis.get(`resume:${userId}`);
+                if (cached) {
+                    activeResume = JSON.parse(cached);
+                }
+            } catch (cacheErr) {
+                console.error("Interview redis resume cache error:", cacheErr);
+            }
+        }
+
         const result = await graph.invoke({
             action: "start",
             role,
             type,
-            useResume,
-            resume
+            useResume: Boolean(useResume && activeResume),
+            resume: activeResume || {}
         })
 
         const questions = result.questions;

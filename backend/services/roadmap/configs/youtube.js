@@ -1,72 +1,59 @@
-import dotenv from "dotenv"
-dotenv.config()
-import axios from "axios"
+import dotenv from "dotenv";
+dotenv.config();
+import axios from "axios";
 
+const BASE_URL = "https://www.googleapis.com/youtube/v3/search";
 
-const BASE_URL = "https://www.googleapis.com/youtube/v3/search"
+const searchVideo = async (topic, role = "") => {
+  const cleanTopic = String(topic || "").trim();
+  const cleanRole = String(role || "").trim();
+  const defaultQuery = cleanRole ? `${cleanTopic} ${cleanRole} complete tutorial` : `${cleanTopic} complete tutorial`;
+  const fallbackUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(defaultQuery)}`;
 
+  if (!process.env.YOUTUBE_API_KEY) {
+    return {
+      title: `${cleanTopic} Tutorial`,
+      channel: "YouTube",
+      url: fallbackUrl,
+    };
+  }
 
-const searchVideo = async (topic) => {
   try {
-    let query = `Virtual Code ${topic}`
-    let { data } = await axios.get(BASE_URL, {
+    const { data } = await axios.get(BASE_URL, {
       params: {
         key: process.env.YOUTUBE_API_KEY,
         part: "snippet",
-        q: query,
+        q: defaultQuery,
         maxResults: 1,
         type: "video",
       },
-    })
+    });
 
-    if (data.items.length > 0) {
+    if (data?.items && data.items.length > 0) {
       const video = data.items[0];
-
-      if (
-        video.snippet.channelTitle
-          .toLowerCase()
-          .includes("virtual code")
-      ) {
+      const videoId = video.id?.videoId;
+      if (videoId) {
         return {
-          title: video.snippet.title,
-          channel: video.snippet.channelTitle,
-          url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
+          title: video.snippet?.title || `${cleanTopic} Tutorial`,
+          channel: video.snippet?.channelTitle || "YouTube",
+          url: `https://www.youtube.com/watch?v=${videoId}`,
         };
       }
     }
 
-
-     query = `${topic} tutorial`;
-
-     ({ data } = await axios.get(BASE_URL, {
-      params: {
-        key: process.env.YOUTUBE_API_KEY,
-        part: "snippet",
-        q: query,
-        maxResults: 1,
-        type: "video",
-      },
-    }))
-
-    if (data.items.length > 0) {
-      const video = data.items[0];
-
-        return {
-          title: video.snippet.title,
-          channel: video.snippet.channelTitle,
-          url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
-        };
-      }
-    
-      return null
-
+    return {
+      title: `${cleanTopic} Tutorial`,
+      channel: "YouTube",
+      url: fallbackUrl,
+    };
   } catch (error) {
-
-
-    console.log(error)
-    return null;
-
+    console.warn("YouTube API search warning:", error?.message);
+    return {
+      title: `${cleanTopic} Tutorial`,
+      channel: "YouTube",
+      url: fallbackUrl,
+    };
   }
-}
+};
 
-export default searchVideo
+export default searchVideo;

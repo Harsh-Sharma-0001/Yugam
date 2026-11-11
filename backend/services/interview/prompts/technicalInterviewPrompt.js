@@ -1,313 +1,97 @@
+const formatProjects = (projects) => {
+  if (!Array.isArray(projects) || projects.length === 0) return "None provided";
+  return projects
+    .map((p, idx) => {
+      if (typeof p === "string") return `${idx + 1}. ${p}`;
+      const techs = Array.isArray(p.technologies) ? p.technologies.filter(Boolean).join(", ") : "";
+      return `${idx + 1}. Project: ${p.name || "Untitled"}\n   Description: ${p.description || "N/A"}\n   Tech Stack: ${techs || "N/A"}`;
+    })
+    .join("\n");
+};
+
+const formatExperience = (experience) => {
+  if (!Array.isArray(experience) || experience.length === 0) return "None provided";
+  return experience
+    .map((e, idx) => {
+      if (typeof e === "string") return `${idx + 1}. ${e}`;
+      const resps = Array.isArray(e.responsibilities) ? e.responsibilities.filter(Boolean).join("; ") : "";
+      return `${idx + 1}. Role: ${e.role || "Developer"} at ${e.company || "Company"} (${e.dates || "N/A"})\n   Responsibilities: ${resps || "N/A"}`;
+    })
+    .join("\n");
+};
+
 const technicalInterviewPrompt = ({
   role,
   useResume,
   resume,
 }) => `
+You are a Principal Software Architect and Senior Technical Interviewer.
 
-You are a Senior Technical Interviewer.
+Your sole objective is to conduct a RIGOROUS, 100% TECHNICAL interview.
+Return VALID JSON only. No markdown formatting, no commentary.
 
-Generate realistic technical interview questions.
-
-Return VALID JSON only.
-
-Candidate Role:
-
-${role}
+Candidate Target Role:
+${role || "Software Engineer"}
 
 Resume Available:
-
-${useResume ? "YES" : "NO"}
+${useResume && resume ? "YES" : "NO"}
 
 ${
-useResume
-? `
-Resume
-
-Summary:
-${resume?.summary}
-
-Skills:
-${resume?.skills?.join(", ")}
-
-Projects:
-${resume?.projects?.join(", ")}
-
-Strengths:
-${resume?.strengths?.join(", ")}
-
-Weaknesses:
-${resume?.weaknesses?.join(", ")}
-
-Missing Skills:
-${resume?.missingSkills?.join(", ")}
-
-Recommendations:
-${resume?.recommendations?.join(", ")}
+  useResume && resume
+    ? `
+Candidate Resume Context:
+- Summary: ${resume.summary || "N/A"}
+- Declared Skills: ${Array.isArray(resume.skills) ? resume.skills.join(", ") : "N/A"}
+- Verified Projects:
+${formatProjects(resume.projects)}
+- Work Experience:
+${formatExperience(resume.experience)}
+- Strengths: ${Array.isArray(resume.strengths) ? resume.strengths.join(", ") : "N/A"}
+- Missing / Growth Skills: ${Array.isArray(resume.missingSkills) ? resume.missingSkills.join(", ") : "N/A"}
 `
-: ""
+    : ""
 }
 
 =========================
-RULES
+STRICT DOMAIN SEGREGATION & RULES
 =========================
-
-Generate EXACTLY 6 questions.
-
-Each object must contain ONLY:
-
-- question
-- difficulty
-- timer
-
-Difficulty must be ONLY:
-
-- easy
-- medium
-- hard
-
-Never use
-
-- coding
-- practical
-- technical
-- hr
-
-as difficulty.
-
-Difficulty Order
-
-Q1 -> easy
-
-Q2 -> easy
-
-Q3 -> medium
-
-Q4 -> hard
-
-Q5 -> medium
-
-Q6 -> hard
-
-=========================
-Question Rules
-=========================
-
-Question 1-4
-
-Generate conceptual and technical interview questions according to the candidate role.
-
-Examples
-
-Backend
-
-- Node.js
-- Express
-- MongoDB
-- SQL
-- API
-- Authentication
-- Redis
-- System Design
-
-Frontend
-
-- React
-- JavaScript
-- HTML
-- CSS
-- Performance
-- State Management
-
-DevOps
-
-- Docker
-- Kubernetes
-- AWS
-- CI/CD
-
-Data Science
-
-- ML
-- Python
-- Statistics
-
-etc.
-
-Resume should influence the questions if available.
-
-=========================
-Question 5 & Question 6
-=========================
-
-If the candidate belongs to a SOFTWARE DEVELOPMENT role such as:
-
-- Software Engineer
-- Backend Developer
-- Frontend Developer
-- Full Stack Developer
-- MERN Developer
-- Java Developer
-- Python Developer
-- Node.js Developer
-- React Developer
-- Mobile Developer
-- AI Engineer
-
-Generate CODING questions.
-
-Coding is ONLY a question type.
-
-Difficulty remains HARD.
-
-The question should be solvable during a live interview.
-
-Examples
-
-- Implement LRU Cache
-- Reverse Linked List
-- Debounce Function
-- Design Rate Limiter
-- Build REST API
-- Binary Tree Traversal
-
-Timer should be decided according to the coding complexity.
-
-Usually between
-
-600-1800 seconds.
-
-Do NOT always use the same timer.
-
-----------------------------
-
-If the candidate belongs to ANY NON-CODING role such as
-
-- HR
-- Sales
-- Marketing
-- Accountant
-- Business Analyst
-- UI/UX
-- Product Manager
-- QA
-- Network Engineer
-- Support Engineer
-- Data Analyst
-- Cyber Security
-- Cloud Engineer
-- Mechanical Engineer
-- Civil Engineer
-
-Generate PRACTICAL ROLE-SPECIFIC interview questions.
-
-These should simulate real interview scenarios.
-
-Examples
-
-Sales
-
-"Sell me this laptop."
-
-Marketing
-
-"How would you launch a new product?"
-
-UI/UX
-
-"Improve this login page experience."
-
-Cloud
-
-"Your production server suddenly crashes. What will you do?"
-
-Cyber Security
-
-"User credentials are leaked. Explain your response."
-
-QA
-
-"How would you test this e-commerce checkout flow?"
-
-The timer should be based on the complexity.
-
-Generally between
-
-180-600 seconds.
-
-=========================
-Timer Rules
-=========================
-
-The interview should feel like a real live technical interview.
-
-Give slightly less time to create realistic interview pressure.
-
-Minimum timer = 60 seconds.
-
-Do NOT assign fixed timers.
-
-Choose the timer according to the expected complexity.
-
-Recommended ranges:
-
-Basic definition
-60-75 sec
-
-Concept explanation
-75-120 sec
-
-Comparison questions
-90-120 sec
-
-Architecture / Design discussion
-120-180 sec
-
-Debugging scenarios
-120-240 sec
-
-Practical role-based scenarios
-180-300 sec
-
-Coding Questions
-
-Easy coding
-300-420 sec
-
-Medium coding
-420-600 sec
-
-Hard coding
-600-900 sec
-
-Do NOT always use the maximum time.
-
-The timer should feel challenging but achievable in a live interview.
-
-=========================
-
-Return ONLY JSON.
-
-Example
-
+1. 100% STRICTLY TECHNICAL ONLY:
+   - Every single question must be purely technical.
+   - Topics: Data Structures, Algorithms, System Design, Architecture, Database Internals (SQL/NoSQL indexing, ACID, transactions), Network Protocols, Memory Management, Concurrency, Framework Internals, and Live Code Writing.
+   - ABSOLUTE PROHIBITION: NEVER ask behavioral, HR, personal, or situational culture questions (e.g., NEVER ask "Tell me about yourself", "Why this company", "Conflict with teammates", "Greatest weakness", "Where do you see yourself in 5 years").
+
+2. RESUME INTEGRATION:
+   - When Resume Available is YES: Formulate technical questions directly challenging the tech stack, architectural choices, and tools listed in the candidate's projects and work experience (e.g. asking deep architectural questions about how they handled state, caching, data consistency, or scaling in their listed projects).
+   - When Resume Available is NO: Formulate questions targeting industry-standard technical depth for the role "${role}".
+
+3. EXACTLY 6 QUESTIONS:
+   - Q1: Easy - Core Language/Framework Fundamentals & Architecture concepts (Timer: 60-90 sec)
+   - Q2: Easy - Data modeling, API structure, or State/Resource Lifecycle (Timer: 60-90 sec)
+   - Q3: Medium - Scalability, Caching, Concurrency, or System Architecture (Timer: 90-150 sec)
+   - Q4: Hard - Complex Debugging Scenario, Deep Internals, or Distributed System Challenge (Timer: 120-180 sec)
+   - Q5: Medium - Live Coding / Algorithmic Implementation problem (Timer: 300-600 sec)
+   - Q6: Hard - Live Coding / Complex Data Structure & Algorithm problem (Timer: 600-900 sec)
+
+4. OUTPUT FORMAT:
+   Return a JSON array containing EXACTLY 6 objects.
+   Each object must have ONLY these three keys:
+   - "question": string
+   - "difficulty": "easy" | "medium" | "hard"
+   - "timer": number (seconds)
+
+Example JSON Output:
 [
   {
-    "question":"Explain event loop.",
-    "difficulty":"easy",
-    "timer":90
+    "question": "Explain the difference between optimistic and pessimistic locking in database transactions.",
+    "difficulty": "easy",
+    "timer": 90
   },
   {
-    "question":"Implement an LRU Cache.",
-    "difficulty":"hard",
-    "timer":1200
+    "question": "Write a function to implement an LRU (Least Recently Used) cache with O(1) get and put operations.",
+    "difficulty": "hard",
+    "timer": 600
   }
 ]
-
-No markdown.
-
-No explanation.
-
-No extra text.
-
 `;
 
 export default technicalInterviewPrompt;

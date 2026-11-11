@@ -12,6 +12,7 @@ import { ROLE_SKILLS } from "../config/roleSkills.js";
 import {
   analyzeRoleSkills,
   getAvailableRoles,
+  resolveTargetRoleKey,
 } from "../utils/skillMatcher.js";
 
 // --------------------------------------------------
@@ -43,20 +44,7 @@ export const uploadResume = async (req, res) => {
       });
     }
 
-    // 3. Validate target role
-    const targetRole = req.body?.targetRole;
-
-    if (
-      typeof targetRole !== "string" ||
-      !Object.hasOwn(ROLE_SKILLS, targetRole)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please select a valid target role",
-      });
-    }
-
-    // 4. Extract text from PDF
+    // 3. Extract text from PDF
     const resumeText = await extractText(file.path);
 
     if (!resumeText || !resumeText.trim()) {
@@ -66,7 +54,7 @@ export const uploadResume = async (req, res) => {
       });
     }
 
-    // 5. Extract structured resume information using AI
+    // 4. Extract structured resume information using AI
     const resumeData = await resumeAgent(resumeText);
 
     if (
@@ -77,9 +65,17 @@ export const uploadResume = async (req, res) => {
       throw new Error("Invalid structured response from Resume AI");
     }
 
+    // 5. Resolve target role & domain
+    // If the client explicitly provided a targetRole, respect it.
+    // Otherwise, dynamically derive the role from the resume's own AI extraction (suggestedRole).
+    const rawRole = (req.body?.targetRole || "").trim();
+    const effectiveRoleName = rawRole || resumeData?.suggestedRole || "Full-Stack Software Engineer";
+    const targetRoleKey = resolveTargetRoleKey(effectiveRoleName) || "custom-track";
+
     // 6. Perform deterministic role-based skill matching
     const roleSkillAnalysis = analyzeRoleSkills({
-      targetRole,
+      targetRole: targetRoleKey,
+      customRoleLabel: effectiveRoleName,
       resumeData,
       extractedText: resumeText,
     });
@@ -92,7 +88,8 @@ export const uploadResume = async (req, res) => {
           ...resumeData,
           userId,
           extractedText: resumeText,
-          targetRole,
+          targetRole: effectiveRoleName,
+          suggestedRole: resumeData.suggestedRole || effectiveRoleName,
           missingSkills: roleSkillAnalysis.missingSkills,
           roleSkillAnalysis,
         },
@@ -185,6 +182,7 @@ export const getResume = async (req, res) => {
               success: true,
               source: "redis",
               data: cachedResume,
+              resume: cachedResume,
             });
           }
         } catch (parseError) {
@@ -205,9 +203,11 @@ export const getResume = async (req, res) => {
     const resume = await Resume.findOne({ userId });
 
     if (!resume) {
-      return res.status(404).json({
-        success: false,
-        message: "Resume not found",
+      return res.status(200).json({
+        success: true,
+        data: null,
+        resume: null,
+        message: "No resume found for this user.",
       });
     }
 
@@ -229,6 +229,7 @@ export const getResume = async (req, res) => {
       success: true,
       source: "mongoDb",
       data: resume,
+      resume: resume,
     });
 
   } catch (error) {

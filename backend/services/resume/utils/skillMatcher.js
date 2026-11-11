@@ -66,21 +66,85 @@ export const getAvailableRoles = () =>
     label: role.label,
   }));
 
+export const resolveTargetRoleKey = (inputRole = "") => {
+  if (!inputRole || typeof inputRole !== "string") {
+    return null;
+  }
+
+  const clean = inputRole.trim().toLowerCase();
+  if (!clean) {
+    return null;
+  }
+
+  // 1. Exact key match
+  if (Object.hasOwn(ROLE_SKILLS, clean)) {
+    return clean;
+  }
+
+  // 2. Slug match (e.g. "Frontend Developer" -> "frontend-developer")
+  const slug = clean.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (Object.hasOwn(ROLE_SKILLS, slug)) {
+    return slug;
+  }
+
+  // 3. Label match
+  for (const [key, val] of Object.entries(ROLE_SKILLS)) {
+    if (val.label.toLowerCase() === clean) {
+      return key;
+    }
+  }
+
+  // 4. Keyword fuzzy match
+  if (clean.includes("cyber") || clean.includes("security") || clean.includes("infosec") || clean.includes("soc") || clean.includes("pen") || clean.includes("threat") || clean.includes("vulnerab")) {
+    return "cybersecurity-engineer";
+  }
+  if (clean.includes("ml") || clean.includes("machine learning") || clean.includes("deep learning") || clean.includes("computer vision") || clean.includes("nlp") || clean.includes("ai engineer")) {
+    return "ml-engineer";
+  }
+  if (clean.includes("front") || clean.includes("react") || clean.includes("ui") || clean.includes("web")) {
+    return "frontend-developer";
+  }
+  if (clean.includes("mern")) {
+    return "mern-stack-developer";
+  }
+  if (clean.includes("java") && !clean.includes("script")) {
+    return "java-backend-developer";
+  }
+  if (clean.includes("python") || clean.includes("django") || clean.includes("fastapi")) {
+    return "python-backend-developer";
+  }
+  if (clean.includes("back") || clean.includes("node") || clean.includes("express") || clean.includes("api")) {
+    return "backend-developer";
+  }
+  if (clean.includes("devops") || clean.includes("cloud") || clean.includes("sre") || clean.includes("infra")) {
+    return "devops-engineer";
+  }
+  if (clean.includes("qa") || clean.includes("test") || clean.includes("automation")) {
+    return "qa-automation-engineer";
+  }
+  if (clean.includes("data") || clean.includes("analyst")) {
+    return "data-analyst";
+  }
+  if (clean.includes("full") || clean.includes("software") || clean.includes("engineer")) {
+    return "full-stack-software-engineer";
+  }
+
+  return slug || "custom-track";
+};
+
 export const analyzeRoleSkills = ({
   targetRole,
+  customRoleLabel,
   resumeData,
   extractedText,
 }) => {
   const role = ROLE_SKILLS[targetRole];
-
-  if (!role) {
-    throw new Error("Invalid target role");
-  }
+  const roleLabel = role?.label || customRoleLabel || (targetRole ? targetRole.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Custom Track");
 
   const content = getResumeContent(resumeData, extractedText);
 
-  const requiredSkills = role.required;
-  const preferredSkills = role.preferred;
+  const requiredSkills = role ? role.required : (resumeData.skills?.slice(0, 8) || []);
+  const preferredSkills = role ? role.preferred : (resumeData.skills?.slice(8, 16) || []);
 
   const matchedRequiredSkills = requiredSkills.filter(
     (skill) => hasSkill(content, skill)
@@ -118,11 +182,11 @@ export const analyzeRoleSkills = ({
 
   const overallCoverage = totalSkills
     ? Math.round((totalMatched / totalSkills) * 100)
-    : 100;
+    : (resumeData.score || 85);
 
   return {
-    targetRole,
-    targetRoleLabel: role.label,
+    targetRole: targetRole || "custom-track",
+    targetRoleLabel: roleLabel,
 
     requiredSkills,
     preferredSkills,

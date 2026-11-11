@@ -5,23 +5,36 @@ import technicalInterviewPrompt from "../prompts/technicalInterviewPrompt.js"
 
 
 export const interviewAgent = async (data) => {
-
+    let rawContent = "";
     try {
-        const prompt = data.type?.toLowerCase() === "hr" ? hrInterviewPrompt(data) : technicalInterviewPrompt(data)
+        const isHr = String(data.type || "").trim().toLowerCase() === "hr";
+        const prompt = isHr ? hrInterviewPrompt(data) : technicalInterviewPrompt(data);
 
-        const response = await llm.invoke(prompt)
+        const response = await llm.invoke(prompt);
+        rawContent = response?.content || "";
 
-        const cleaned = response.content
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
+        const cleaned = rawContent
+            .replace(/```json/gi, "")
+            .replace(/```/g, "")
+            .trim();
 
-        return JSON.parse(cleaned)
+        // Attempt direct parse
+        try {
+            return JSON.parse(cleaned);
+        } catch {
+            // Fallback: extract substring between first [ and last ]
+            const startIdx = cleaned.indexOf("[");
+            const endIdx = cleaned.lastIndexOf("]");
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                return JSON.parse(cleaned.substring(startIdx, endIdx + 1));
+            }
+            throw new Error("Unable to locate JSON array in response");
+        }
     } catch (error) {
-        console.log("Interview Agent Parse Error");
-    console.log(response.content);
-
-    throw new Error("Failed to generate interview questions.");
-        
+        console.error("Interview Agent Error:", error?.message);
+        if (rawContent) {
+            console.error("Raw LLM Response:", rawContent);
+        }
+        throw new Error("Failed to generate interview questions.");
     }
-}
+};

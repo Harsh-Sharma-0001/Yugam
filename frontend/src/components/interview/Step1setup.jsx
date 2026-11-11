@@ -14,70 +14,101 @@ function Step1setup({ user, setUser }) {
     const { resume } = useSelector((state) => state.resume)
     const [role, setRole] = useState("");
     const [type, setType] = useState("technical");
-    const [useResume, setUseResume] = useState(!!resume)
+    const [useResume, setUseResume] = useState(false)
     const [file, setFile] = useState(null)
     const [uploading, setUploading] = useState(false)
     const [starting, setStarting] = useState(false)
 
+    const detectedRole =
+        resume?.suggestedRole ||
+        resume?.roleSkillAnalysis?.targetRoleLabel ||
+        resume?.targetRole ||
+        (role && role.trim()) ||
+        "Custom Track";
+
     const uploadResume = async () => {
         if (!file) {
-            alert("Please select a PDF")
+            alert("Please select a PDF file.")
+            return;
         }
         try {
             setUploading(true)
             try {
-                
-            const coinResponse = await useCoins({ coins: 10, action: "resume-scorer" })
-
-            setUser((prev) => ({
-                ...prev, interviewCoin: coinResponse?.interviewCoin,
-            }))
+                const coinResponse = await useCoins({ coins: 10, action: "resume-scorer" })
+                setUser((prev) => ({
+                    ...prev, interviewCoin: coinResponse?.interviewCoin,
+                }))
             } catch (error) {
                 setUploading(false)
                 alert("Failed to use coins.")
                 return;
             }
 
-
             const formData = new FormData()
             formData.append("resume", file)
+            if (role && role.trim()) {
+                formData.append("targetRole", role.trim())
+            }
 
             const response = await api.post("/api/resume/upload", formData)
+            const uploadedResume = response?.data?.data
 
-            dispatch(setResume(response?.data?.data))
+            dispatch(setResume(uploadedResume))
+            setUseResume(true)
             setUploading(false)
             setFile(null)
+
+            const detectedTitle =
+                uploadedResume?.suggestedRole ||
+                uploadedResume?.roleSkillAnalysis?.targetRoleLabel ||
+                uploadedResume?.targetRole;
+            if (!role.trim() && detectedTitle) {
+                setRole(detectedTitle);
+            }
         } catch (error) {
-            console.log(error)
-            alert("Upload failed")
+            console.error("Resume upload error:", error)
+            const errorMsg = error.response?.data?.message || "Upload failed. Please try again."
+            alert(errorMsg)
             setUploading(false)
         }
     }
 
     const start = async () => {
+        if (!role.trim()) {
+            alert("Please specify a target role.")
+            return;
+        }
+        if (useResume && !resume) {
+            alert("Please upload your resume or toggle off 'Use Resume'.")
+            return;
+        }
+
         setStarting(true)
-        const response = await startInterview({ role, type, useResume, resume })
+        const response = await startInterview({
+            role: role.trim(),
+            type,
+            useResume,
+            resume: useResume ? resume : null
+        })
 
-        if(response){
+        if(response && response.interviewId){
             try {
-                
-            const coinResponse = await useCoins({ coins: 50, action: "start-interview" })
-
-            setUser((prev) => ({
-                ...prev, interviewCoin: coinResponse?.interviewCoin,
-            }))
+                const coinResponse = await useCoins({ coins: 50, action: "start-interview" })
+                setUser((prev) => ({
+                    ...prev, interviewCoin: coinResponse?.interviewCoin,
+                }))
             } catch (error) {
                 setStarting(false)
                 alert("Failed to use coins.")
                 return;
             }
 
-
+            setStarting(false)
+            navigate(`/interview/${response.interviewId}`)
+        } else {
+            setStarting(false)
+            alert("Failed to start interview. Please try again.")
         }
-
-        setStarting(false)
-        navigate(`/interview/${response.interviewId}`)
-
     }
 
     return (
@@ -204,7 +235,7 @@ function Step1setup({ user, setUser }) {
                                         <FiFileText size={15} className='text-white' />
                                     </div>
                                     <div className='flex-1 min-w-0'>
-                                        <h4 className='text-sm font-semibold text-white'>Resume Ready <span className='text-gray-400'>({resume?.suggestedRole})</span></h4>
+                                        <h4 className='text-sm font-semibold text-white'>Resume Ready <span className='text-gray-400'>({detectedRole})</span></h4>
                                         <p className='text-xs text-zinc-400'>
                                             Resume detected successfully.
                                         </p>

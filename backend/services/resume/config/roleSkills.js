@@ -218,9 +218,75 @@ export const ROLE_SKILLS = {
       "ETL",
     ],
   },
+
+  "cybersecurity-engineer": {
+    label: "Cybersecurity Engineer",
+
+    required: [
+      "Network Security",
+      "Information Security",
+      "Vulnerability Assessment",
+      "Linux",
+      "Firewalls",
+      "Security Operations",
+      "Git",
+    ],
+
+    preferred: [
+      "Penetration Testing",
+      "SIEM",
+      "Wireshark",
+      "SOC",
+      "Incident Response",
+      "OWASP",
+      "Python",
+      "Cryptography",
+      "Cloud Security",
+      "Docker",
+    ],
+  },
+
+  "ml-engineer": {
+    label: "ML Engineer",
+
+    required: [
+      "Python",
+      "Machine Learning",
+      "Data Structures and Algorithms",
+      "SQL",
+      "Git",
+    ],
+
+    preferred: [
+      "Deep Learning",
+      "PyTorch",
+      "TensorFlow",
+      "NLP",
+      "LLMs",
+      "Computer Vision",
+      "Scikit-Learn",
+      "Docker",
+      "MLOps",
+      "Pandas",
+      "NumPy",
+    ],
+  },
 };
 
 export const SKILL_ALIASES = {
+  "Network Security": ["network security", "infosec", "cyber security", "cybersecurity", "security analyst", "security engineering"],
+  "Vulnerability Assessment": ["vapt", "vulnerability management", "vulnerability scanning", "vulnerability assessment"],
+  "Penetration Testing": ["pentesting", "pen test", "ethical hacking", "metasploit", "burp suite"],
+  "SIEM": ["siem", "splunk", "qradar", "sentinel"],
+  "Information Security": ["infosec", "information security", "cybersecurity"],
+  "Security Operations": ["secops", "soc", "soc analyst", "security operations"],
+  "Incident Response": ["incident handling", "dfir", "incident response"],
+  "Cryptography": ["encryption", "pki", "cryptography", "ssl", "tls"],
+  "Deep Learning": ["deep learning", "neural networks", "dnn", "cnn", "rnn"],
+  "PyTorch": ["pytorch"],
+  "TensorFlow": ["tensorflow", "tf"],
+  "NLP": ["natural language processing", "nlp"],
+  "LLMs": ["llm", "large language models", "generative ai", "genai"],
   "JavaScript": ["js", "ecmascript"],
   "TypeScript": ["ts"],
   "Node.js": ["node", "nodejs"],

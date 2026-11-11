@@ -2,18 +2,17 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import llm from "../configs/llm.js";
 import roadmapPrompt from "../configs/roadmap.prompt.js";
 
-
 const roadmapAgent = async (state) => {
     try {
-        const resume = state.useResume
+        const resume = state.useResume && state.resume
             ? {
-                skills: state.resume.skills,
-                missingSkills: state.resume.missingSkills,
-                projects: state.resume.projects,
-                experience: state.resume.experience,
-                score: state.resume.score,
-                suggestedRole: state.resume.suggestedRole,
-                recommendations: state.resume.recommendations,
+                skills: state.resume.skills || [],
+                missingSkills: state.resume.missingSkills || [],
+                projects: state.resume.projects || [],
+                experience: state.resume.experience || [],
+                score: state.resume.score || 0,
+                suggestedRole: state.resume.suggestedRole || "",
+                recommendations: state.resume.recommendations || [],
             }
             : null;
 
@@ -28,41 +27,45 @@ ${state.targetPackage}
 
 Resume:
 ${JSON.stringify(resume, null, 2)}
-
 `)
         ]);
 
-        const roadmap = JSON.parse(response.content
-            .replace(/```json/g, "")
+        const cleaned = (response.content || "")
+            .replace(/```json/gi, "")
             .replace(/```/g, "")
-            .trim())
+            .trim();
 
-             const capitalize = (value = "") =>
-      value.charAt(0).toUpperCase() +
-      value.slice(1).toLowerCase();
+        let roadmap;
+        try {
+            roadmap = JSON.parse(cleaned);
+        } catch {
+            const startIdx = cleaned.indexOf("{");
+            const endIdx = cleaned.lastIndexOf("}");
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                roadmap = JSON.parse(cleaned.substring(startIdx, endIdx + 1));
+            } else {
+                throw new Error("Invalid structured response from Roadmap AI");
+            }
+        }
 
-    roadmap.level = capitalize(roadmap.level);
+        const capitalize = (value = "") =>
+            value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : "Medium";
 
-    roadmap.modules = (roadmap.modules || []).map((module) => ({
-      ...module,
-      difficulty: capitalize(module.difficulty),
-    }));
+        roadmap.level = capitalize(roadmap.level || "Intermediate");
 
-    return {
-        ...state,
-        roadmap
-    }
+        roadmap.modules = (roadmap.modules || []).map((module) => ({
+            ...module,
+            difficulty: capitalize(module.difficulty || "Medium"),
+        }));
 
-
-
-
+        return {
+            ...state,
+            roadmap,
+        };
     } catch (error) {
-console.log("Roadmap Agent Error");
-    console.log(error);
-
-    throw error;
+        console.error("Roadmap Agent Error:", error);
+        throw error;
     }
-}
+};
 
-
-export default roadmapAgent
+export default roadmapAgent;
