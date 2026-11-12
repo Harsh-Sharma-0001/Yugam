@@ -67,10 +67,10 @@ Modern tech recruitment demands rigorous preparation, tailored resumes, structur
 | :--- | :--- |
 | **Authentication** | Firebase OAuth (Google popup/redirect), Redis-backed 7-day session store, secure HTTP-only cookies, automated session revocation on logout. |
 | **API Gateway** | Unified reverse proxy entrypoint (`express-http-proxy`), central authentication guard (`isAuth`), transparent header decoration (`x-user-id`). |
-| **Resume Intelligence** | PDF text parsing (`pdf-parse`), LangChain structured output extraction, deterministic role matching (MERN, Full-Stack, Java Backend, etc.), ATS radial score meters (`recharts`). |
-| **AI Mock Interview** | LangGraph cyclic workflows, 8-dimensional evaluation (Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, Creativity), comprehensive post-interview feedback report. |
-| **Interactive Studio** | Embedded Monaco Code Editor (`@monaco-editor/react`), Docker-Isolated Multi-Language Code Execution Engine (JavaScript, Python, Java, C++), custom `stdin` terminal, candidate WebRTC camera stream, Web Speech voice input, video avatar synchronization. |
-| **Targeted Roadmaps** | Salary-bracketed skill tracks, automated web-resource resolution, YouTube API v3 tutorial pairing, Redis cached roadmaps. |
+| **Resume Intelligence** | PDF text parsing (`pdf-parse`), LangChain structured output extraction with dynamic AI domain detection (`suggestedRole`), deterministic ATS skill matching across 11+ tracks (including Cybersecurity & ML Engineering), clean `200 OK` empty-state handling, and ATS radial score meters (`recharts`). |
+| **AI Mock Interview** | LangGraph cyclic workflows, strict Technical vs. HR domain segregation, contextual resume-backed question synthesis, 8-dimensional evaluation (Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, Creativity), comprehensive post-interview feedback report. |
+| **Interactive Studio** | Embedded Monaco Code Editor (`@monaco-editor/react`), Docker-Isolated Multi-Language Code Execution Engine (JavaScript [Node.js 18], Python [3.8], Java [OpenJDK 17], C++ [GCC 9]), custom `stdin` terminal drawer, real-time `stdout`/`stderr`/compilation error diagnostics, candidate WebRTC camera stream, Web Speech voice input, video avatar synchronization. |
+| **Targeted Roadmaps** | 10 standardized engineering tracks (MERN Stack, Full-Stack, Java Backend, Frontend, Backend, Python Backend, QA Automation, DevOps, Data Analyst, ML Engineer), salary-bracketed milestones (10 to 40 LPA), dynamic resume attachment/replacement flow, automated official documentation resolution, YouTube Data API v3 video retrieval, Redis cached roadmaps. |
 | **Monetization & Billing** | Razorpay checkout, server-side HMAC-SHA256 signature verification, instant credit balance updates. |
 
 ---
@@ -101,6 +101,10 @@ flowchart TB
         BillingSvc["Billing Service :8005<br/>Razorpay Order & Verification"]
     end
 
+    subgraph ExecutionLayer ["Isolated Execution Sandbox"]
+        ExecutionEngine["Docker-Isolated Code Execution Engine :3000<br/>(Node.js 18, Python 3.8, OpenJDK 17, GCC 9)"]
+    end
+
     subgraph ExternalAPIs ["External Intelligence & Cloud APIs"]
         Firebase["Google Firebase Auth"]
         Groq["Groq Cloud LLM API<br/>(openai/gpt-oss-120b)"]
@@ -117,6 +121,8 @@ flowchart TB
     GW -->|"/api/interview/* [x-user-id]"| InterviewSvc
     GW -->|"/api/roadmap/* [x-user-id]"| RoadmapSvc
     GW -->|"/api/billing/* [x-user-id]"| BillingSvc
+
+    InterviewSvc -->|"Async Submissions [X-Auth-Token]"| ExecutionEngine
 
     AuthSvc <--> Mongo
     AuthSvc <--> Redis
@@ -235,13 +241,13 @@ Yugam/
 │   │   │   └── package.json
 │   │   │
 │   │   ├── resume/                     # Port 8002: Resume Extraction & Role Skill Matcher
-│   │   │   ├── agents/                 # resume.agent.js (LangChain structured parser)
-│   │   │   ├── config/                 # Mongoose DB, Groq LLM, PDF extraction & role taxonomy
+│   │   │   ├── agents/                 # resume.agent.js (LangChain structured parser with suggestedRole extraction)
+│   │   │   ├── config/                 # Mongoose DB, Groq LLM, PDF extraction & roleSkills.js (11+ role profiles)
 │   │   │   ├── controllers/            # uploadResume, getResume, getResumeRoles
 │   │   │   ├── middleware/             # Multer temporary disk storage
 │   │   │   ├── models/                 # Resume MongoDB schema (nested education, exp, projects)
 │   │   │   ├── routes/                 # /upload, /get-resume, /roles
-│   │   │   ├── utils/                  # Deterministic skill matching & weighted scoring engine
+│   │   │   ├── utils/                  # skillMatcher.js (deterministic ATS scoring & dynamic custom role fallback)
 │   │   │   ├── index.js
 │   │   │   ├── Dockerfile
 │   │   │   └── package.json
@@ -249,18 +255,19 @@ Yugam/
 │   │   ├── interview/                  # Port 8003: LangGraph Conversational Interview Engine
 │   │   │   ├── agents/                 # interview.agent.js, feedback.agent.js, summary.agent.js
 │   │   │   ├── config/                 # DB & Groq LLM setup (openai/gpt-oss-120b)
-│   │   │   ├── controllers/            # startInterview, submitAnswer, getInterview, getAllInterviews
+│   │   │   ├── controllers/            # interview.controller.js & code.controller.js (isolated code runner)
 │   │   │   ├── graph/                  # LangGraph StateGraph, nodes, and conditional routers
 │   │   │   ├── models/                 # Interview schema with 8-dimensional scoring subdocument
-│   │   │   ├── prompts/                # HR, Technical, Feedback, and Summary system prompts
-│   │   │   ├── routes/                 # /start, /answer, /all, /:id
+│   │   │   ├── prompts/                # Strict domain segregation: hrInterviewPrompt.js, technicalInterviewPrompt.js
+│   │   │   ├── routes/                 # interview.route.js (/code/run, /code/status/:token, /start, /answer, /all, /:id)
+│   │   │   ├── utils/                  # codebox.js (runtime ID mappings & payload validation)
 │   │   │   ├── index.js
 │   │   │   ├── Dockerfile
 │   │   │   └── package.json
 │   │   │
 │   │   ├── roadmap/                    # Port 8004: Career Roadmap & Learning Resource Engine
 │   │   │   ├── agents/                 # roadmap.agent.js & resource.agent.js
-│   │   │   ├── configs/                # DB, Groq LLM, Roadmap Prompt, YouTube API v3 client
+│   │   │   ├── configs/                # DB, Groq LLM (6,000 max tokens), roadmap.prompt.js, youtube.js
 │   │   │   ├── controllers/            # generateRoadmap, getAllRoadmap, getRoadmapbyId
 │   │   │   ├── graph/                  # 2-stage LangGraph execution pipeline
 │   │   │   ├── models/                 # Roadmap & nested Module MongoDB schemas
@@ -288,7 +295,7 @@ Yugam/
     │   ├── apis/                       # Axios endpoints (user, resume, interview)
     │   ├── assets/                     # AI avatar video loops (male-ai.mp4, female-ai.mp4)
     │   ├── components/
-    │   │   ├── interview/              # CodeEditor (Monaco), Timer, Step1setup, Step2interview, Step3report
+    │   │   ├── interview/              # CodeEditor (Monaco + Terminal I/O), Timer, Step1setup, Step2interview, Step3report
     │   │   ├── resume/                 # ATSTemplate, PreviewResume, ResumeForm, DownloadBtn
     │   │   ├── roadmap/                # ModuleCard, RoadmapResult
     │   │   ├── InterviewGraph.jsx      # Radar & Bar visualizer for candidate metrics
@@ -345,11 +352,13 @@ Manages the user lifecycle and virtual coin balance.
 Analyzes candidate resumes against target job profiles.
 - **PDF Extraction**: Ingests multi-page PDFs using Multer disk buffering and parses textual streams via `pdf-parse`.
 - **LangChain Structured Agent**: Prompts Groq LLM (`openai/gpt-oss-120b`) to convert raw text into a normalized schema comprising contact info, summary, education, technologies, experience, and projects.
+- **AI-First Domain Extraction (`suggestedRole`)**: Automatically detects the candidate's authentic domain and career specialization (e.g. `Cybersecurity Analyst`, `ML Engineer`, `Cloud Architect`) directly from parsed resume text, eliminating hardcoded role fallbacks.
 - **Deterministic Skill Gap Matcher (`roleSkills.js` & `skillMatcher.js`)**:
-  - Evaluates extracted candidate skills against curated role profiles (e.g., MERN, Full-Stack, Java Backend, Python AI/ML, DevOps/Cloud, etc.).
-  - Distinguishes between **Required Core Skills** and **Preferred Skills**.
-  - Calculates deterministic ATS compatibility scores (0–100%).
-  - Identifies critical missing competencies and formulates recommendations.
+  - Evaluates extracted candidate skills against 11+ curated role profiles (MERN Stack, Full-Stack, Java Backend, Frontend, Backend, Python Backend, QA Automation, DevOps, Data Analyst, ML Engineer, and Cybersecurity Engineer).
+  - Distinguishes between **Required Core Skills** and **Preferred Skills** with fuzzy alias matching.
+  - Dynamically adapts to custom/unlisted domains without throwing runtime exceptions.
+  - Calculates deterministic ATS compatibility scores (0–100%) and formulates targeted missing skill recommendations.
+- **Clean Empty-State Handling**: For newly registered accounts without an uploaded resume, `GET /api/resume/get-resume` returns a graceful `200 OK` with `{ success: true, data: null, resume: null }` rather than an exceptional `404 Not Found`.
 - **Caching**: Persists analyzed resume entities under Redis key `resume:<userId>` for sub-millisecond retrieval.
 - **Resource Hygiene**: Automatically unlinks uploaded temporary PDF files from the local filesystem in a `finally` block.
 
@@ -357,6 +366,10 @@ Analyzes candidate resumes against target job profiles.
 Orchestrates autonomous, dynamic HR and Technical interviews.
 - **LangGraph StateGraph Engine**:
   - **`interviewAgent`**: Generates 6 highly contextual, scenario-based interview questions tailored to the candidate's chosen role, difficulty level, and optional resume context.
+  - **Strict Domain Segregation**:
+    - **Technical Tracks**: Inforces 100% purely technical questions on Data Structures, Algorithms, System Design, Concurrency, Database Internals, and Framework Architecture (`technicalInterviewPrompt.js`).
+    - **HR Tracks**: Enforces 100% behavioral, situational, culture fit, and conflict resolution questions using the STAR framework (`hrInterviewPrompt.js`).
+  - **Resume Context Injection**: When `useResume: true`, dynamically formats and passes candidate project descriptions, tech stacks, experience, and growth areas directly into the interviewer prompt.
   - **`feedbackAgent`**: Evaluates individual responses against **8 rigorous dimensions**:
     1. *Correctness*
     2. *Clarity*
@@ -368,16 +381,21 @@ Orchestrates autonomous, dynamic HR and Technical interviews.
     8. *Creativity*
   - **`summaryAgent`**: Triggered upon completion of the final question. Computes overall performance metrics, pinpoints explicit candidate strengths, analyzes weaknesses, and issues actionable study recommendations.
 - **Docker-Isolated Multi-Language Code Execution Engine**:
-  - Compiles and runs user code in an isolated sandbox supporting **JavaScript** (Node.js 18), **Python** (3.8), **Java** (OpenJDK 17), and **C++** (GCC 9).
-  - Features an interactive Monaco editor drawer with live status reporting (Accepted, Compilation Error, Runtime Error, Time Limit Exceeded), custom `stdin` input, execution timing, and memory telemetry.
-  - Zero client credential exposure: all execution traffic is proxied securely through the API Gateway.
+  - Compiles and runs user code in an isolated sandbox supporting **JavaScript** (Node.js 18), **Python** (3.8), **Java** (OpenJDK 17 with `Main.java` entrypoint), and **C++** (GCC 9).
+  - **Decoupled Workflow**: Clicking **"Run Code"** executes the solution and displays terminal output without submitting or advancing the interview question; **"Add To Answer"** appends formatted code to the active answer textarea.
+  - **Interactive Terminal Drawer**: Monaco editor integrated with a bottom tabbed drawer providing custom standard input (`stdin`), real-time execution status badges (Accepted, Compilation Error, Runtime Error, Time Limit Exceeded), `stdout`, `stderr`, execution time (`time`), and memory telemetry (`memory`).
+  - **Asynchronous Polling**: Submits execution jobs via `POST /code/run` and polls `GET /code/status/:token` every 400ms with a 20-second safety timeout.
+  - **Zero Client Credential Exposure**: All sandbox traffic is proxied through the API Gateway, ensuring runner URLs and authentication secrets remain strictly internal.
 - **Analytics Caching**: Caches user interview aggregations (`stats`, `technicalData`, `hrData`) under `interviews:<userId>` in Redis for 10 minutes, invalidating automatically upon submission of answers.
 
 ### 5. Roadmap & Resource Service (Port 8004)
 Synthesizes end-to-end learning curriculums for career acceleration.
+- **10 Standardized Engineering Tracks**: Fully supports MERN Stack Developer, Full-Stack Software Engineer, Java Backend Developer, Frontend Developer, Backend Developer, Python Backend Developer, QA Automation Engineer, DevOps Engineer, Data Analyst, and ML Engineer with salary-bracketed targets (10 LPA, 15 LPA, 20 LPA, 30 LPA, 40 LPA).
 - **Two-Stage Sequential Pipeline**:
-  - **Stage 1 (`roadmapAgent`)**: Analyzes target role, salary package tier (e.g. 10 LPA, 20 LPA, 40 LPA), and user resume gaps to generate progressive learning modules categorized by timeline and difficulty (*Easy*, *Medium*, *Hard*).
+  - **Stage 1 (`roadmapAgent`)**: Analyzes target role, salary package tier, and user resume gaps to generate progressive learning modules categorized by timeline and difficulty (*Easy*, *Medium*, *Hard*). Configured with `maxTokens: 6000` to prevent JSON response truncation.
   - **Stage 2 (`resourceAgent`)**: Parses each module title, invokes the LLM to locate authoritative official documentation, and calls the **YouTube Data API v3** to retrieve matching video tutorials.
+- **Resilient Fallbacks**: Seamlessly degrades to query-encoded fallback documentation and YouTube search links if external API rate limits or network hiccups occur, preventing roadmap generation failures.
+- **Resume Replacement & Customization**: Features an interactive attachment and re-upload modal allowing candidates to swap resumes and re-align milestone recommendations.
 - **Caching Strategy**: Roadmaps are cached in Redis under `roadmap:<id>` and `userRoadmaps:<userId>` for 1 hour (`3600s`).
 
 ### 6. Billing & Subscription Service (Port 8005)
@@ -440,21 +458,23 @@ Yugam implements a virtual coin economy to balance LLM compute usage:
 | Method | Endpoint | Description | Headers / Auth | Payload |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/roles` | Fetch supported target job roles & taxonomy | `x-user-id` | None |
-| `POST` | `/upload` | Upload resume PDF & trigger ATS analysis | `x-user-id` | `FormData`: `resume` (PDF), `targetRole` (String) |
-| `GET` | `/get-resume`| Retrieve user's parsed resume & gap analysis | `x-user-id` | None |
+| `POST` | `/upload` | Upload resume PDF & trigger ATS analysis | `x-user-id` | `FormData`: `resume` (PDF), `targetRole` (Optional String) |
+| `GET` | `/get-resume`| Retrieve user's parsed resume & gap analysis (returns `200 OK` with `{ data: null, resume: null }` if not found) | `x-user-id` | None |
 
 ### AI Interview Engine (`/api/interview`)
 | Method | Endpoint | Description | Headers / Auth | Payload |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/start` | Start new interview session & generate questions | `x-user-id` | `{ "type": "technical"\|"hr", "role": "Frontend", "useResume": false }` |
+| `POST` | `/start` | Start new interview session & generate questions | `x-user-id` | `{ "type": "technical"\|"hr", "role": "Frontend Developer", "useResume": true\|false }` |
 | `POST` | `/answer`| Submit question response & get real-time feedback | `x-user-id` | `{ "interviewId": "...", "answer": "..." }` |
 | `GET` | `/all` | Fetch user interview history, averages & radar metrics | `x-user-id` | None |
 | `GET` | `/:id` | Fetch specific interview details and final report | `x-user-id` | None |
+| `POST` | `/code/run` | Submit source code to isolated execution sandbox | `x-user-id` | `{ "language": "javascript"\|"python"\|"java"\|"cpp", "source_code": "...", "stdin": "..." }` |
+| `GET` | `/code/status/:token` | Poll async execution status, stdout, stderr, errors & metrics | `x-user-id` | None |
 
 ### Roadmaps & Learning Paths (`/api/roadmap`)
 | Method | Endpoint | Description | Headers / Auth | Payload |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/generate`| Build custom roadmap with docs & YouTube videos | `x-user-id` | `{ "role": "DevOps", "targetPackage": "20 LPA", "useResume": false }` |
+| `POST` | `/generate`| Build custom roadmap across 10 tracks with docs & YouTube videos | `x-user-id` | `{ "role": "MERN Stack Developer", "targetPackage": "10 LPA"\|"15 LPA"\|"20 LPA"\|"30 LPA"\|"40 LPA", "useResume": true\|false }` |
 | `GET` | `/all` | List all historical roadmaps created by the user | `x-user-id` | None |
 | `GET` | `/:id` | Fetch specific roadmap details by ID | `x-user-id` | None |
 
@@ -524,7 +544,10 @@ PORT=8003
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/interview"
 REDIS_URL="redis://localhost:6379"
 GROQ_API_KEY="gsk_..."
+CODEBOX_URL="http://localhost:3000"
+CODEBOX_AUTH_TOKEN="dev-token"
 ```
+*(Internal execution engine running in an isolated Docker container on port 3000, authenticated via `CODEBOX_AUTH_TOKEN`)*
 
 ### 5. Roadmap Service (`backend/services/roadmap/.env`)
 ```ini
