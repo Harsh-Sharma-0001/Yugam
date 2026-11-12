@@ -1,6 +1,8 @@
 <div align="center">
 
-# ⚡ YUGAM (युगम्)
+  <img src="./frontend/public/Logo_2.png" alt="Yugam Logo" width="145" style="border-radius: 24px;" />
+
+# YUGAM (युगम्)
 
 ### _Next-Generation Autonomous AI Career Intelligence & Real-Time Interview Platform_
 
