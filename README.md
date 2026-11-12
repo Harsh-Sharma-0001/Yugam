@@ -1,7 +1,8 @@
 <div align="center">
 
 # ⚡ YUGAM (युगम्)
-### *Next-Generation Autonomous AI Career Intelligence & Real-Time Interview Platform*
+
+### _Next-Generation Autonomous AI Career Intelligence & Real-Time Interview Platform_
 
 [![Microservices Architecture](https://img.shields.io/badge/Architecture-Event--Driven%20Microservices-blueviolet.svg)](#system-architecture)
 [![Frontend](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%208%20%7C%20TailwindCSS%20v4-blue.svg)](#frontend-client)
@@ -9,6 +10,7 @@
 [![AI Orchestration](https://img.shields.io/badge/AI%20Orchestration-LangChain%20%7C%20LangGraph%20%7C%20Groq-orange.svg)](#ai--langgraph-agent-workflows)
 [![Database & Cache](https://img.shields.io/badge/Storage-MongoDB%20Atlas%20%7C%20Redis-red.svg)](#data-storage--redis-caching)
 [![Payments](https://img.shields.io/badge/Payments-Razorpay-02042B.svg)](#billing-service-port-8005)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
 <p align="center">
   <b>Yugam</b> is an enterprise-grade, microservices-driven AI career copilot designed to empower developers and job seekers. From automated <b>ATS resume scoring</b> and <b>intelligent curriculum generation with integrated YouTube/official documentation</b>, to <b>real-time conversational AI mock interviews</b> equipped with synchronized video avatars, voice synthesis, speech-to-text, and in-browser code execution—Yugam simulates the end-to-end tech hiring pipeline.
@@ -63,15 +65,15 @@ Modern tech recruitment demands rigorous preparation, tailored resumes, structur
 
 ## ✨ Key Features
 
-| Domain | Features |
-| :--- | :--- |
-| **Authentication** | Firebase OAuth (Google popup/redirect), Redis-backed 7-day session store, secure HTTP-only cookies, automated session revocation on logout. |
-| **API Gateway** | Unified reverse proxy entrypoint (`express-http-proxy`), central authentication guard (`isAuth`), transparent header decoration (`x-user-id`). |
-| **Resume Intelligence** | PDF text parsing (`pdf-parse`), LangChain structured output extraction with dynamic AI domain detection (`suggestedRole`), deterministic ATS skill matching across 11+ tracks (including Cybersecurity & ML Engineering), clean `200 OK` empty-state handling, and ATS radial score meters (`recharts`). |
-| **AI Mock Interview** | LangGraph cyclic workflows, strict Technical vs. HR domain segregation, contextual resume-backed question synthesis, 8-dimensional evaluation (Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, Creativity), comprehensive post-interview feedback report. |
-| **Interactive Studio** | Embedded Monaco Code Editor (`@monaco-editor/react`), Docker-Isolated Multi-Language Code Execution Engine (JavaScript [Node.js 18], Python [3.8], Java [OpenJDK 17], C++ [GCC 9]), custom `stdin` terminal drawer, real-time `stdout`/`stderr`/compilation error diagnostics, candidate WebRTC camera stream, Web Speech voice input, video avatar synchronization. |
-| **Targeted Roadmaps** | 10 standardized engineering tracks (MERN Stack, Full-Stack, Java Backend, Frontend, Backend, Python Backend, QA Automation, DevOps, Data Analyst, ML Engineer), salary-bracketed milestones (10 to 40 LPA), dynamic resume attachment/replacement flow, automated official documentation resolution, YouTube Data API v3 video retrieval, Redis cached roadmaps. |
-| **Monetization & Billing** | Razorpay checkout, server-side HMAC-SHA256 signature verification, instant credit balance updates. |
+| Domain                     | Features                                                                                                                                                                                                                                                                                                                                                             |
+| :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Authentication**         | Firebase OAuth (Google popup/redirect), Redis-backed 7-day session store, secure HTTP-only cookies, automated session revocation on logout.                                                                                                                                                                                                                          |
+| **API Gateway**            | Unified reverse proxy entrypoint (`express-http-proxy`), central authentication guard (`isAuth`), transparent header decoration (`x-user-id`).                                                                                                                                                                                                                       |
+| **Resume Intelligence**    | PDF text parsing (`pdf-parse`), LangChain structured output extraction with dynamic AI domain detection (`suggestedRole`), deterministic ATS skill matching across 11+ tracks (including Cybersecurity & ML Engineering), clean `200 OK` empty-state handling, and ATS radial score meters (`recharts`).                                                             |
+| **AI Mock Interview**      | LangGraph cyclic workflows, strict Technical vs. HR domain segregation, contextual resume-backed question synthesis, 8-dimensional evaluation (Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, Creativity), comprehensive post-interview feedback report.                                                                       |
+| **Interactive Studio**     | Embedded Monaco Code Editor (`@monaco-editor/react`), Docker-Isolated Multi-Language Code Execution Engine (JavaScript [Node.js 18], Python [3.8], Java [OpenJDK 17], C++ [GCC 9]), custom `stdin` terminal drawer, real-time `stdout`/`stderr`/compilation error diagnostics, candidate WebRTC camera stream, Web Speech voice input, video avatar synchronization. |
+| **Targeted Roadmaps**      | 10 standardized engineering tracks (MERN Stack, Full-Stack, Java Backend, Frontend, Backend, Python Backend, QA Automation, DevOps, Data Analyst, ML Engineer), salary-bracketed milestones (10 to 40 LPA), dynamic resume attachment/replacement flow, automated official documentation resolution, YouTube Data API v3 video retrieval, Redis cached roadmaps.     |
+| **Monetization & Billing** | Razorpay checkout, server-side HMAC-SHA256 signature verification, instant credit balance updates.                                                                                                                                                                                                                                                                   |
 
 ---
 
@@ -331,7 +333,9 @@ Yugam/
 ## 🔬 Microservices Deep-Dive
 
 ### 1. API Gateway (Port 8000)
+
 The central ingress controller for all client requests.
+
 - **Reverse Proxy**: Utilizes `express-http-proxy` to route requests to upstream services without revealing downstream network ports.
 - **Authentication Guard (`isAuth.js`)**:
   - Reads `session` cookie.
@@ -340,7 +344,9 @@ The central ingress controller for all client requests.
 - **Identity Propagation (`proxyWithHeaders.js`)**: Decorates incoming HTTP requests with `x-user-id: <MongoObjectId>`, ensuring downstream services remain stateless regarding session storage.
 
 ### 2. Authentication Service (Port 8001)
+
 Manages the user lifecycle and virtual coin balance.
+
 - **Firebase Auth Bridge**: Decodes and verifies Firebase client ID tokens using `firebase-admin`.
 - **User Upsert**: Automatically creates a record in MongoDB upon first login and assigns default starting credits (**150 Interview Coins**).
 - **Session Provisioning**: Emits cryptographically secure session IDs via `crypto.randomUUID()`, caches session objects in Redis with a 7-day TTL (`60 * 60 * 24 * 7`), and writes a secure, `httpOnly`, `sameSite: "none"` cookie.
@@ -349,7 +355,9 @@ Manages the user lifecycle and virtual coin balance.
   - `POST /add-coins`: Credits user balances following successful Razorpay payment verifications.
 
 ### 3. Resume Intelligence Service (Port 8002)
+
 Analyzes candidate resumes against target job profiles.
+
 - **PDF Extraction**: Ingests multi-page PDFs using Multer disk buffering and parses textual streams via `pdf-parse`.
 - **LangChain Structured Agent**: Prompts Groq LLM (`openai/gpt-oss-120b`) to convert raw text into a normalized schema comprising contact info, summary, education, technologies, experience, and projects.
 - **AI-First Domain Extraction (`suggestedRole`)**: Automatically detects the candidate's authentic domain and career specialization (e.g. `Cybersecurity Analyst`, `ML Engineer`, `Cloud Architect`) directly from parsed resume text, eliminating hardcoded role fallbacks.
@@ -363,7 +371,9 @@ Analyzes candidate resumes against target job profiles.
 - **Resource Hygiene**: Automatically unlinks uploaded temporary PDF files from the local filesystem in a `finally` block.
 
 ### 4. AI Mock Interview Service (Port 8003)
+
 Orchestrates autonomous, dynamic HR and Technical interviews.
+
 - **LangGraph StateGraph Engine**:
   - **`interviewAgent`**: Generates 6 highly contextual, scenario-based interview questions tailored to the candidate's chosen role, difficulty level, and optional resume context.
   - **Strict Domain Segregation**:
@@ -371,14 +381,14 @@ Orchestrates autonomous, dynamic HR and Technical interviews.
     - **HR Tracks**: Enforces 100% behavioral, situational, culture fit, and conflict resolution questions using the STAR framework (`hrInterviewPrompt.js`).
   - **Resume Context Injection**: When `useResume: true`, dynamically formats and passes candidate project descriptions, tech stacks, experience, and growth areas directly into the interviewer prompt.
   - **`feedbackAgent`**: Evaluates individual responses against **8 rigorous dimensions**:
-    1. *Correctness*
-    2. *Clarity*
-    3. *Relevance*
-    4. *Detail*
-    5. *Efficiency*
-    6. *Communication*
-    7. *Problem Solving*
-    8. *Creativity*
+    1. _Correctness_
+    2. _Clarity_
+    3. _Relevance_
+    4. _Detail_
+    5. _Efficiency_
+    6. _Communication_
+    7. _Problem Solving_
+    8. _Creativity_
   - **`summaryAgent`**: Triggered upon completion of the final question. Computes overall performance metrics, pinpoints explicit candidate strengths, analyzes weaknesses, and issues actionable study recommendations.
 - **Docker-Isolated Multi-Language Code Execution Engine**:
   - Compiles and runs user code in an isolated sandbox supporting **JavaScript** (Node.js 18), **Python** (3.8), **Java** (OpenJDK 17 with `Main.java` entrypoint), and **C++** (GCC 9).
@@ -389,18 +399,22 @@ Orchestrates autonomous, dynamic HR and Technical interviews.
 - **Analytics Caching**: Caches user interview aggregations (`stats`, `technicalData`, `hrData`) under `interviews:<userId>` in Redis for 10 minutes, invalidating automatically upon submission of answers.
 
 ### 5. Roadmap & Resource Service (Port 8004)
+
 Synthesizes end-to-end learning curriculums for career acceleration.
+
 - **10 Standardized Engineering Tracks**: Fully supports MERN Stack Developer, Full-Stack Software Engineer, Java Backend Developer, Frontend Developer, Backend Developer, Python Backend Developer, QA Automation Engineer, DevOps Engineer, Data Analyst, and ML Engineer with salary-bracketed targets (10 LPA, 15 LPA, 20 LPA, 30 LPA, 40 LPA).
 - **Two-Stage Sequential Pipeline**:
-  - **Stage 1 (`roadmapAgent`)**: Analyzes target role, salary package tier, and user resume gaps to generate progressive learning modules categorized by timeline and difficulty (*Easy*, *Medium*, *Hard*). Configured with `maxTokens: 6000` to prevent JSON response truncation.
+  - **Stage 1 (`roadmapAgent`)**: Analyzes target role, salary package tier, and user resume gaps to generate progressive learning modules categorized by timeline and difficulty (_Easy_, _Medium_, _Hard_). Configured with `maxTokens: 6000` to prevent JSON response truncation.
   - **Stage 2 (`resourceAgent`)**: Parses each module title, invokes the LLM to locate authoritative official documentation, and calls the **YouTube Data API v3** to retrieve matching video tutorials.
 - **Resilient Fallbacks**: Seamlessly degrades to query-encoded fallback documentation and YouTube search links if external API rate limits or network hiccups occur, preventing roadmap generation failures.
 - **Resume Replacement & Customization**: Features an interactive attachment and re-upload modal allowing candidates to swap resumes and re-align milestone recommendations.
 - **Caching Strategy**: Roadmaps are cached in Redis under `roadmap:<id>` and `userRoadmaps:<userId>` for 1 hour (`3600s`).
 
 ### 6. Billing & Subscription Service (Port 8005)
+
 Facilitates payment transactions and token replenishment.
-- **Catalog Management**: Provides tiered plans (e.g., *Starter Plan* at ₹199 for 300 Interview Coins).
+
+- **Catalog Management**: Provides tiered plans (e.g., _Starter Plan_ at ₹199 for 300 Interview Coins).
 - **Order Generation**: Invokes Razorpay SDK to create valid currency orders (`INR`).
 - **Cryptographic Verification**: Re-computes and verifies HMAC-SHA256 signatures (`crypto.createHmac("sha256", secret)`) against `razorpay_order_id` and `razorpay_payment_id` to guarantee tamper-proof order settlements.
 
@@ -429,66 +443,73 @@ The frontend is a single-page application built with **React 19**, **Vite 8**, a
 
 Yugam implements a virtual coin economy to balance LLM compute usage:
 
-| Event / Action | Coin Impact | Description |
-| :--- | :---: | :--- |
-| **New Account Creation** | **+150 Coins** | Welcome bonus credited on first login. |
-| **Resume ATS Scoring** | **-10 Coins** | Deducted when submitting a PDF for parsing and gap analysis. |
-| **Roadmap Generation** | **-20 Coins** | Deducted when compiling a custom curriculum with video resources. |
-| **Start Mock Interview** | **-50 Coins** | Deducted when generating a full 6-question AI interview session. |
-| **Starter Plan Purchase** | **+300 Coins** | Credited on payment of ₹199 via Razorpay. |
+| Event / Action            |  Coin Impact   | Description                                                       |
+| :------------------------ | :------------: | :---------------------------------------------------------------- |
+| **New Account Creation**  | **+150 Coins** | Welcome bonus credited on first login.                            |
+| **Resume ATS Scoring**    | **-10 Coins**  | Deducted when submitting a PDF for parsing and gap analysis.      |
+| **Roadmap Generation**    | **-20 Coins**  | Deducted when compiling a custom curriculum with video resources. |
+| **Start Mock Interview**  | **-50 Coins**  | Deducted when generating a full 6-question AI interview session.  |
+| **Starter Plan Purchase** | **+300 Coins** | Credited on payment of ₹199 via Razorpay.                         |
 
 ---
 
 ## 📡 API Reference Guide
 
 ### Authentication (`/api/auth`)
-| Method | Endpoint | Description | Headers / Auth | Payload |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/login` | Authenticate with Firebase token & create session | None | `{ "token": "<FirebaseIdToken>" }` |
-| `GET` | `/logout` | Invalidate Redis session & clear session cookie | Cookie | None |
-| `POST` | `/use-coins`| Deduct coins for an action | Cookie | `{ "coins": 50, "action": "start-interview" }` |
-| `POST` | `/add-coins`| Credit coins to user wallet | Cookie | `{ "coins": 300 }` |
+
+| Method | Endpoint     | Description                                       | Headers / Auth | Payload                                        |
+| :----- | :----------- | :------------------------------------------------ | :------------- | :--------------------------------------------- |
+| `POST` | `/login`     | Authenticate with Firebase token & create session | None           | `{ "token": "<FirebaseIdToken>" }`             |
+| `GET`  | `/logout`    | Invalidate Redis session & clear session cookie   | Cookie         | None                                           |
+| `POST` | `/use-coins` | Deduct coins for an action                        | Cookie         | `{ "coins": 50, "action": "start-interview" }` |
+| `POST` | `/add-coins` | Credit coins to user wallet                       | Cookie         | `{ "coins": 300 }`                             |
 
 ### User Profile (`/api`)
-| Method | Endpoint | Description | Headers / Auth | Payload |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/me` | Get currently authenticated user profile | Session Cookie | None |
+
+| Method | Endpoint | Description                              | Headers / Auth | Payload |
+| :----- | :------- | :--------------------------------------- | :------------- | :------ |
+| `GET`  | `/me`    | Get currently authenticated user profile | Session Cookie | None    |
 
 ### Resume Services (`/api/resume`)
-| Method | Endpoint | Description | Headers / Auth | Payload |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/roles` | Fetch supported target job roles & taxonomy | `x-user-id` | None |
-| `POST` | `/upload` | Upload resume PDF & trigger ATS analysis | `x-user-id` | `FormData`: `resume` (PDF), `targetRole` (Optional String) |
-| `GET` | `/get-resume`| Retrieve user's parsed resume & gap analysis (returns `200 OK` with `{ data: null, resume: null }` if not found) | `x-user-id` | None |
+
+| Method | Endpoint      | Description                                                                                                      | Headers / Auth | Payload                                                    |
+| :----- | :------------ | :--------------------------------------------------------------------------------------------------------------- | :------------- | :--------------------------------------------------------- |
+| `GET`  | `/roles`      | Fetch supported target job roles & taxonomy                                                                      | `x-user-id`    | None                                                       |
+| `POST` | `/upload`     | Upload resume PDF & trigger ATS analysis                                                                         | `x-user-id`    | `FormData`: `resume` (PDF), `targetRole` (Optional String) |
+| `GET`  | `/get-resume` | Retrieve user's parsed resume & gap analysis (returns `200 OK` with `{ data: null, resume: null }` if not found) | `x-user-id`    | None                                                       |
 
 ### AI Interview Engine (`/api/interview`)
-| Method | Endpoint | Description | Headers / Auth | Payload |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/start` | Start new interview session & generate questions | `x-user-id` | `{ "type": "technical"\|"hr", "role": "Frontend Developer", "useResume": true\|false }` |
-| `POST` | `/answer`| Submit question response & get real-time feedback | `x-user-id` | `{ "interviewId": "...", "answer": "..." }` |
-| `GET` | `/all` | Fetch user interview history, averages & radar metrics | `x-user-id` | None |
-| `GET` | `/:id` | Fetch specific interview details and final report | `x-user-id` | None |
-| `POST` | `/code/run` | Submit source code to isolated execution sandbox | `x-user-id` | `{ "language": "javascript"\|"python"\|"java"\|"cpp", "source_code": "...", "stdin": "..." }` |
-| `GET` | `/code/status/:token` | Poll async execution status, stdout, stderr, errors & metrics | `x-user-id` | None |
+
+| Method | Endpoint              | Description                                                   | Headers / Auth | Payload                                                                                       |
+| :----- | :-------------------- | :------------------------------------------------------------ | :------------- | :-------------------------------------------------------------------------------------------- |
+| `POST` | `/start`              | Start new interview session & generate questions              | `x-user-id`    | `{ "type": "technical"\|"hr", "role": "Frontend Developer", "useResume": true\|false }`       |
+| `POST` | `/answer`             | Submit question response & get real-time feedback             | `x-user-id`    | `{ "interviewId": "...", "answer": "..." }`                                                   |
+| `GET`  | `/all`                | Fetch user interview history, averages & radar metrics        | `x-user-id`    | None                                                                                          |
+| `GET`  | `/:id`                | Fetch specific interview details and final report             | `x-user-id`    | None                                                                                          |
+| `POST` | `/code/run`           | Submit source code to isolated execution sandbox              | `x-user-id`    | `{ "language": "javascript"\|"python"\|"java"\|"cpp", "source_code": "...", "stdin": "..." }` |
+| `GET`  | `/code/status/:token` | Poll async execution status, stdout, stderr, errors & metrics | `x-user-id`    | None                                                                                          |
 
 ### Roadmaps & Learning Paths (`/api/roadmap`)
-| Method | Endpoint | Description | Headers / Auth | Payload |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/generate`| Build custom roadmap across 10 tracks with docs & YouTube videos | `x-user-id` | `{ "role": "MERN Stack Developer", "targetPackage": "10 LPA"\|"15 LPA"\|"20 LPA"\|"30 LPA"\|"40 LPA", "useResume": true\|false }` |
-| `GET` | `/all` | List all historical roadmaps created by the user | `x-user-id` | None |
-| `GET` | `/:id` | Fetch specific roadmap details by ID | `x-user-id` | None |
+
+| Method | Endpoint    | Description                                                      | Headers / Auth | Payload                                                                                                                           |
+| :----- | :---------- | :--------------------------------------------------------------- | :------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/generate` | Build custom roadmap across 10 tracks with docs & YouTube videos | `x-user-id`    | `{ "role": "MERN Stack Developer", "targetPackage": "10 LPA"\|"15 LPA"\|"20 LPA"\|"30 LPA"\|"40 LPA", "useResume": true\|false }` |
+| `GET`  | `/all`      | List all historical roadmaps created by the user                 | `x-user-id`    | None                                                                                                                              |
+| `GET`  | `/:id`      | Fetch specific roadmap details by ID                             | `x-user-id`    | None                                                                                                                              |
 
 ### Billing & Orders (`/api/billing`)
-| Method | Endpoint | Description | Headers / Auth | Payload |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/create` | Create Razorpay order | `x-user-id` | `{ "planId": "starter" }` |
-| `POST` | `/verify` | Validate cryptographic HMAC-SHA256 signature | `x-user-id` | `{ "razorpay_order_id": "...", "razorpay_payment_id": "...", "razorpay_signature": "..." }` |
+
+| Method | Endpoint  | Description                                  | Headers / Auth | Payload                                                                                     |
+| :----- | :-------- | :------------------------------------------- | :------------- | :------------------------------------------------------------------------------------------ |
+| `POST` | `/create` | Create Razorpay order                        | `x-user-id`    | `{ "planId": "starter" }`                                                                   |
+| `POST` | `/verify` | Validate cryptographic HMAC-SHA256 signature | `x-user-id`    | `{ "razorpay_order_id": "...", "razorpay_payment_id": "...", "razorpay_signature": "..." }` |
 
 ---
 
 ## 🗄️ Data Storage & Redis Caching
 
 ### MongoDB Collections
+
 - `User`: Primary user identities, Firebase UIDs, emails, profile names, and live `interviewCoin` ledger balances.
 - `Resume`: Full structured resume schemas including nested subdocuments for `education`, `experience`, `projects`, extracted skills, missing skills, and overall ATS scores.
 - `Interview`: Interview metadata, chosen role, type, array of question subdocuments (questions, answers, timers, 8-metric scores), and aggregate final summary reports.
@@ -496,13 +517,14 @@ Yugam implements a virtual coin economy to balance LLM compute usage:
 - `Billing`: Immutable transaction records documenting Razorpay order IDs, payment IDs, verification signatures, monetary amounts, and settlement statuses (`created`, `paid`, `failed`).
 
 ### Redis Key Patterns & Expiry Policies
-| Key Pattern | Purpose | Lifetime (TTL) | Invalidation Trigger |
-| :--- | :--- | :--- | :--- |
-| `session:<sessionId>` | Holds authenticated user session JSON | `7 days` (604,800s) | User logout / manual session revocation |
-| `resume:<userId>` | Cached structured resume & ATS analysis | Persistent (no TTL) | User re-uploads / updates resume |
-| `interviews:<userId>` | Aggregated interview statistics & radar charts | `10 minutes` (600s) | New interview started or answer submitted |
-| `roadmap:<id>` | Cached individual roadmap entity | `1 hour` (3600s) | Cache expiry |
-| `userRoadmaps:<userId>` | Array of all roadmaps belonging to user | `1 hour` (3600s) | Generation of a new roadmap |
+
+| Key Pattern             | Purpose                                        | Lifetime (TTL)      | Invalidation Trigger                      |
+| :---------------------- | :--------------------------------------------- | :------------------ | :---------------------------------------- |
+| `session:<sessionId>`   | Holds authenticated user session JSON          | `7 days` (604,800s) | User logout / manual session revocation   |
+| `resume:<userId>`       | Cached structured resume & ATS analysis        | Persistent (no TTL) | User re-uploads / updates resume          |
+| `interviews:<userId>`   | Aggregated interview statistics & radar charts | `10 minutes` (600s) | New interview started or answer submitted |
+| `roadmap:<id>`          | Cached individual roadmap entity               | `1 hour` (3600s)    | Cache expiry                              |
+| `userRoadmaps:<userId>` | Array of all roadmaps belonging to user        | `1 hour` (3600s)    | Generation of a new roadmap               |
 
 ---
 
@@ -511,6 +533,7 @@ Yugam implements a virtual coin economy to balance LLM compute usage:
 To run the full Yugam stack, configure the following `.env` files across services:
 
 ### 1. Gateway (`backend/gateway/.env`)
+
 ```ini
 PORT=8000
 REDIS_URL="redis://localhost:6379"
@@ -523,14 +546,17 @@ FRONTEND_URL="http://localhost:5173"
 ```
 
 ### 2. Auth Service (`backend/services/auth/.env`)
+
 ```ini
 PORT=8001
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/user"
 REDIS_URL="redis://localhost:6379"
 ```
-*(Requires `backend/services/auth/serviceAccountKey.json` from Firebase Console)*
+
+_(Requires `backend/services/auth/serviceAccountKey.json` from Firebase Console)_
 
 ### 3. Resume Service (`backend/services/resume/.env`)
+
 ```ini
 PORT=8002
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/resume"
@@ -539,6 +565,7 @@ GROQ_API_KEY="gsk_..."
 ```
 
 ### 4. Interview Service (`backend/services/interview/.env`)
+
 ```ini
 PORT=8003
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/interview"
@@ -547,9 +574,11 @@ GROQ_API_KEY="gsk_..."
 CODEBOX_URL="http://localhost:3000"
 CODEBOX_AUTH_TOKEN="dev-token"
 ```
-*(Internal execution engine running in an isolated Docker container on port 3000, authenticated via `CODEBOX_AUTH_TOKEN`)*
+
+_(Internal execution engine running in an isolated Docker container on port 3000, authenticated via `CODEBOX_AUTH_TOKEN`)_
 
 ### 5. Roadmap Service (`backend/services/roadmap/.env`)
+
 ```ini
 PORT=8004
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/Roadmap"
@@ -559,6 +588,7 @@ YOUTUBE_API_KEY="AIzaSy..."
 ```
 
 ### 6. Billing Service (`backend/services/billing/.env`)
+
 ```ini
 PORT=8005
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/Billing"
@@ -567,6 +597,7 @@ RAZORPAY_KEY_SECRET="jrdE..."
 ```
 
 ### 7. Frontend Client (`frontend/.env`)
+
 ```ini
 VITE_BACKEND_URL="http://localhost:8000"
 VITE_FIREBASE_APIKEY="AIzaSy..."
@@ -578,23 +609,29 @@ VITE_RAZORPAY_KEY_ID="rzp_test_..."
 ## 🚀 Getting Started & Local Setup
 
 ### Prerequisites
+
 - [Node.js](https://nodejs.org/) `>= 20.x`
 - [Docker & Docker Compose](https://www.docker.com/) (for Redis)
 - [Git](https://git-scm.com/)
 - Active API keys for **Groq Cloud**, **Firebase**, **YouTube Data API v3**, and **Razorpay** (Test Mode).
 
 ### Docker Setup (Redis)
+
 From the `backend/` directory, spin up the Redis container:
+
 ```bash
 cd backend
 docker-compose up -d
 ```
+
 Verify Redis is running on `localhost:6379`:
+
 ```bash
 docker ps
 ```
 
 ### Backend Services Launch
+
 Each microservice can be started in development mode using `nodemon`. Open separate terminal windows or run them concurrently:
 
 ```bash
@@ -630,12 +667,15 @@ npm run dev
 ```
 
 ### Frontend Launch
+
 Launch the React 19 development server:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
 Navigate to `http://localhost:5173` to access the application.
 
 ---
@@ -653,8 +693,16 @@ Navigate to `http://localhost:5173` to access the application.
 
 ## 📄 License & Contributors
 
-Distributed under the **ISC License**. Built with passion to empower the next generation of engineers and leaders.
+### Creator & Lead Architect
+
+- **Harsh Sharma** — Project Creator, System Architecture & Full-Stack Development
+
+### License
+
+This project is licensed under the terms of the [ISC License](LICENSE). See the [LICENSE](LICENSE) file for complete terms and copyright details.
+
+---
 
 <div align="center">
-  <sub>Engineered with ❤️ for ambitious developers worldwide.</sub>
+  <sub>Engineered with ❤️ by <b>Harsh Sharma</b>.</sub>
 </div>
