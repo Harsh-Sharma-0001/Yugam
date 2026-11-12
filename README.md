@@ -69,7 +69,7 @@ Modern tech recruitment demands rigorous preparation, tailored resumes, structur
 | **API Gateway** | Unified reverse proxy entrypoint (`express-http-proxy`), central authentication guard (`isAuth`), transparent header decoration (`x-user-id`). |
 | **Resume Intelligence** | PDF text parsing (`pdf-parse`), LangChain structured output extraction, deterministic role matching (MERN, Full-Stack, Java Backend, etc.), ATS radial score meters (`recharts`). |
 | **AI Mock Interview** | LangGraph cyclic workflows, 8-dimensional evaluation (Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, Creativity), comprehensive post-interview feedback report. |
-| **Interactive Studio** | Embedded Monaco Code Editor (`@monaco-editor/react`), candidate WebRTC camera stream, Web Speech voice input, video avatar synchronization. |
+| **Interactive Studio** | Embedded Monaco Code Editor (`@monaco-editor/react`), Docker-Isolated Multi-Language Code Execution Engine (JavaScript, Python, Java, C++), custom `stdin` terminal, candidate WebRTC camera stream, Web Speech voice input, video avatar synchronization. |
 | **Targeted Roadmaps** | Salary-bracketed skill tracks, automated web-resource resolution, YouTube API v3 tutorial pairing, Redis cached roadmaps. |
 | **Monetization & Billing** | Razorpay checkout, server-side HMAC-SHA256 signature verification, instant credit balance updates. |
 
@@ -367,6 +367,10 @@ Orchestrates autonomous, dynamic HR and Technical interviews.
     7. *Problem Solving*
     8. *Creativity*
   - **`summaryAgent`**: Triggered upon completion of the final question. Computes overall performance metrics, pinpoints explicit candidate strengths, analyzes weaknesses, and issues actionable study recommendations.
+- **Docker-Isolated Multi-Language Code Execution Engine**:
+  - Compiles and runs user code in an isolated sandbox supporting **JavaScript** (Node.js 18), **Python** (3.8), **Java** (OpenJDK 17), and **C++** (GCC 9).
+  - Features an interactive Monaco editor drawer with live status reporting (Accepted, Compilation Error, Runtime Error, Time Limit Exceeded), custom `stdin` input, execution timing, and memory telemetry.
+  - Zero client credential exposure: all execution traffic is proxied securely through the API Gateway.
 - **Analytics Caching**: Caches user interview aggregations (`stats`, `technicalData`, `hrData`) under `interviews:<userId>` in Redis for 10 minutes, invalidating automatically upon submission of answers.
 
 ### 5. Roadmap & Resource Service (Port 8004)

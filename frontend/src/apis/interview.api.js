@@ -53,7 +53,7 @@ export const executeCode = async ({ language, source_code, stdin }) => {
     const message =
       error.response?.data?.message ||
       (error.response?.status === 503
-        ? "Code execution service is currently offline."
+        ? "Code execution engine is currently unavailable."
         : "Failed to execute code.");
     return {
       success: false,

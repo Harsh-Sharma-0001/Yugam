@@ -4,7 +4,7 @@ import { getExecutionStatus, runCode } from "../controllers/code.controller.js"
 
 const interviewRouter = express.Router()
 
-// CodeBox Execution Routes
+// Code Execution Engine Routes
 interviewRouter.post("/code/run", runCode)
 interviewRouter.get("/code/status/:token", getExecutionStatus)
 

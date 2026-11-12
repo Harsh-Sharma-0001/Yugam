@@ -126,7 +126,7 @@ function CodeEditor({ onClose, onSubmitCode }) {
           }
           setIsRunning(false);
           setOutput({
-            error: "Execution timed out waiting for CodeBox worker (20s).",
+            error: "Execution timed out waiting for sandbox worker (20s).",
             status: { id: 5, description: "Time Limit Exceeded" },
           });
           return;
@@ -148,7 +148,7 @@ function CodeEditor({ onClose, onSubmitCode }) {
             return;
           }
 
-          // CodeBox/Judge0 status.id:
+          // Runner status codes:
           // 1: In Queue, 2: Processing
           // 3: Accepted
           // > 3: Compilation/Runtime/Time Limit Error
@@ -278,7 +278,7 @@ function CodeEditor({ onClose, onSubmitCode }) {
             <div>
               <span className="text-sm font-semibold text-white">Online Compiler & Editor</span>
               <span className="hidden sm:inline-block ml-2 text-[10px] text-zinc-400 border border-white/10 rounded px-1.5 py-0.2 bg-white/[0.03]">
-                CodeBox Sandbox
+                Isolated Sandbox
               </span>
             </div>
           </div>
@@ -396,7 +396,7 @@ function CodeEditor({ onClose, onSubmitCode }) {
                 {isRunning ? (
                   <div className="flex items-center gap-2 text-amber-400/90 text-xs py-2">
                     <FiLoader className="animate-spin shrink-0" size={14} />
-                    <span>Compiling & executing code in CodeBox sandbox...</span>
+                    <span>Compiling & executing code in isolated sandbox...</span>
                   </div>
                 ) : output ? (
                   <div className="space-y-2">

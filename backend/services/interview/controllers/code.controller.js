@@ -59,7 +59,7 @@ export const runCode = async (req, res) => {
         message:
           errData.error ||
           errData.message ||
-          `CodeBox returned HTTP ${response.status}`,
+          `Code execution runner returned HTTP ${response.status}`,
       });
     }
 
@@ -68,7 +68,7 @@ export const runCode = async (req, res) => {
     if (!data?.token) {
       return res.status(502).json({
         success: false,
-        message: "CodeBox did not return an execution token",
+        message: "Code execution service did not return an execution token",
       });
     }
 
@@ -82,7 +82,7 @@ export const runCode = async (req, res) => {
     if (isConnectionError(error)) {
       return res.status(503).json({
         success: false,
-        message: "Code execution service is currently offline.",
+        message: "Code execution engine is currently unavailable.",
       });
     }
 
@@ -126,7 +126,7 @@ export const getExecutionStatus = async (req, res) => {
     if (!response.ok) {
       return res.status(response.status).json({
         success: false,
-        message: `CodeBox status query failed with HTTP ${response.status}.`,
+        message: `Execution status query failed with HTTP ${response.status}.`,
       });
     }
 
@@ -148,7 +148,7 @@ export const getExecutionStatus = async (req, res) => {
     if (isConnectionError(error)) {
       return res.status(503).json({
         success: false,
-        message: "Code execution service is currently offline.",
+        message: "Code execution engine is currently unavailable.",
       });
     }
 
