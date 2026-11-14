@@ -79,3 +79,71 @@ export const pollCodeStatus = async (token) => {
     };
   }
 };
+
+export const getStudentsPerformanceDirectory = async (params = {}) => {
+  try {
+    const response = await api.get("/api/interview/students-directory", { params });
+    return response.data;
+  } catch (error) {
+    console.error("getStudentsPerformanceDirectory error:", error);
+    return error.response?.data || { success: false, message: error.message };
+  }
+};
+
+export const exportStudentsDirectoryFile = async (format = "csv", params = {}) => {
+  try {
+    const response = await api.get("/api/interview/students-directory/export", {
+      params: { ...params, format },
+      responseType: "blob",
+    });
+
+    const blob = new Blob([response.data], {
+      type:
+        format === "xlsx"
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "text/csv;charset=utf-8;",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Yugam_Student_Report.${format}`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    return { success: true };
+  } catch (error) {
+    console.error("exportStudentsDirectoryFile error:", error);
+    return { success: false, message: "Export download failed." };
+  }
+};
+
+export const scheduleInterview = async (data) => {
+  try {
+    const response = await api.post("/api/interview/schedule", data);
+    return response.data;
+  } catch (error) {
+    console.error("scheduleInterview error:", error);
+    throw error;
+  }
+};
+
+export const getScheduledInterviews = async (params = {}) => {
+  try {
+    const response = await api.get("/api/interview/schedule", { params });
+    return response.data;
+  } catch (error) {
+    console.error("getScheduledInterviews error:", error);
+    return error.response?.data || { success: false, scheduledInterviews: [] };
+  }
+};
+
+export const updateScheduleStatus = async (id, data) => {
+  try {
+    const response = await api.patch(`/api/interview/schedule/${id}/status`, data);
+    return response.data;
+  } catch (error) {
+    console.error("updateScheduleStatus error:", error);
+    throw error;
+  }
+};

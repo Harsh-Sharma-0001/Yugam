@@ -1,9 +1,11 @@
 import express from "express";
 import {
   addCoins,
+  createInternalAuditLog,
   deductFeatureCoins,
   getAuditLogs,
   getInstitutionUsers,
+  getInternalStudents,
   getPendingVerifications,
   getUserById,
   login,
@@ -69,6 +71,8 @@ authRouter.get(
 authRouter.post("/add-coins", isInternalService, addCoins);
 authRouter.post("/use-coins", useInterviewCoins);
 authRouter.get("/internal/user/:id", isInternalService, getUserById);
+authRouter.get("/internal/institution/students", isInternalService, getInternalStudents);
+authRouter.post("/internal/audit-logs", isInternalService, createInternalAuditLog);
 authRouter.post("/internal/coins/deduct", isInternalService, deductFeatureCoins);
 authRouter.post("/internal/coins/refund", isInternalService, refundFeatureCoins);
 

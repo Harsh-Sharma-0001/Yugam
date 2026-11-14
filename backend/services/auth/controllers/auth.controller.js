@@ -1014,3 +1014,61 @@ export const getAuditLogs = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+/**
+ * GET /internal/institution/students
+ * Protected by isInternalService
+ */
+export const getInternalStudents = async (req, res) => {
+  try {
+    const { institutionId } = req.query;
+    const filter = { role: "student" };
+    if (institutionId) {
+      filter.institutionId = institutionId;
+    }
+
+    const students = await User.find(filter)
+      .select("_id name email status role institutionId profile createdAt")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("getInternalStudents error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * POST /internal/audit-logs
+ * Protected by isInternalService
+ */
+export const createInternalAuditLog = async (req, res) => {
+  try {
+    const { institutionId, actorId, actorRole, action, targetId, details } = req.body;
+    if (!institutionId || !actorId || !actorRole || !action) {
+      return res.status(400).json({ success: false, message: "Missing required audit fields." });
+    }
+
+    const log = await AuditLog.create({
+      institutionId,
+      actorId,
+      actorRole,
+      action,
+      targetId: targetId || null,
+      details: details || {},
+    });
+
+    return res.status(201).json({
+      success: true,
+      log,
+    });
+  } catch (error) {
+    console.error("createInternalAuditLog error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+

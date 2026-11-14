@@ -5,7 +5,12 @@ import InterviewGraph from "../components/InterviewGraph";
 import InterviewArchive from "../components/interview/InterviewArchive";
 import InterviewDetailView from "../components/interview/InterviewDetailView";
 import EditProfileModal from "../components/EditProfileModal";
-import { getAllInterviews } from "../apis/interview.api";
+import StudentDirectory from "../components/StudentDirectory";
+import ScheduleInterviewModal from "../components/ScheduleInterviewModal";
+import {
+  getAllInterviews,
+  getScheduledInterviews,
+} from "../apis/interview.api";
 import {
   getCurrentUser,
   getTasks,
@@ -38,6 +43,8 @@ import {
   FiLayers,
   FiGrid,
   FiExternalLink,
+  FiCalendar,
+  FiPlay,
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -52,10 +59,7 @@ function Dashboard() {
   const [moblieOpen, setMoblieOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
-  // Workspace View State:
-  // "overview" = tab-based dashboard
-  // "history" = full-width interview archive
-  // "detail" = full-width single interview transcript
+  // Workspace View State: "overview" | "history" | "detail"
   const [activeView, setActiveView] = useState("overview");
   const [selectedInterviewId, setSelectedInterviewId] = useState(null);
 
@@ -81,6 +85,11 @@ function Dashboard() {
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [submitModalTask, setSubmitModalTask] = useState(null);
   const [reviewTaskSubmissions, setReviewTaskSubmissions] = useState(null);
+
+  // Scheduling State
+  const [scheduledInterviews, setScheduledInterviews] = useState([]);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [selectedStudentForSchedule, setSelectedStudentForSchedule] = useState(null);
 
   // Directory & Governance Data
   const [students, setStudents] = useState([]);
@@ -159,6 +168,18 @@ function Dashboard() {
     }
   };
 
+  // Load Scheduled Interviews
+  const fetchScheduledList = async () => {
+    try {
+      const res = await getScheduledInterviews();
+      if (res?.scheduledInterviews) {
+        setScheduledInterviews(res.scheduledInterviews);
+      }
+    } catch (e) {
+      console.error("fetchScheduledList error:", e);
+    }
+  };
+
   // Load Institution Directory & Pending Verifications (For Admin & Trainer)
   const fetchInstitutionalData = async () => {
     if (role !== "admin" && role !== "trainer") return;
@@ -184,6 +205,7 @@ function Dashboard() {
     fetchUser();
     fetchInterviews();
     fetchTasksList();
+    fetchScheduledList();
   }, []);
 
   useEffect(() => {
@@ -282,7 +304,6 @@ function Dashboard() {
       try {
         usersArray = JSON.parse(provisionInput);
       } catch {
-        // Parse CSV/TSV format: email, name, role, rollNumber, section, course, currentCGPA
         const lines = provisionInput.trim().split("\n");
         usersArray = lines.map((line) => {
           const parts = line.split(",").map((p) => p.trim());
@@ -401,6 +422,19 @@ function Dashboard() {
 
           {/* Top-Right Header Actions */}
           <div className="flex items-center gap-2">
+            {(role === "admin" || role === "trainer") && (
+              <button
+                onClick={() => {
+                  setSelectedStudentForSchedule(null);
+                  setScheduleModalOpen(true);
+                }}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-zinc-800 transition shadow-sm"
+              >
+                <FiCalendar size={13} />
+                <span>Schedule Interview</span>
+              </button>
+            )}
+
             <button
               onClick={() => setEditProfileOpen(true)}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-semibold transition border border-black/5"
@@ -500,7 +534,7 @@ function Dashboard() {
                     }`}
                   >
                     <FiUsers className="inline mr-1.5" size={13} />
-                    Students Directory ({students.length})
+                    Students Directory
                   </button>
                 )}
 
@@ -536,6 +570,95 @@ function Dashboard() {
               {/* TAB 1: OVERVIEW */}
               {activeTab === "overview" && (
                 <div className="space-y-6">
+                  {/* Upcoming Scheduled Interviews Strip for Students */}
+                  {role === "student" && scheduledInterviews.length > 0 && (
+                    <div className="bg-[#0E1016] border border-white/10 rounded-2xl p-5 text-white shadow-xl">
+                      <div className="flex items-center justify-between mb-3.5">
+                        <div className="flex items-center gap-2">
+                          <FiCalendar className="text-blue-400" size={17} />
+                          <h4 className="text-sm font-bold text-white">
+                            Upcoming Scheduled Interviews
+                          </h4>
+                        </div>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30">
+                          {scheduledInterviews.length} Scheduled
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {scheduledInterviews.map((item) => (
+                          <div
+                            key={item._id}
+                            className="bg-[#17181E] border border-white/5 rounded-xl p-4 flex flex-col justify-between space-y-3"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span
+                                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                                    item.mode === "ai"
+                                      ? "bg-blue-500/20 text-blue-400"
+                                      : "bg-purple-500/20 text-purple-400"
+                                  }`}
+                                >
+                                  {item.mode === "ai"
+                                    ? "AI Mock Interview"
+                                    : "Live Trainer Interview"}
+                                </span>
+                                <h5 className="text-sm font-bold text-white mt-1.5">
+                                  {item.role}
+                                </h5>
+                                <p className="text-xs text-zinc-400">
+                                  Scheduled by: {item.trainerName}
+                                </p>
+                              </div>
+
+                              <div className="text-right">
+                                <span className="text-xs text-zinc-300 block font-semibold">
+                                  {new Date(item.scheduledAt).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                                <span className="text-[10px] text-zinc-500">
+                                  {item.durationMinutes} Mins
+                                </span>
+                              </div>
+                            </div>
+
+                            {item.instructions && (
+                              <p className="text-xs text-zinc-400 bg-black/40 p-2.5 rounded-lg border border-white/5 line-clamp-2">
+                                Note: {item.instructions}
+                              </p>
+                            )}
+
+                            <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                              <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span>Free / College Sponsored</span>
+                              </span>
+
+                              {item.mode === "ai" ? (
+                                <button
+                                  onClick={() => navigate("/interview")}
+                                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <FiPlay size={11} />
+                                  <span>Start AI Interview</span>
+                                </button>
+                              ) : (
+                                <span className="text-xs font-bold text-purple-400">
+                                  Video Link Provided by Trainer
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Statbox Metric Counters */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 md:gap-3">
                     <Statbox
@@ -804,108 +927,14 @@ function Dashboard() {
                 </div>
               )}
 
-              {/* TAB 3: STUDENTS DIRECTORY */}
+              {/* TAB 3: FULL-WIDTH EXPANDABLE STUDENT PERFORMANCE DIRECTORY */}
               {activeTab === "students" && (role === "admin" || role === "trainer") && (
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-[#0A0A0A]">
-                        Students Directory ({students.length})
-                      </h3>
-                      <p className="text-xs text-black/50">
-                        View enrolled students, academic verification flags, and current academic performance.
-                      </p>
-                    </div>
-
-                    <div className="relative max-w-xs w-full">
-                      <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
-                      <input
-                        type="text"
-                        placeholder="Search by name, roll, section..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-zinc-100 border border-black/10 rounded-xl pl-9 pr-3 py-2 text-xs text-[#0A0A0A] outline-none focus:border-black/30"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-[#0E1016] border border-white/10 rounded-2xl overflow-hidden shadow-xl text-white">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-[#17181E] border-b border-white/10 text-zinc-400 uppercase font-semibold">
-                          <tr>
-                            <th className="py-3 px-4">Student</th>
-                            <th className="py-3 px-4">Roll Number</th>
-                            <th className="py-3 px-4">Course & Section</th>
-                            <th className="py-3 px-4">Current CGPA</th>
-                            <th className="py-3 px-4">Verification</th>
-                            <th className="py-3 px-4">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {students
-                            .filter(
-                              (s) =>
-                                !searchQuery ||
-                                s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                s.profile?.rollNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                s.profile?.section?.toLowerCase().includes(searchQuery.toLowerCase())
-                            )
-                            .map((s) => (
-                              <tr key={s._id} className="hover:bg-white/[0.02]">
-                                <td className="py-3 px-4">
-                                  <div className="font-bold text-white">{s.name}</div>
-                                  <div className="text-[10px] text-zinc-400">{s.email}</div>
-                                </td>
-                                <td className="py-3 px-4 font-mono text-zinc-300">
-                                  {s.profile?.rollNumber || "—"}
-                                </td>
-                                <td className="py-3 px-4 text-zinc-300">
-                                  {s.profile?.course || "B.Tech"} ({s.profile?.section || "Sec A"})
-                                </td>
-                                <td className="py-3 px-4 font-bold text-white">
-                                  {s.profile?.currentCGPA ? `${s.profile.currentCGPA} / 10` : "—"}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                      s.profile?.academicVerificationStatus === "verified"
-                                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                                        : s.profile?.academicVerificationStatus === "pending"
-                                        ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                                        : "bg-zinc-500/15 text-zinc-400"
-                                    }`}
-                                  >
-                                    {s.profile?.academicVerificationStatus || "unsubmitted"}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4">
-                                  {s.profile?.academicVerificationStatus === "pending" ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <button
-                                        onClick={() => handleVerifyStudent(s._id, "verified")}
-                                        className="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[10px] transition"
-                                      >
-                                        Approve
-                                      </button>
-                                      <button
-                                        onClick={() => handleVerifyStudent(s._id, "rejected")}
-                                        className="px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold text-[10px] transition"
-                                      >
-                                        Reject
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-zinc-500">—</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
+                <StudentDirectory
+                  onScheduleStudent={(student) => {
+                    setSelectedStudentForSchedule(student);
+                    setScheduleModalOpen(true);
+                  }}
+                />
               )}
 
               {/* TAB 4: TRAINERS DIRECTORY (Admin Only) */}
@@ -1128,6 +1157,19 @@ function Dashboard() {
         user={user}
         onProfileUpdated={(updatedUser) => {
           setUser(updatedUser);
+        }}
+      />
+
+      {/* Schedule Interview Modal */}
+      <ScheduleInterviewModal
+        isOpen={scheduleModalOpen}
+        onClose={() => {
+          setScheduleModalOpen(false);
+          setSelectedStudentForSchedule(null);
+        }}
+        initialStudent={selectedStudentForSchedule}
+        onScheduled={() => {
+          fetchScheduledList();
         }}
       />
 
@@ -1392,7 +1434,6 @@ function Dashboard() {
                                 score: Number(val),
                                 trainerRemarks: "Evaluated by Instructor",
                               });
-                              // Refresh
                               const res = await getTaskSubmissions(reviewTaskSubmissions.task._id);
                               setReviewTaskSubmissions({
                                 ...reviewTaskSubmissions,

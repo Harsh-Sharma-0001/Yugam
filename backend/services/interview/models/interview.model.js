@@ -99,6 +99,18 @@ const interviewSchema = new mongoose.Schema(
             index: true,
         },
 
+        mode: {
+            type: String,
+            enum: ["ai", "live"],
+            default: "ai",
+            index: true,
+        },
+
+        isInstitutionScheduled: {
+            type: Boolean,
+            default: false,
+        },
+
         type: {
             type: String,
             enum: ["hr", "technical"],
