@@ -5,7 +5,8 @@ import { getAuth } from "firebase-admin/auth";
 
 import { app } from "../configs/firebase.js";
 import User from "../model/user.model.js";
-import  redis from "../../../shared/redis/redis.js";
+import CoinTransaction from "../models/CoinTransaction.js";
+import redis from "../../../shared/redis/redis.js";
 
 
 export const login = async (req, res) => {
@@ -155,20 +156,28 @@ export const syncUserSessionsInRedis = async (userId, updatedCoins, specificSess
 export const useInterviewCoins = async (req, res) => {
   try {
     const sessionId = req.cookies?.session;
-    let userId = req.headers["x-user-id"];
-
-    if (sessionId) {
-      const session = await redis.get(`session:${sessionId}`);
-      if (session) {
-        const sessionData = JSON.parse(session);
-        userId = userId || sessionData.userId;
-      }
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: No active session.",
+      });
     }
+
+    const rawSession = await redis.get(`session:${sessionId}`);
+    if (!rawSession) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Invalid or expired session.",
+      });
+    }
+
+    const sessionData = JSON.parse(rawSession);
+    const userId = sessionData?.userId;
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized: User identification missing",
+        message: "Unauthorized: Invalid session payload.",
       });
     }
 
@@ -224,7 +233,7 @@ export const useInterviewCoins = async (req, res) => {
 
 export const addCoins = async (req, res) => {
   try {
-    const { userId, amount, coins, sessionId } = req.body;
+    const { userId, amount, coins, idempotencyKey, sessionId } = req.body;
     const addAmount = Number(amount ?? coins);
 
     if (!userId) {
@@ -241,7 +250,24 @@ export const addCoins = async (req, res) => {
       });
     }
 
-    // Atomic increment
+    if (!idempotencyKey) {
+      return res.status(400).json({
+        success: false,
+        message: "idempotencyKey is required",
+      });
+    }
+
+    // Check if transaction has already been recorded in the ledger
+    const existingTx = await CoinTransaction.findOne({ idempotencyKey });
+    if (existingTx) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: existingTx.balanceAfter,
+      });
+    }
+
+    // Atomically increment user balance
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $inc: { interviewCoin: addAmount } },
@@ -253,6 +279,30 @@ export const addCoins = async (req, res) => {
         success: false,
         message: "User not found",
       });
+    }
+
+    // Record transaction in ledger
+    try {
+      await CoinTransaction.create({
+        idempotencyKey,
+        userId: updatedUser._id,
+        amount: addAmount,
+        type: "PURCHASE_CREDIT",
+        balanceAfter: updatedUser.interviewCoin,
+      });
+    } catch (err) {
+      // In case of concurrent race condition causing duplicate key violation (E11000)
+      if (err.code === 11000) {
+        // Roll back the duplicate increment
+        await User.findByIdAndUpdate(userId, { $inc: { interviewCoin: -addAmount } });
+        const record = await CoinTransaction.findOne({ idempotencyKey });
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin - addAmount,
+        });
+      }
+      throw err;
     }
 
     // Synchronize all active Redis sessions for this user

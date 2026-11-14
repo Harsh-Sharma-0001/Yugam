@@ -22,9 +22,11 @@ const billingSchema = new mongoose.Schema({
 
     status: {
       type: String,
-      enum: ["created", "paid", "failed"],
+      enum: ["created", "processing", "paid", "failed"],
       default: "created",
     },
+    processingStartedAt: Date,
+    paidAt: Date,
 },{timestamps:true})
 
 

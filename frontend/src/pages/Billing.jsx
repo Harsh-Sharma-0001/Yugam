@@ -59,15 +59,20 @@ function Billing({ user, setUser }) {
                     try {
                         const verifyRes = await api.post("/api/billing/verify", response);
 
-                        if (verifyRes.data?.interviewCoin !== undefined) {
-                            setUser((prev) => ({
-                                ...prev,
-                                interviewCoin: verifyRes.data.interviewCoin,
-                            }));
-                        }
+                        if (verifyRes.data?.success) {
+                            if (verifyRes.data?.interviewCoin !== undefined) {
+                                setUser((prev) => ({
+                                    ...prev,
+                                    interviewCoin: verifyRes.data.interviewCoin,
+                                }));
+                            }
 
-                        alert("Payment Successful 🎉");
-                        navigate("/dashboard");
+                            alert("Payment Successful 🎉");
+                            navigate("/dashboard");
+                        } else {
+                            alert(verifyRes.data?.message || "Payment verification in progress. Please check your dashboard shortly.");
+                            navigate("/dashboard");
+                        }
 
                     } catch (error) {
                         console.log(error);
