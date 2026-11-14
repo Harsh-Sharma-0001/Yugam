@@ -34,36 +34,32 @@ export const login = async (req, res) => {
 
     }
 
-    const sessionId =crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
 
     await redis.set(`session:${sessionId}`, JSON.stringify({
-        userId:
-        user._id,
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        interviewCoin: user.interviewCoin
+      }), "EX", 60 * 60 * 24 * 7);
 
-        name:
-        user.name,
+    // Track active session in the user's session set
+    await redis.sadd(`userSessions:${user._id}`, sessionId);
+    await redis.expire(`userSessions:${user._id}`, 60 * 60 * 24 * 7);
 
-        email:
-        user.email,
-
-        interviewCoin:
-        user.interviewCoin
-
-      }),"EX", 60 * 60 * 24 * 7);
-
-    res.cookie( "session", sessionId,{
+    res.cookie("session", sessionId, {
         httpOnly: true,
         secure: true,
         sameSite: "none",
-        maxAge:1000 * 60 * 60 * 24 * 7,
+        maxAge: 1000 * 60 * 60 * 24 * 7,
       }
     );
 
-    return res.json({ success:true,user});
+    return res.json({ success: true, user });
 
   } catch (error) {
-console.log(error)
-    return res.status(401).json({ message: error.message, });
+    console.log(error);
+    return res.status(401).json({ message: error.message });
 
   }
 
@@ -75,6 +71,17 @@ export const logout = async (req, res) => {
     const sessionId = req.cookies?.session;
 
     if (sessionId) {
+      const session = await redis.get(`session:${sessionId}`);
+      if (session) {
+        try {
+          const sessionData = JSON.parse(session);
+          if (sessionData?.userId) {
+            await redis.srem(`userSessions:${sessionData.userId}`, sessionId);
+          }
+        } catch (e) {
+          console.error("Error cleaning up user session set on logout:", e);
+        }
+      }
       await redis.del(`session:${sessionId}`);
     }
 
@@ -98,109 +105,178 @@ export const logout = async (req, res) => {
 
   }
 };
+export const syncUserSessionsInRedis = async (userId, updatedCoins, specificSessionId) => {
+  try {
+    // 1. If a specific sessionId is known, update it directly
+    if (specificSessionId) {
+      const cached = await redis.get(`session:${specificSessionId}`);
+      if (cached) {
+        const sessionData = JSON.parse(cached);
+        sessionData.interviewCoin = updatedCoins;
+        const ttl = await redis.ttl(`session:${specificSessionId}`);
+        await redis.set(
+          `session:${specificSessionId}`,
+          JSON.stringify(sessionData),
+          "EX",
+          ttl > 0 ? ttl : 60 * 60 * 24 * 7
+        );
+      }
+    }
+
+    // 2. Query all active session IDs tracked in the user's session set
+    const userSessionsKey = `userSessions:${userId}`;
+    const sessionIds = await redis.smembers(userSessionsKey);
+
+    if (sessionIds && sessionIds.length > 0) {
+      for (const sid of sessionIds) {
+        if (sid === specificSessionId) continue;
+        const cached = await redis.get(`session:${sid}`);
+        if (cached) {
+          const sessionData = JSON.parse(cached);
+          sessionData.interviewCoin = updatedCoins;
+          const ttl = await redis.ttl(`session:${sid}`);
+          await redis.set(
+            `session:${sid}`,
+            JSON.stringify(sessionData),
+            "EX",
+            ttl > 0 ? ttl : 60 * 60 * 24 * 7
+          );
+        } else {
+          // Clean up expired session ID
+          await redis.srem(userSessionsKey, sid);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("syncUserSessionsInRedis error:", err);
+  }
+};
+
 export const useInterviewCoins = async (req, res) => {
   try {
-const sessionId = req.cookies?.session;
+    const sessionId = req.cookies?.session;
+    let userId = req.headers["x-user-id"];
 
-  const session = await redis.get(`session:${sessionId}`)
+    if (sessionId) {
+      const session = await redis.get(`session:${sessionId}`);
+      if (session) {
+        const sessionData = JSON.parse(session);
+        userId = userId || sessionData.userId;
+      }
+    }
 
-  const sessionData = JSON.parse(session);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: User identification missing",
+      });
+    }
 
     const { coins, action } = req.body;
+    const cost = Number(coins);
 
-    if (!coins) {
-      return res.status(400).json({ 
+    if (isNaN(cost) || cost <= 0) {
+      return res.status(400).json({
         success: false,
-        message: "Coins are required",
+        message: "Valid coin amount is required",
       });
     }
 
-    const user = await User.findById(sessionData.userId);
+    // Atomic conditional balance deduction to prevent race conditions and negative balances
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId, interviewCoin: { $gte: cost } },
+      { $inc: { interviewCoin: -cost } },
+      { new: true }
+    );
 
-    if (!user) {
-      return res.status(404).json({
+    if (!updatedUser) {
+      const existingUser = await User.findById(userId);
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+      return res.status(402).json({
         success: false,
-        message: "User not found",
+        message: "Insufficient interview coins.",
+        interviewCoin: existingUser.interviewCoin,
       });
     }
 
-    // Not enough coins
-    if (user.interviewCoin < coins) {
-      return res.status(403).json({
-        success: false,
-        message: "Not enough interview coins",
-        interviewCoin: user.interviewCoin,
-      });
-    }
-
-    // Deduct coins
-    user.interviewCoin -= coins;
-
-    await user.save();
-    await redis.set(`session:${sessionId}`, JSON.stringify({
-        userId:
-        user._id,
-
-        name:
-        user.name,
-
-        email:
-        user.email,
-
-        interviewCoin:
-        user.interviewCoin
-
-      }),"EX", 60 * 60 * 24 * 7);
-
+    // Synchronize all active Redis sessions for this user
+    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, sessionId);
 
     return res.status(200).json({
       success: true,
       message: "Interview coins updated successfully",
       action,
-      interviewCoin: user.interviewCoin,
+      interviewCoin: updatedUser.interviewCoin,
     });
-
   } catch (error) {
-
-    console.log(error);
-
+    console.error("useInterviewCoins error:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
 };
 
-
-
-
 export const addCoins = async (req, res) => {
   try {
-    const sessionId = req.cookies?.session;
+    const { userId, amount, coins, sessionId } = req.body;
+    const addAmount = Number(amount ?? coins);
 
-    const session = await redis.get(`session:${sessionId}`);
-
-    if (!session) {
-      return res.status(401).json({
-        success: false,
-        message: "Session expired",
-      });
-    }
-
-    const sessionData = JSON.parse(session);
-
-    const { coins } = req.body;
-
-    if (!coins || coins <= 0) {
+    if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "Valid coins are required",
+        message: "User ID is required",
       });
     }
 
-    const user = await User.findById(sessionData.userId);
+    if (isNaN(addAmount) || addAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid coin amount is required",
+      });
+    }
 
+    // Atomic increment
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { interviewCoin: addAmount } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Synchronize all active Redis sessions for this user
+    const activeSessionId = sessionId || req.cookies?.session;
+    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, activeSessionId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Coins added successfully",
+      interviewCoin: updatedUser.interviewCoin,
+    });
+  } catch (error) {
+    console.error("addCoins error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).select("-__v");
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -208,31 +284,17 @@ export const addCoins = async (req, res) => {
       });
     }
 
-    user.interviewCoin += Number(coins);
-
-    await user.save();
-
-    // Update Redis Session
-    await redis.set(
-      `session:${sessionId}`,
-      JSON.stringify({
+    return res.status(200).json({
+      success: true,
+      user: {
         userId: user._id,
         name: user.name,
         email: user.email,
         interviewCoin: user.interviewCoin,
-      }),
-      "EX",
-      60 * 60 * 24 * 7
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "Coins added successfully",
-      interviewCoin: user.interviewCoin,
+      },
     });
   } catch (error) {
-    console.log(error);
-
+    console.error("getUserById error:", error);
     return res.status(500).json({
       success: false,
       message: error.message,

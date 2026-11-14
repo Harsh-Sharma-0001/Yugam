@@ -51,7 +51,7 @@ export const generateRoadmap =async (req,res)=> {
         ...result.roadmap
       })
 
-      await redis.set(`roadmap:${roadmap._id}`,JSON.stringify(roadmap),"EX", 60*60)
+      await redis.set(`roadmap:${userId}:${roadmap._id}`, JSON.stringify(roadmap), "EX", 60 * 60)
 
       await redis.del(`userRoadmaps:${userId}`)
 
@@ -103,47 +103,66 @@ export const getAllRoadmap = async (req,res) => {
     }
 }
 
-export const getRoadmapbyId = async (req,res) => {
+export const getRoadmapbyId = async (req, res) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const userId = req.headers["x-user-id"];
 
-        const cache = await redis.get(`roadmap:${id}`)
-        if(cache){
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized: Missing user ID",
+            });
+        }
+
+        // Check user-scoped Redis cache
+        const cache = await redis.get(`roadmap:${userId}:${id}`);
+        if (cache) {
+            const cachedRoadmap = JSON.parse(cache);
+            // Explicitly verify ownership
+            if (String(cachedRoadmap.userId) !== String(userId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Forbidden: You do not have permission to access this roadmap.",
+                });
+            }
             return res.json({
                 success: true,
                 fromCache: true,
-                data: JSON.parse(cache)
+                data: cachedRoadmap,
             });
-
         }
 
-        const roadmap = await Roadmap.findOne({
-             _id: id,
-            userId:userId
-        })
+        const roadmap = await Roadmap.findById(id);
 
-        if(!roadmap){
+        if (!roadmap) {
             return res.status(404).json({
                 success: false,
-                message: "Roadmap not found"
+                message: "Roadmap not found",
             });
         }
 
-        await redis.set(`roadmap:${id}`,JSON.stringify(roadmap),"EX", 60*60)
+        // Verify ownership against database record
+        if (String(roadmap.userId) !== String(userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: You do not have permission to access this roadmap.",
+            });
+        }
+
+        await redis.set(`roadmap:${userId}:${id}`, JSON.stringify(roadmap), "EX", 60 * 60);
 
         return res.json({
             success: true,
             fromCache: false,
-            data: roadmap
+            data: roadmap,
         });
     } catch (error) {
-      console.log(error);
+        console.error("getRoadmapbyId error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-    }  
-    
-}
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};

@@ -6,23 +6,24 @@ import feedbackPrompt from "../prompts/feedbackPrompt.js";
 
 
 export const feedbackAgent = async (data) => {
-
+    let response;
     try {
-        const prompt = feedbackPrompt(data)
+        const prompt = feedbackPrompt(data);
 
-        const response = await llm.invoke(prompt)
+        response = await llm.invoke(prompt);
 
-        const cleaned = response.content
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
+        const cleaned = response?.content
+            ?.replace(/```json/g, "")
+            ?.replace(/```/g, "")
+            ?.trim() || "";
 
-        return JSON.parse(cleaned)
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.log("Feedback Agent Parse Error");
-    console.log(response.content);
+        console.error("Feedback Agent Error:", error?.message);
+        if (response?.content) {
+            console.error("Feedback Agent raw response content:", response.content);
+        }
 
-    throw new Error("Failed to generate feedback");
-        
+        throw new Error("Failed to generate feedback");
     }
-}
+};

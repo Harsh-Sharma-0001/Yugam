@@ -57,16 +57,17 @@ function Billing({ user, setUser }) {
 
                 handler: async function (response) {
                     try {
-                        await api.post("/api/billing/verify", response)
+                        const verifyRes = await api.post("/api/billing/verify", response);
 
-                        const coinRes = await api.post("/api/auth/add-coins", { coins: plan.coins })
+                        if (verifyRes.data?.interviewCoin !== undefined) {
+                            setUser((prev) => ({
+                                ...prev,
+                                interviewCoin: verifyRes.data.interviewCoin,
+                            }));
+                        }
 
-                        setUser((prev) => ({
-                            ...prev, interviewCoin: coinRes.data.interviewCoin
-                        }))
-
-                        alert("Payment Successful 🎉")
-                        navigate("/dashboard")
+                        alert("Payment Successful 🎉");
+                        navigate("/dashboard");
 
                     } catch (error) {
                         console.log(error);

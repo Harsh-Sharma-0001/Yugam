@@ -2,23 +2,24 @@ import llm from "../config/llm.js";
 import summaryPrompt from "../prompts/summaryPrompt.js";
 
 export const summaryAgent = async (data) => {
-
+    let response;
     try {
-        const prompt = summaryPrompt(data)
+        const prompt = summaryPrompt(data);
 
-        const response = await llm.invoke(prompt)
+        response = await llm.invoke(prompt);
 
-        const cleaned = response.content
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
+        const cleaned = response?.content
+            ?.replace(/```json/g, "")
+            ?.replace(/```/g, "")
+            ?.trim() || "";
 
-        return JSON.parse(cleaned)
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.log("Summary Agent Parse Error");
-    console.log(response.content);
+        console.error("Summary Agent Error:", error?.message);
+        if (response?.content) {
+            console.error("Summary Agent raw response content:", response.content);
+        }
 
-    throw new Error("Failed to generate Summary");
-        
+        throw new Error("Failed to generate Summary");
     }
-}
+};
