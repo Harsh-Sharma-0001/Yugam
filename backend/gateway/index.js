@@ -1,30 +1,37 @@
-import express from "express"
-import dotenv from "dotenv"
-dotenv.config()
-import proxy from "express-http-proxy"
-import cors from "cors"
-import morgan from "morgan"
-import cookieParser from "cookie-parser"
-import { getCurrentUser } from "./controllers/user.controller.js"
-import { isAuth } from "./middleware/isAuth.js"
-import { proxyWithHeaders } from "./utils/proxyWithHeaders.js"
+import "dotenv/config";
+import express from "express";
+import proxy from "express-http-proxy";
+import cors from "cors";
+import morgan from "morgan";
+import cookieParser from "cookie-parser";
+import { getCurrentUser } from "./controllers/user.controller.js";
+import { isAuth } from "./middleware/isAuth.js";
+import { proxyWithHeaders } from "./utils/proxyWithHeaders.js";
 
-const app = express()
-app.use(express.json())
+const app = express();
+app.use(express.json());
 
 app.use(cors({
     origin: process.env.FRONTEND_URL,
-    credentials: true
-}))
+    credentials: true,
+}));
 
-app.use(morgan("dev"))
-app.use(cookieParser())
+app.use(morgan("dev"));
+app.use(cookieParser());
 
-const PORT = process.env.PORT || 6000
+const PORT = process.env.PORT || 6000;
 
 app.get("/", (req, res) => {
-    res.send("Hello from Gateway")
-})
+    res.send("Hello from Gateway");
+});
+
+app.get("/health", (req, res) => {
+    return res.status(200).json({
+        status: "ok",
+        service: "gateway",
+        timestamp: new Date().toISOString(),
+    });
+});
 
 // Block public access to internal endpoints
 app.use("/api/auth/add-coins", (req, res) => {

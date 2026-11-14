@@ -46,6 +46,25 @@ function ATSTemplate({ data }) {
     }
 
 
+    const cleanLinkedin = linkedin
+        ? linkedin
+            .trim()
+            .replace(/^https?:\/\//i, "")
+            .replace(/^www\./i, "")
+            .replace(/^linkedin\.com\/in\//i, "")
+            .replace(/^linkedin\.com\//i, "")
+            .replace(/\/+$/, "")
+        : "";
+
+    const cleanGithub = github
+        ? github
+            .trim()
+            .replace(/^https?:\/\//i, "")
+            .replace(/^www\./i, "")
+            .replace(/^github\.com\//i, "")
+            .replace(/\/+$/, "")
+        : "";
+
     return (
         <div className='box-border
         w-[210mm]
@@ -66,8 +85,8 @@ function ATSTemplate({ data }) {
                         email,
                         phone,
                         location,
-                        linkedin ? `linkedin.com/in/${linkedin}` : null,
-                        github ? `github.com/${github}` : null,
+                        cleanLinkedin ? `linkedin.com/in/${cleanLinkedin}` : null,
+                        cleanGithub ? `github.com/${cleanGithub}` : null,
                     ].filter(Boolean).map((v, i, arr) => (
                         <span key={i} className='whitespace-nowrap'>
                             {v}

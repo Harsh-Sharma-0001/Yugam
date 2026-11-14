@@ -1,6 +1,9 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import llm from "../configs/llm.js";
 import searchVideo from "../configs/youtube.js";
+import { validateResourceUrl, TRUSTED_RESOURCE_DOMAINS } from "../utils/urlValidator.js";
+
+export { validateResourceUrl, TRUSTED_RESOURCE_DOMAINS };
 
 const resourceAgent = async (state) => {
     try {
@@ -67,11 +70,16 @@ Format:
                 }
 
                 const fallbackDoc = `https://www.google.com/search?q=${encodeURIComponent(`${module.title} ${role} official documentation`.trim())}`;
+                const rawDoc = docsMap.get((module.title || "").trim().toLowerCase());
+                const safeDoc = validateResourceUrl(rawDoc, fallbackDoc);
+
+                const fallbackVideo = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${module.title} ${role} tutorial`.trim())}`;
+                const safeVideo = validateResourceUrl(video?.url, fallbackVideo);
 
                 return {
                     ...module,
-                    youtube: video?.url || `https://www.youtube.com/results?search_query=${encodeURIComponent(`${module.title} ${role} tutorial`.trim())}`,
-                    article: docsMap.get((module.title || "").trim().toLowerCase()) || fallbackDoc,
+                    youtube: safeVideo,
+                    article: safeDoc,
                 };
             })
         );

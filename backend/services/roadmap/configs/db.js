@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 
-export const connectDB=async () => {
+export const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URL)
-        console.log("Connected DB")
+        await mongoose.connect(process.env.MONGODB_URL);
+        console.log("Roadmap DB Connected");
     } catch (error) {
-        console.log("MongoDb error",error)
+        console.error("Roadmap MongoDB Connection Error:", error);
+        throw error;
     }
-    
-}
+};

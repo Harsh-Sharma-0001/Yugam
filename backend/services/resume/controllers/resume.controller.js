@@ -16,6 +16,8 @@ import {
   getAvailableRoles,
   resolveTargetRoleKey,
 } from "../utils/skillMatcher.js";
+import { validatePdfBuffer } from "../utils/pdfValidator.js";
+export { validatePdfBuffer };
 
 // --------------------------------------------------
 // UPLOAD AND ANALYZE RESUME
@@ -34,6 +36,22 @@ export const uploadResume = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Resume PDF is required",
+      });
+    }
+
+    // Validate PDF magic bytes (%PDF-) to reject spoofed MIME types
+    const fileHeader = Buffer.alloc(5);
+    const fd = fs.openSync(file.path, "r");
+    try {
+      fs.readSync(fd, fileHeader, 0, 5, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
+
+    if (!validatePdfBuffer(fileHeader)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid PDF file signature.",
       });
     }
 

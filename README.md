@@ -121,10 +121,14 @@ flowchart TB
     AuthMiddleware <-->|"Validate session:${id}"| Redis
 
     GW -->|"/api/auth/*"| AuthSvc
-    GW -->|"/api/resume/* [x-user-id]"| ResumeSvc
-    GW -->|"/api/interview/* [x-user-id]"| InterviewSvc
-    GW -->|"/api/roadmap/* [x-user-id]"| RoadmapSvc
-    GW -->|"/api/billing/* [x-user-id]"| BillingSvc
+    GW -->|"/api/resume/* [x-user-id, x-gateway-secret]"| ResumeSvc
+    GW -->|"/api/interview/* [x-user-id, x-gateway-secret]"| InterviewSvc
+    GW -->|"/api/roadmap/* [x-user-id, x-gateway-secret]"| RoadmapSvc
+    GW -->|"/api/billing/* [x-user-id, x-gateway-secret]"| BillingSvc
+
+    ResumeSvc -.->|"Internal Deduct/Refund [x-internal-service-key]"| AuthSvc
+    InterviewSvc -.->|"Internal Deduct/Refund [x-internal-service-key]"| AuthSvc
+    RoadmapSvc -.->|"Internal Deduct/Refund [x-internal-service-key]"| AuthSvc
 
     InterviewSvc -->|"Async Submissions [X-Auth-Token]"| ExecutionEngine
 
@@ -159,22 +163,31 @@ sequenceDiagram
     participant GW as API Gateway
     participant Redis as Redis Session Store
     participant Auth as Auth Service
-    participant DS as Downstream Services
+    participant DS as Downstream Services (Resume, Interview, Roadmap)
 
     User->>Auth: POST Login with Firebase ID Token
     Auth->>Auth: Verify Firebase Token
     Auth->>Auth: Find or Create User in MongoDB
-    Auth->>Redis: Create User Session
+    Auth->>Redis: Create User Session (7-Day TTL)
     Auth-->>User: Return Session Cookie
 
-    Note over User,GW: Subsequent Protected Requests
+    Note over User,GW: Protected AI & Core Feature Requests
 
     User->>GW: Send API Request with Session Cookie
-    GW->>Redis: Validate Session
+    GW->>Redis: Validate Session Key (session:${sessionId})
     Redis-->>GW: Return User Session Data
-    GW->>GW: Extract Authenticated User ID
-    GW->>DS: Forward Request with User ID Header
-    DS-->>GW: Return Response
+    GW->>GW: Decorate x-user-id & x-gateway-secret
+    GW->>DS: Forward Request with Verified Origin Headers
+    DS->>Auth: POST /internal/coins/deduct (Upfront Atomic Check & Lock)
+    Auth-->>DS: Coins Reserved & Updated
+    DS->>DS: Execute Heavy AI / LLM Operation
+    alt Operation Succeeds
+        DS-->>GW: Return 200 OK + Updated interviewCoin Balance
+    else Operation Fails
+        DS->>Auth: POST /internal/coins/refund (Automatic Idempotent Re-credit)
+        Auth-->>DS: Coins Restored
+        DS-->>GW: Return Error + Restored interviewCoin Balance
+    end
     GW-->>User: Send API Response
 ```
 
@@ -343,82 +356,102 @@ The central ingress controller for all client requests.
   - Reads `session` cookie.
   - Interrogates Redis for `session:<sessionId>`.
   - Injects `req.user` payload into request context.
-- **Identity Propagation (`proxyWithHeaders.js`)**: Decorates incoming HTTP requests with `x-user-id: <MongoObjectId>`, ensuring downstream services remain stateless regarding session storage.
+- **Identity & Origin Propagation (`proxyWithHeaders.js`)**: Decorates incoming HTTP requests with `x-user-id: <MongoObjectId>` and `x-gateway-secret: <Secret>`, ensuring downstream microservices verify that requests originated strictly from the trusted API Gateway.
+- **Direct Attack Defense**: Explicitly blocks external callers from reaching `/api/auth/add-coins` or `/api/auth/internal/*` with `403 Forbidden`.
+- **Health Verification**: Exposes `GET /health` returning `200 OK` gateway uptime status.
 
 ### 2. Authentication Service (Port 8001)
 
-Manages the user lifecycle and virtual coin balance.
+Manages the user lifecycle, virtual coin economy, and immutable transaction ledger.
 
 - **Firebase Auth Bridge**: Decodes and verifies Firebase client ID tokens using `firebase-admin`.
 - **User Upsert**: Automatically creates a record in MongoDB upon first login and assigns default starting credits (**150 Interview Coins**).
 - **Session Provisioning**: Emits cryptographically secure session IDs via `crypto.randomUUID()`, caches session objects in Redis with a 7-day TTL (`60 * 60 * 24 * 7`), and writes a secure, `httpOnly`, `sameSite: "none"` cookie.
-- **Coin Operations**:
-  - `POST /use-coins`: Atomically checks balances and deducts credits for AI operations.
-  - `POST /add-coins`: Credits user balances following successful Razorpay payment verifications.
+- **Server-Side Allowlisted Coin Economy (`FEATURE_COIN_COSTS`)**:
+  - `INTERVIEW_START`: 50 coins
+  - `RESUME_SCORE`: 10 coins
+  - `ROADMAP_GENERATE`: 20 coins
+  - `RESUME_PDF_DOWNLOAD`: 10 coins
+- **Internal Service Deduction & Refund Endpoints**:
+  - `POST /internal/coins/deduct`: Atomically verifies balance (`interviewCoin >= cost`), executes `$inc: -cost`, creates a ledger record, and syncs all active Redis sessions (`syncUserSessionsInRedis`). Guarded by `isInternalService` (`x-internal-service-key`).
+  - `POST /internal/coins/refund`: Automatically and idempotently restores deducted coins if downstream AI execution or PDF parsing fails.
+- **Immutable Transaction Ledger (`CoinTransaction`)**: Tracks all credits, feature deductions, and refunds with unique `reservationId` and `idempotencyKey` constraints to prevent double-spending and duplicate settlement.
+- **Fail-Fast Startup & Health**: Awaits MongoDB connection and Redis ping on boot; exposes `GET /health`.
 
 ### 3. Resume Intelligence Service (Port 8002)
 
 Analyzes candidate resumes against target job profiles.
 
-- **PDF Extraction**: Ingests multi-page PDFs using Multer disk buffering and parses textual streams via `pdf-parse`.
+- **PDF Magic-Byte Validation**: Inspects the first 5 bytes of uploaded files to verify `%PDF-` header signature before processing, rejecting spoofed MIME types immediately with `400 Bad Request`.
+- **Server-Side Upfront Deduction**: Invokes `POST /internal/coins/deduct` for `RESUME_SCORE` (10 coins) before running compute-heavy PDF extraction and AI matching; automatically refunds on failure.
+- **Gateway Origin Verification (`verifyGatewayOrigin`)**: Rejects direct requests bypassing the API Gateway with `403 Forbidden` (`x-gateway-secret`).
+- **PDF Extraction**: Parses textual streams via `pdf-parse`.
 - **LangChain Structured Agent**: Prompts Groq LLM (`openai/gpt-oss-120b`) to convert raw text into a normalized schema comprising contact info, summary, education, technologies, experience, and projects.
 - **AI-First Domain Extraction (`suggestedRole`)**: Automatically detects the candidate's authentic domain and career specialization (e.g. `Cybersecurity Analyst`, `ML Engineer`, `Cloud Architect`) directly from parsed resume text, eliminating hardcoded role fallbacks.
 - **Deterministic Skill Gap Matcher (`roleSkills.js` & `skillMatcher.js`)**:
   - Evaluates extracted candidate skills against 11+ curated role profiles (MERN Stack, Full-Stack, Java Backend, Frontend, Backend, Python Backend, QA Automation, DevOps, Data Analyst, ML Engineer, and Cybersecurity Engineer).
-  - Distinguishes between **Required Core Skills** and **Preferred Skills** with fuzzy alias matching.
+  - Distinguishes between **Required Core Skills** and **Preferred Skills** with fuzzy alias and word boundary matching.
   - Dynamically adapts to custom/unlisted domains without throwing runtime exceptions.
   - Calculates deterministic ATS compatibility scores (0–100%) and formulates targeted missing skill recommendations.
 - **Clean Empty-State Handling**: For newly registered accounts without an uploaded resume, `GET /api/resume/get-resume` returns a graceful `200 OK` with `{ success: true, data: null, resume: null }` rather than an exceptional `404 Not Found`.
 - **Caching**: Persists analyzed resume entities under Redis key `resume:<userId>` for sub-millisecond retrieval.
 - **Resource Hygiene**: Automatically unlinks uploaded temporary PDF files from the local filesystem in a `finally` block.
+- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
 
 ### 4. AI Mock Interview Service (Port 8003)
 
 Orchestrates autonomous, dynamic HR and Technical interviews.
 
+- **Server-Side Upfront Deduction**: Atomically deducts `INTERVIEW_START` (50 coins) before invoking LLM question generation; automatically refunds on failure.
+- **Atomic Concurrency & Submission Validation**:
+  - Strict input validation requires `interviewId` and non-empty string `answer` (max 15,000 characters).
+  - Enforces optimistic concurrency guard on `{ currentQuestion: expectedIndex, status: { $ne: "completed" } }` via `findOneAndUpdate`, preventing race conditions or duplicate submissions with `409 Conflict`.
+- **Accurate Dashboard Metrics**: Calculates `totalQuestions` (Questions Solved) by counting strictly answered questions (`q.userAnswer && q.userAnswer.trim().length > 0`) rather than total generated questions.
 - **LangGraph StateGraph Engine**:
   - **`interviewAgent`**: Generates 6 highly contextual, scenario-based interview questions tailored to the candidate's chosen role, difficulty level, and optional resume context.
   - **Strict Domain Segregation**:
-    - **Technical Tracks**: Inforces 100% purely technical questions on Data Structures, Algorithms, System Design, Concurrency, Database Internals, and Framework Architecture (`technicalInterviewPrompt.js`).
+    - **Technical Tracks**: Enforces 100% purely technical questions on Data Structures, Algorithms, System Design, Concurrency, Database Internals, and Framework Architecture (`technicalInterviewPrompt.js`).
     - **HR Tracks**: Enforces 100% behavioral, situational, culture fit, and conflict resolution questions using the STAR framework (`hrInterviewPrompt.js`).
   - **Resume Context Injection**: When `useResume: true`, dynamically formats and passes candidate project descriptions, tech stacks, experience, and growth areas directly into the interviewer prompt.
-  - **`feedbackAgent`**: Evaluates individual responses against **8 rigorous dimensions**:
-    1. _Correctness_
-    2. _Clarity_
-    3. _Relevance_
-    4. _Detail_
-    5. _Efficiency_
-    6. _Communication_
-    7. _Problem Solving_
-    8. _Creativity_
+  - **`feedbackAgent`**: Evaluates individual responses against **8 rigorous dimensions**: Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, and Creativity.
   - **`summaryAgent`**: Triggered upon completion of the final question. Computes overall performance metrics, pinpoints explicit candidate strengths, analyzes weaknesses, and issues actionable study recommendations.
 - **Docker-Isolated Multi-Language Code Execution Engine**:
-  - Compiles and runs user code in an isolated sandbox supporting **JavaScript** (Node.js 18), **Python** (3.8), **Java** (OpenJDK 17 with `Main.java` entrypoint), and **C++** (GCC 9).
+  - Compiles and runs user code in an external isolated sandbox service supporting **JavaScript** (Node.js 18), **Python** (3.8), **Java** (OpenJDK 17 with `Main.java` entrypoint), and **C++** (GCC 9).
+  - **Security & Access Control**: Requires mandatory `CODEBOX_AUTH_TOKEN` (rejects missing config with `503 Service Unavailable`).
+  - **Per-User Rate Limiting**: Enforces a Redis sliding window limit of **15 executions per minute** per user (`ratelimit:code:<userId>`), returning `429 Too Many Requests` when exceeded.
+  - **Token Ownership Binding**: Execution tokens are bound to the requesting user in Redis (`codebox:token:<token>` with 1-hour TTL); `GET /code/status/:token` rejects requests from unauthorized users with `403 Forbidden`.
   - **Decoupled Workflow**: Clicking **"Run Code"** executes the solution and displays terminal output without submitting or advancing the interview question; **"Add To Answer"** appends formatted code to the active answer textarea.
-  - **Interactive Terminal Drawer**: Monaco editor integrated with a bottom tabbed drawer providing custom standard input (`stdin`), real-time execution status badges (Accepted, Compilation Error, Runtime Error, Time Limit Exceeded), `stdout`, `stderr`, execution time (`time`), and memory telemetry (`memory`).
+  - **Interactive Terminal Drawer**: Monaco editor integrated with a bottom tabbed drawer providing custom standard input (`stdin`), real-time execution status badges, `stdout`, `stderr`, execution time (`time`), and memory telemetry (`memory`).
   - **Asynchronous Polling**: Submits execution jobs via `POST /code/run` and polls `GET /code/status/:token` every 400ms with a 20-second safety timeout.
-  - **Zero Client Credential Exposure**: All sandbox traffic is proxied through the API Gateway, ensuring runner URLs and authentication secrets remain strictly internal.
 - **Analytics Caching**: Caches user interview aggregations (`stats`, `technicalData`, `hrData`) under `interviews:<userId>` in Redis for 10 minutes, invalidating automatically upon submission of answers.
+- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
 
 ### 5. Roadmap & Resource Service (Port 8004)
 
 Synthesizes end-to-end learning curriculums for career acceleration.
 
+- **Server-Side Upfront Deduction**: Deducts `ROADMAP_GENERATE` (20 coins) upfront via internal auth service; automatically refunds on failure.
 - **10 Standardized Engineering Tracks**: Fully supports MERN Stack Developer, Full-Stack Software Engineer, Java Backend Developer, Frontend Developer, Backend Developer, Python Backend Developer, QA Automation Engineer, DevOps Engineer, Data Analyst, and ML Engineer with salary-bracketed targets (10 LPA, 15 LPA, 20 LPA, 30 LPA, 40 LPA).
 - **Two-Stage Sequential Pipeline**:
   - **Stage 1 (`roadmapAgent`)**: Analyzes target role, salary package tier, and user resume gaps to generate progressive learning modules categorized by timeline and difficulty (_Easy_, _Medium_, _Hard_). Configured with `maxTokens: 6000` to prevent JSON response truncation.
   - **Stage 2 (`resourceAgent`)**: Parses each module title, invokes the LLM to locate authoritative official documentation, and calls the **YouTube Data API v3** to retrieve matching video tutorials.
-- **Resilient Fallbacks**: Seamlessly degrades to query-encoded fallback documentation and YouTube search links if external API rate limits or network hiccups occur, preventing roadmap generation failures.
+- **HTTPS & Trusted Domain Resource Validation**: Strictly validates all documentation and tutorial links against an authoritative domain allowlist (e.g. `react.dev`, `nodejs.org`, `developer.mozilla.org`, `docs.python.org`, `kubernetes.io`, `youtube.com`). Replaces insecure (`http:`) or untrusted links with safe search queries.
 - **Resume Replacement & Customization**: Features an interactive attachment and re-upload modal allowing candidates to swap resumes and re-align milestone recommendations.
-- **Caching Strategy**: Roadmaps are cached in Redis under `roadmap:<id>` and `userRoadmaps:<userId>` for 1 hour (`3600s`).
+- **User-Scoped Caching Strategy**: Roadmaps are cached in Redis under `roadmap:<userId>:<roadmapId>` and `userRoadmaps:<userId>` for 1 hour (`3600s`).
+- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
 
 ### 6. Billing & Subscription Service (Port 8005)
 
 Facilitates payment transactions and token replenishment.
 
 - **Catalog Management**: Provides tiered plans (e.g., _Starter Plan_ at ₹199 for 300 Interview Coins).
-- **Order Generation**: Invokes Razorpay SDK to create valid currency orders (`INR`).
-- **Cryptographic Verification**: Re-computes and verifies HMAC-SHA256 signatures (`crypto.createHmac("sha256", secret)`) against `razorpay_order_id` and `razorpay_payment_id` to guarantee tamper-proof order settlements.
+- **Scoped User Ownership**: All order creation, lookups, and verification queries are strictly bound to the authenticated `userId`.
+- **3-State Idempotent Payment Settlement**:
+  - Orders transition through a strict state machine: `created` → `processing` → `paid`.
+  - Uses `razorpayOrderId` as an idempotency key to prevent double-crediting under duplicate webhook deliveries or race conditions.
+- **Cryptographic Verification**: Re-computes and verifies HMAC-SHA256 signatures (`crypto.createHmac("sha256", secret)`) against `razorpay_order_id` and `razorpay_payment_id`.
+- **Internal Coin Crediting**: Invokes Auth Service's internal `/internal/coins/credit` with `x-internal-service-key` to atomically credit coins and update `CoinTransaction` ledger.
+- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
 
 ---
 
@@ -443,28 +476,43 @@ The frontend is a single-page application built with **React 19**, **Vite 8**, a
 
 ## 🪙 Token & Coin Economics
 
-Yugam implements a virtual coin economy to balance LLM compute usage:
+Yugam implements an enterprise-grade virtual credit economy with strict server-side price enforcement, distributed idempotency, and automated failure refunds:
 
-| Event / Action            |  Coin Impact   | Description                                                       |
-| :------------------------ | :------------: | :---------------------------------------------------------------- |
-| **New Account Creation**  | **+150 Coins** | Welcome bonus credited on first login.                            |
-| **Resume ATS Scoring**    | **-10 Coins**  | Deducted when submitting a PDF for parsing and gap analysis.      |
-| **Roadmap Generation**    | **-20 Coins**  | Deducted when compiling a custom curriculum with video resources. |
-| **Start Mock Interview**  | **-50 Coins**  | Deducted when generating a full 6-question AI interview session.  |
-| **Starter Plan Purchase** | **+300 Coins** | Credited on payment of ₹199 via Razorpay.                         |
+- **Server-Side Allowlisted Pricing (`FEATURE_COIN_COSTS`)**: Feature costs are strictly enforced on the server; clients cannot dictate deduction amounts.
+- **Upfront Atomic Deduction**: Microservices reserve/deduct coins before initiating compute-heavy LLM pipelines or PDF processing, preventing race conditions.
+- **Automated Failure Refunds**: If an upstream AI provider or parser fails, deducted credits are automatically and idempotently re-credited via `POST /internal/coins/refund`.
+- **Immutable Transaction Ledger (`CoinTransaction`)**: Every balance event creates a persistent ledger record referencing a unique `reservationId` or `idempotencyKey`, preventing duplicate settlement or race condition exploits.
+- **3-State Payment Settlement Machine**: Razorpay payments transition through `created` → `processing` → `paid` states atomically scoped to the authenticated `userId`.
+
+| Event / Action            |  Coin Impact   | Description                                                                     |
+| :------------------------ | :------------: | :------------------------------------------------------------------------------ |
+| **New Account Creation**  | **+150 Coins** | Welcome bonus credited on first login.                                          |
+| **Resume ATS Scoring**    | **-10 Coins**  | Upfront deduction for PDF parsing, text extraction, and ATS skill gap analysis. |
+| **Resume PDF Download**   | **-10 Coins**  | Deducted upon generating and downloading the ATS-compliant formatted resume.    |
+| **Roadmap Generation**    | **-20 Coins**  | Upfront deduction for compiling custom modular curriculum & validated links.    |
+| **Start Mock Interview**  | **-50 Coins**  | Upfront deduction for synthesizing full 6-question HR/Technical interview set.  |
+| **Starter Plan Purchase** | **+300 Coins** | Credited upon verified payment of ₹199 via Razorpay.                            |
 
 ---
 
 ## 📡 API Reference Guide
 
-### Authentication (`/api/auth`)
+### Health & Monitoring (All Microservices)
 
-| Method | Endpoint     | Description                                       | Headers / Auth | Payload                                        |
-| :----- | :----------- | :------------------------------------------------ | :------------- | :--------------------------------------------- |
-| `POST` | `/login`     | Authenticate with Firebase token & create session | None           | `{ "token": "<FirebaseIdToken>" }`             |
-| `GET`  | `/logout`    | Invalidate Redis session & clear session cookie   | Cookie         | None                                           |
-| `POST` | `/use-coins` | Deduct coins for an action                        | Cookie         | `{ "coins": 50, "action": "start-interview" }` |
-| `POST` | `/add-coins` | Credit coins to user wallet                       | Cookie         | `{ "coins": 300 }`                             |
+| Method | Endpoint  | Description                                                         | Headers / Auth | Payload |
+| :----- | :-------- | :------------------------------------------------------------------ | :------------- | :------ |
+| `GET`  | `/health` | Service health status & MongoDB readiness check (returns `200`/`503`) | Public         | None    |
+
+### Authentication & Virtual Economy (`/api/auth`)
+
+| Method | Endpoint                  | Description                                                             | Headers / Auth            | Payload                                                                     |
+| :----- | :------------------------ | :---------------------------------------------------------------------- | :------------------------ | :-------------------------------------------------------------------------- |
+| `POST` | `/login`                  | Authenticate with Firebase token & establish 7-day session              | None                      | `{ "token": "<FirebaseIdToken>" }`                                          |
+| `GET`  | `/logout`                 | Invalidate Redis session & purge session cookie                         | Cookie                    | None                                                                        |
+| `POST` | `/use-coins`              | Session-bound coin deduction with server allowlist fallback             | Cookie                    | `{ "coins": 10, "action": "download-pdf" }`                                 |
+| `POST` | `/internal/coins/deduct`  | Internal service upfront atomic coin deduction & ledger write           | `x-internal-service-key`  | `{ "userId": "...", "action": "INTERVIEW_START", "reservationId": "..." }`  |
+| `POST` | `/internal/coins/refund`  | Internal service idempotent failure refund                              | `x-internal-service-key`  | `{ "userId": "...", "action": "INTERVIEW_START", "reservationId": "..." }`  |
+| `POST` | `/internal/coins/credit`  | Internal service ledger-backed balance top-up after payment settlement   | `x-internal-service-key`  | `{ "userId": "...", "coins": 300, "idempotencyKey": "order_..." }`         |
 
 ### User Profile (`/api`)
 
@@ -474,37 +522,38 @@ Yugam implements a virtual coin economy to balance LLM compute usage:
 
 ### Resume Services (`/api/resume`)
 
-| Method | Endpoint      | Description                                                                                                      | Headers / Auth | Payload                                                    |
-| :----- | :------------ | :--------------------------------------------------------------------------------------------------------------- | :------------- | :--------------------------------------------------------- |
-| `GET`  | `/roles`      | Fetch supported target job roles & taxonomy                                                                      | `x-user-id`    | None                                                       |
-| `POST` | `/upload`     | Upload resume PDF & trigger ATS analysis                                                                         | `x-user-id`    | `FormData`: `resume` (PDF), `targetRole` (Optional String) |
-| `GET`  | `/get-resume` | Retrieve user's parsed resume & gap analysis (returns `200 OK` with `{ data: null, resume: null }` if not found) | `x-user-id`    | None                                                       |
+| Method | Endpoint      | Description                                                                                                      | Headers / Auth                          | Payload                                                    |
+| :----- | :------------ | :--------------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :--------------------------------------------------------- |
+| `GET`  | `/roles`      | Fetch supported target job roles & taxonomy                                                                      | `x-user-id`, `x-gateway-secret`         | None                                                       |
+| `POST` | `/upload`     | Upload resume PDF (%PDF- validated), deduct 10 coins upfront & trigger ATS analysis                              | `x-user-id`, `x-gateway-secret`         | `FormData`: `resume` (PDF), `targetRole` (Optional String) |
+| `GET`  | `/get-resume` | Retrieve user's parsed resume & gap analysis (returns `200 OK` with `{ data: null, resume: null }` if not found) | `x-user-id`, `x-gateway-secret`         | None                                                       |
 
 ### AI Interview Engine (`/api/interview`)
 
-| Method | Endpoint              | Description                                                   | Headers / Auth | Payload                                                                                       |
-| :----- | :-------------------- | :------------------------------------------------------------ | :------------- | :-------------------------------------------------------------------------------------------- |
-| `POST` | `/start`              | Start new interview session & generate questions              | `x-user-id`    | `{ "type": "technical"\|"hr", "role": "Frontend Developer", "useResume": true\|false }`       |
-| `POST` | `/answer`             | Submit question response & get real-time feedback             | `x-user-id`    | `{ "interviewId": "...", "answer": "..." }`                                                   |
-| `GET`  | `/all`                | Fetch user interview history, averages & radar metrics        | `x-user-id`    | None                                                                                          |
-| `GET`  | `/:id`                | Fetch specific interview details and final report             | `x-user-id`    | None                                                                                          |
-| `POST` | `/code/run`           | Submit source code to isolated execution sandbox              | `x-user-id`    | `{ "language": "javascript"\|"python"\|"java"\|"cpp", "source_code": "...", "stdin": "..." }` |
-| `GET`  | `/code/status/:token` | Poll async execution status, stdout, stderr, errors & metrics | `x-user-id`    | None                                                                                          |
+| Method | Endpoint              | Description                                                                        | Headers / Auth                          | Payload                                                                                       |
+| :----- | :-------------------- | :--------------------------------------------------------------------------------- | :-------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| `POST` | `/start`              | Start interview session, deduct 50 coins upfront & generate questions              | `x-user-id`, `x-gateway-secret`         | `{ "type": "technical"\|"hr", "role": "Frontend Developer", "useResume": true\|false }`       |
+| `POST` | `/answer`             | Submit answer with optimistic concurrency locking & get feedback                   | `x-user-id`, `x-gateway-secret`         | `{ "interviewId": "...", "answer": "...", "questionIndex": 0 }`                               |
+| `POST` | `/submit`             | Alias for `/answer`                                                                | `x-user-id`, `x-gateway-secret`         | `{ "interviewId": "...", "answer": "...", "questionIndex": 0 }`                               |
+| `GET`  | `/all`                | Fetch user interview history, averages, and answered Questions Solved count        | `x-user-id`, `x-gateway-secret`         | None                                                                                          |
+| `GET`  | `/:id`                | Fetch specific interview details and final report                                  | `x-user-id`, `x-gateway-secret`         | None                                                                                          |
+| `POST` | `/code/run`           | Submit source code to isolated execution sandbox (Rate Limit: 15 runs/min)         | `x-user-id`, `x-gateway-secret`         | `{ "language": "javascript"\|"python"\|"java"\|"cpp", "source_code": "...", "stdin": "..." }` |
+| `GET`  | `/code/status/:token` | Poll async execution status; strictly bound to requesting user ownership           | `x-user-id`, `x-gateway-secret`         | None                                                                                          |
 
 ### Roadmaps & Learning Paths (`/api/roadmap`)
 
-| Method | Endpoint    | Description                                                      | Headers / Auth | Payload                                                                                                                           |
-| :----- | :---------- | :--------------------------------------------------------------- | :------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/generate` | Build custom roadmap across 10 tracks with docs & YouTube videos | `x-user-id`    | `{ "role": "MERN Stack Developer", "targetPackage": "10 LPA"\|"15 LPA"\|"20 LPA"\|"30 LPA"\|"40 LPA", "useResume": true\|false }` |
-| `GET`  | `/all`      | List all historical roadmaps created by the user                 | `x-user-id`    | None                                                                                                                              |
-| `GET`  | `/:id`      | Fetch specific roadmap details by ID                             | `x-user-id`    | None                                                                                                                              |
+| Method | Endpoint    | Description                                                                          | Headers / Auth                          | Payload                                                                                                                           |
+| :----- | :---------- | :----------------------------------------------------------------------------------- | :-------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/generate` | Deduct 20 coins upfront & build custom roadmap across 10 tracks with validated links | `x-user-id`, `x-gateway-secret`         | `{ "role": "MERN Stack Developer", "targetPackage": "10 LPA"\|"15 LPA"\|"20 LPA"\|"30 LPA"\|"40 LPA", "useResume": true\|false }` |
+| `GET`  | `/all`      | List all historical roadmaps created by the user                                     | `x-user-id`, `x-gateway-secret`         | None                                                                                                                              |
+| `GET`  | `/:id`      | Fetch specific roadmap details by ID                                                 | `x-user-id`, `x-gateway-secret`         | None                                                                                                                              |
 
 ### Billing & Orders (`/api/billing`)
 
-| Method | Endpoint  | Description                                  | Headers / Auth | Payload                                                                                     |
-| :----- | :-------- | :------------------------------------------- | :------------- | :------------------------------------------------------------------------------------------ |
-| `POST` | `/create` | Create Razorpay order                        | `x-user-id`    | `{ "planId": "starter" }`                                                                   |
-| `POST` | `/verify` | Validate cryptographic HMAC-SHA256 signature | `x-user-id`    | `{ "razorpay_order_id": "...", "razorpay_payment_id": "...", "razorpay_signature": "..." }` |
+| Method | Endpoint  | Description                                                                     | Headers / Auth                          | Payload                                                                                     |
+| :----- | :-------- | :------------------------------------------------------------------------------ | :-------------------------------------- | :------------------------------------------------------------------------------------------ |
+| `POST` | `/create` | Create Razorpay order scoped to authenticated user                              | `x-user-id`, `x-gateway-secret`         | `{ "planId": "starter" }`                                                                   |
+| `POST` | `/verify` | Validate cryptographic HMAC-SHA256 signature and settle payment state machine   | `x-user-id`, `x-gateway-secret`         | `{ "razorpay_order_id": "...", "razorpay_payment_id": "...", "razorpay_signature": "..." }` |
 
 ---
 
@@ -513,20 +562,23 @@ Yugam implements a virtual coin economy to balance LLM compute usage:
 ### MongoDB Collections
 
 - `User`: Primary user identities, Firebase UIDs, emails, profile names, and live `interviewCoin` ledger balances.
+- `CoinTransaction`: Immutable double-entry ledger documenting credits, upfront feature deductions, refunds, idempotency keys, and balances.
 - `Resume`: Full structured resume schemas including nested subdocuments for `education`, `experience`, `projects`, extracted skills, missing skills, and overall ATS scores.
 - `Interview`: Interview metadata, chosen role, type, array of question subdocuments (questions, answers, timers, 8-metric scores), and aggregate final summary reports.
 - `Roadmap`: Generated modular curriculums, target salaries, duration estimates, difficulty classifications, and resolved learning materials (YouTube URL, official doc link).
-- `Billing`: Immutable transaction records documenting Razorpay order IDs, payment IDs, verification signatures, monetary amounts, and settlement statuses (`created`, `paid`, `failed`).
+- `Billing`: Immutable transaction records documenting Razorpay order IDs, payment IDs, verification signatures, monetary amounts, and settlement statuses (`created`, `processing`, `paid`, `failed`).
 
 ### Redis Key Patterns & Expiry Policies
 
-| Key Pattern             | Purpose                                        | Lifetime (TTL)      | Invalidation Trigger                      |
-| :---------------------- | :--------------------------------------------- | :------------------ | :---------------------------------------- |
-| `session:<sessionId>`   | Holds authenticated user session JSON          | `7 days` (604,800s) | User logout / manual session revocation   |
-| `resume:<userId>`       | Cached structured resume & ATS analysis        | Persistent (no TTL) | User re-uploads / updates resume          |
-| `interviews:<userId>`   | Aggregated interview statistics & radar charts | `10 minutes` (600s) | New interview started or answer submitted |
-| `roadmap:<id>`          | Cached individual roadmap entity               | `1 hour` (3600s)    | Cache expiry                              |
-| `userRoadmaps:<userId>` | Array of all roadmaps belonging to user        | `1 hour` (3600s)    | Generation of a new roadmap               |
+| Key Pattern                       | Purpose                                        | Lifetime (TTL)      | Invalidation Trigger                      |
+| :-------------------------------- | :--------------------------------------------- | :------------------ | :---------------------------------------- |
+| `session:<sessionId>`             | Holds authenticated user session JSON          | `7 days` (604,800s) | User logout / manual session revocation   |
+| `resume:<userId>`                 | Cached structured resume & ATS analysis        | Persistent (no TTL) | User re-uploads / updates resume          |
+| `interviews:<userId>`             | Aggregated interview statistics & radar charts | `10 minutes` (600s) | New interview started or answer submitted |
+| `roadmap:<userId>:<roadmapId>`    | Cached individual user-scoped roadmap entity   | `1 hour` (3600s)    | Cache expiry                              |
+| `userRoadmaps:<userId>`           | Array of all roadmaps belonging to user        | `1 hour` (3600s)    | Generation of a new roadmap               |
+| `codebox:token:<token>`           | Binds code execution token to user ownership   | `1 hour` (3600s)    | Expiration                                |
+| `ratelimit:code:<userId>`         | Enforces sliding limit of 15 code runs/min     | `60 seconds`        | Rate limit window reset                   |
 
 ---
 
@@ -539,6 +591,7 @@ To run the full Yugam stack, configure the following `.env` files across service
 ```ini
 PORT=8000
 REDIS_URL="redis://localhost:6379"
+GATEWAY_INTERNAL_SECRET="yugam-gateway-internal-secret-key-2026"
 AUTH_SERVICE_URL="http://localhost:8001"
 RESUME_SERVICE_URL="http://localhost:8002"
 INTERVIEW_SERVICE_URL="http://localhost:8003"
@@ -553,6 +606,7 @@ FRONTEND_URL="http://localhost:5173"
 PORT=8001
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/user"
 REDIS_URL="redis://localhost:6379"
+INTERNAL_SERVICE_SECRET="yugam-internal-service-secret-key-2026"
 ```
 
 _(Requires `backend/services/auth/serviceAccountKey.json` from Firebase Console)_
@@ -564,6 +618,9 @@ PORT=8002
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/resume"
 REDIS_URL="redis://localhost:6379"
 GROQ_API_KEY="gsk_..."
+GATEWAY_INTERNAL_SECRET="yugam-gateway-internal-secret-key-2026"
+AUTH_SERVICE_URL="http://localhost:8001"
+INTERNAL_SERVICE_SECRET="yugam-internal-service-secret-key-2026"
 ```
 
 ### 4. Interview Service (`backend/services/interview/.env`)
@@ -574,10 +631,11 @@ MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/interview"
 REDIS_URL="redis://localhost:6379"
 GROQ_API_KEY="gsk_..."
 CODEBOX_URL="http://localhost:3000"
-CODEBOX_AUTH_TOKEN="dev-token"
+CODEBOX_AUTH_TOKEN="your_codebox_token"
+GATEWAY_INTERNAL_SECRET="yugam-gateway-internal-secret-key-2026"
+AUTH_SERVICE_URL="http://localhost:8001"
+INTERNAL_SERVICE_SECRET="yugam-internal-service-secret-key-2026"
 ```
-
-_(Internal execution engine running in an isolated Docker container on port 3000, authenticated via `CODEBOX_AUTH_TOKEN`)_
 
 ### 5. Roadmap Service (`backend/services/roadmap/.env`)
 
@@ -587,6 +645,9 @@ MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/Roadmap"
 REDIS_URL="redis://localhost:6379"
 GROQ_API_KEY="gsk_..."
 YOUTUBE_API_KEY="AIzaSy..."
+GATEWAY_INTERNAL_SECRET="yugam-gateway-internal-secret-key-2026"
+AUTH_SERVICE_URL="http://localhost:8001"
+INTERNAL_SERVICE_SECRET="yugam-internal-service-secret-key-2026"
 ```
 
 ### 6. Billing Service (`backend/services/billing/.env`)
@@ -594,8 +655,12 @@ YOUTUBE_API_KEY="AIzaSy..."
 ```ini
 PORT=8005
 MONGODB_URL="mongodb+srv://<username>:<password>@cluster.mongodb.net/Billing"
+REDIS_URL="redis://localhost:6379"
 RAZORPAY_KEY_ID="rzp_test_..."
 RAZORPAY_KEY_SECRET="jrdE..."
+GATEWAY_INTERNAL_SECRET="yugam-gateway-internal-secret-key-2026"
+AUTH_SERVICE_URL="http://localhost:8001"
+INTERNAL_SERVICE_SECRET="yugam-internal-service-secret-key-2026"
 ```
 
 ### 7. Frontend Client (`frontend/.env`)
@@ -685,11 +750,14 @@ Navigate to `http://localhost:5173` to access the application.
 ## 🛡️ Security, Performance & Best Practices
 
 1. **Strict Session Isolation**: Sessions are identified by cryptographically unguessable UUIDs stored solely in Redis. Session cookies are delivered with `HttpOnly`, `SameSite=None`, and `Secure` attributes to prevent XSS-based session hijacking.
-2. **Gateway-Enforced Identity**: Downstream microservices are inaccessible directly from the public web and require the trusted `x-user-id` header passed exclusively by the Gateway after verifying session authenticity.
-3. **Cryptographic Payment Integrity**: Payment confirmations reject unverified client payloads. All transactions require strict server-side HMAC-SHA256 signature verification matching Razorpay secrets before credit top-ups are finalized.
-4. **Resilient AI Extraction**: Prompts enforce JSON-only schemas with automatic cleanup filters (`replace(/```json/g, "").replace(/```/g, "").trim()`) to handle unexpected model outputs.
-5. **Disk & Memory Hygiene**: Uploaded resume PDFs are immediately processed in memory/temporary disk storage and explicitly purged in `finally` execution blocks via `fs.promises.unlink`.
-6. **Multi-Tier Cache Layering**: Expensive computational results (candidate career analytics, generated roadmaps, parsed resume trees) are cached in Redis to minimize unnecessary LLM token expenditure and optimize database queries.
+2. **Gateway-Origin Verification (`x-gateway-secret`)**: Downstream microservices enforce shared gateway-secret checks, immediately rejecting external requests attempting to bypass the API Gateway with `403 Forbidden`.
+3. **Internal Service Authentication (`x-internal-service-key`)**: Balance manipulation endpoints (`/internal/coins/deduct`, `/internal/coins/refund`, `/internal/coins/credit`) require mutual pre-shared secret authentication and cannot be accessed through the public API Gateway.
+4. **Server-Side Allowlisted Economy & Automated Refunds**: All feature coin deductions are priced on the server. Coins are reserved upfront and automatically refunded if an AI call fails, preventing partial or duplicate charges.
+5. **PDF Magic-Byte Validation**: Resumes are verified against the `%PDF-` byte header to prevent spoofed MIME uploads, with immediate filesystem unlinking in `finally` blocks.
+6. **Roadmap Domain Allowlisting**: AI-generated educational resources and YouTube tutorials are validated for HTTPS protocol and verified against an authoritative domain allowlist before persistence.
+7. **Code Execution Sandbox Protection**: CodeBox runner requires authenticated tokens, limits users to 15 executions per minute, and binds output polling to the requesting user ID.
+8. **Cryptographic Payment Integrity**: Payment confirmations reject unverified client payloads. All transactions require strict server-side HMAC-SHA256 signature verification matching Razorpay secrets before credit top-ups are finalized.
+9. **Fail-Fast Startup & Continuous Health Probes**: All microservices await database readiness and Redis ping before accepting network traffic, exposing `/health` endpoints for orchestration probes.
 
 ---
 
