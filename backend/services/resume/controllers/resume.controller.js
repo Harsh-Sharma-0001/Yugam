@@ -1,4 +1,5 @@
 import fs from "fs";
+import crypto from "crypto";
 import mongoose from "mongoose";
 
 import redis from "../../../shared/redis/redis.js";
@@ -6,6 +7,7 @@ import redis from "../../../shared/redis/redis.js";
 import { resumeAgent } from "../agents/resume.agent.js";
 import extractText from "../config/pdf.js";
 import Resume from "../models/resume.model.js";
+import { deductCoins, refundCoins } from "../utils/coinClient.js";
 
 import { ROLE_SKILLS } from "../config/roleSkills.js";
 
@@ -21,6 +23,10 @@ import {
 
 export const uploadResume = async (req, res) => {
   const file = req.file;
+  let reservationId;
+  let deductedCoins = false;
+  const userId = req.headers["x-user-id"];
+  const sessionId = req.headers["x-session-id"];
 
   try {
     // 1. Validate uploaded file
@@ -32,8 +38,6 @@ export const uploadResume = async (req, res) => {
     }
 
     // 2. Validate user
-    const userId = req.headers["x-user-id"];
-
     if (
       !userId ||
       !mongoose.Types.ObjectId.isValid(userId)
@@ -44,14 +48,34 @@ export const uploadResume = async (req, res) => {
       });
     }
 
+    // Deduct RESUME_SCORE coins BEFORE expensive PDF extraction and AI processing
+    reservationId = crypto.randomUUID();
+    let coinRes;
+    try {
+      coinRes = await deductCoins({
+        userId,
+        action: "RESUME_SCORE",
+        reservationId,
+        sessionId,
+      });
+      deductedCoins = true;
+    } catch (coinErr) {
+      if (coinErr.status === 402) {
+        return res.status(402).json({
+          success: false,
+          message: "Insufficient interview coins.",
+          interviewCoin: coinErr.data?.interviewCoin,
+          required: coinErr.data?.required || 10,
+        });
+      }
+      throw coinErr;
+    }
+
     // 3. Extract text from PDF
     const resumeText = await extractText(file.path);
 
     if (!resumeText || !resumeText.trim()) {
-      return res.status(422).json({
-        success: false,
-        message: "Could not extract text from the uploaded PDF",
-      });
+      throw new Error("Could not extract text from the uploaded PDF");
     }
 
     // 4. Extract structured resume information using AI
@@ -120,14 +144,28 @@ export const uploadResume = async (req, res) => {
       success: true,
       message: "Resume analyzed successfully",
       data: resume,
+      interviewCoin: coinRes?.interviewCoin,
     });
 
   } catch (error) {
     console.error("Resume Upload Error:", error);
 
+    // Automatic refund if coins were deducted
+    let refundedBalance;
+    if (deductedCoins && reservationId) {
+      const refundRes = await refundCoins({
+        userId,
+        action: "RESUME_SCORE",
+        reservationId,
+        sessionId,
+      });
+      refundedBalance = refundRes?.interviewCoin;
+    }
+
     return res.status(500).json({
       success: false,
-      message: "Resume processing failed",
+      message: error.message || "Resume processing failed",
+      interviewCoin: refundedBalance,
     });
 
   } finally {

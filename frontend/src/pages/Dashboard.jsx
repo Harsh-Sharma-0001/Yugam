@@ -34,19 +34,31 @@ function Dashboard({ user, setUser }) {
   const navigate = useNavigate()
 
   useEffect(() => {
+    let isMounted = true;
 
     const fetchInterviews = async () => {
-      const response = await getAllInterviews()
-      setStats(response.stats)
-      setTechnicalData(response.technicalData)
-      setHrData(response.hrData)
-      setTechnicalCount(response.technicalCount)
-      setHrCount(response.hrCount)
-    }
+      try {
+        const response = await getAllInterviews();
+        if (!isMounted) return;
 
-    fetchInterviews()
+        if (response && response.stats) {
+          setStats(response.stats);
+          setTechnicalData(response.technicalData || []);
+          setHrData(response.hrData || []);
+          setTechnicalCount(response.technicalCount || 0);
+          setHrCount(response.hrCount || 0);
+        }
+      } catch (err) {
+        console.error("Dashboard fetchInterviews error:", err);
+      }
+    };
 
-  }, [])
+    fetchInterviews();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLogout = async () => {
     try {

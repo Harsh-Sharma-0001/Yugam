@@ -6,7 +6,7 @@ export const startInterview = async (data) => {
     return response.data;
   } catch (error) {
     console.error("Start interview error:", error);
-    return null;
+    throw error;
   }
 };
 
@@ -16,7 +16,7 @@ export const getInterview = async (id) => {
     return response.data;
   } catch (error) {
     console.error("Get interview error:", error);
-    return null;
+    return error.response?.data || null;
   }
 };
 
@@ -26,7 +26,10 @@ export const submitAnswer = async (data) => {
     return response.data;
   } catch (error) {
     console.error("Submit answer error:", error);
-    return null;
+    return error.response?.data || {
+      success: false,
+      message: error.response?.data?.message || error.message || "Failed to submit answer.",
+    };
   }
 };
 
@@ -36,7 +39,7 @@ export const getAllInterviews = async () => {
     return response.data;
   } catch (error) {
     console.error("Get all interviews error:", error);
-    return null;
+    return error.response?.data || null;
   }
 };
 

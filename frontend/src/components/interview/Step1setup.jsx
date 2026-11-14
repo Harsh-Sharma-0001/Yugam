@@ -4,7 +4,6 @@ import { FiArrowLeft, FiArrowRight, FiBriefcase, FiCheck, FiCheckCircle, FiFileT
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { useCoins } from '../../apis/user.api'
 import api from '../../utils/axios'
 import { setResume } from '../../redux/resumeSlice'
 import { startInterview } from '../../apis/interview.api'
@@ -33,16 +32,6 @@ function Step1setup({ user, setUser }) {
         }
         try {
             setUploading(true)
-            try {
-                const coinResponse = await useCoins({ coins: 10, action: "resume-scorer" })
-                setUser((prev) => ({
-                    ...prev, interviewCoin: coinResponse?.interviewCoin,
-                }))
-            } catch (error) {
-                setUploading(false)
-                alert("Failed to use coins.")
-                return;
-            }
 
             const formData = new FormData()
             formData.append("resume", file)
@@ -52,6 +41,13 @@ function Step1setup({ user, setUser }) {
 
             const response = await api.post("/api/resume/upload", formData)
             const uploadedResume = response?.data?.data
+
+            if (typeof response?.data?.interviewCoin === "number") {
+                setUser((prev) => ({
+                    ...prev,
+                    interviewCoin: response.data.interviewCoin,
+                }))
+            }
 
             dispatch(setResume(uploadedResume))
             setUseResume(true)
@@ -67,9 +63,14 @@ function Step1setup({ user, setUser }) {
             }
         } catch (error) {
             console.error("Resume upload error:", error)
+            setUploading(false)
+            if (error.response?.status === 402) {
+                alert(`Insufficient interview coins! You need ${error.response.data?.required || 10} coins to analyze a resume.`)
+                navigate("/billing")
+                return;
+            }
             const errorMsg = error.response?.data?.message || "Upload failed. Please try again."
             alert(errorMsg)
-            setUploading(false)
         }
     }
 
@@ -84,30 +85,36 @@ function Step1setup({ user, setUser }) {
         }
 
         setStarting(true)
-        const response = await startInterview({
-            role: role.trim(),
-            type,
-            useResume,
-            resume: useResume ? resume : null
-        })
+        try {
+            const response = await startInterview({
+                role: role.trim(),
+                type,
+                useResume,
+                resume: useResume ? resume : null
+            })
 
-        if(response && response.interviewId){
-            try {
-                const coinResponse = await useCoins({ coins: 50, action: "start-interview" })
-                setUser((prev) => ({
-                    ...prev, interviewCoin: coinResponse?.interviewCoin,
-                }))
-            } catch (error) {
+            if (response && response.interviewId) {
+                if (typeof response.interviewCoin === "number") {
+                    setUser((prev) => ({
+                        ...prev,
+                        interviewCoin: response.interviewCoin,
+                    }))
+                }
                 setStarting(false)
-                alert("Failed to use coins.")
+                navigate(`/interview/${response.interviewId}`)
+            } else {
+                setStarting(false)
+                alert("Failed to start interview. Please try again.")
+            }
+        } catch (error) {
+            setStarting(false)
+            if (error.response?.status === 402) {
+                alert(`Insufficient interview coins! You need ${error.response.data?.required || 50} coins to start an interview.`)
+                navigate("/billing")
                 return;
             }
-
-            setStarting(false)
-            navigate(`/interview/${response.interviewId}`)
-        } else {
-            setStarting(false)
-            alert("Failed to start interview. Please try again.")
+            const errorMsg = error.response?.data?.message || "Failed to start interview. Please try again."
+            alert(errorMsg)
         }
     }
 

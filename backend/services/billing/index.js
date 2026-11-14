@@ -2,6 +2,7 @@ import express from "express"
 import dotenv from "dotenv"
 import { connectDB } from "./configs/db.js"
 import billingRouter from "./routes/billing.route.js"
+import { verifyGatewayOrigin } from "./middleware/gatewayAuth.js"
 
 dotenv.config()
 
@@ -14,6 +15,7 @@ app.get("/",(req,res)=>{
     res.send("Hello from Billing-service")
 })
 
+app.use(verifyGatewayOrigin)
 app.use("/",billingRouter)
 
 app.listen(PORT , ()=>{

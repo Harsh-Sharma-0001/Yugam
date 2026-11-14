@@ -26,7 +26,6 @@ import {
   RadialBarChart,
 } from "recharts";
 
-import { useCoins } from "../apis/user.api";
 import { getResumeRoles } from "../apis/resume.api";
 
 // --------------------------------------------------
@@ -391,30 +390,12 @@ function Scorer({ user, setUser }) {
       // 3. Update Redux
       dispatch(setResume(analyzedResume));
 
-      // 4. Deduct coins after successful analysis.
-      // This assumes useCoins is an ordinary API function,
-      // not a React hook.
-      try {
-        const coinResponse = await useCoins({
-          coins: 10,
-          action: "resume-scorer",
-        });
-
-        if (coinResponse?.interviewCoin !== undefined) {
-          setUser((previousUser) => ({
-            ...previousUser,
-            interviewCoin: coinResponse.interviewCoin,
-          }));
-        }
-      } catch (coinError) {
-        console.error(
-          "Resume Coin Deduction Error:",
-          coinError
-        );
-
-        setError(
-          "Resume analysis completed, but coin deduction failed. Please contact support."
-        );
+      // 4. Update user coin balance returned from backend server-side deduction
+      if (typeof response.data?.interviewCoin === "number") {
+        setUser((previousUser) => ({
+          ...previousUser,
+          interviewCoin: response.data.interviewCoin,
+        }));
       }
 
       setFile(null);
@@ -422,11 +403,17 @@ function Scorer({ user, setUser }) {
     } catch (err) {
       console.error("Resume Upload Error:", err);
 
-      setError(
-        err.response?.data?.message ||
-        err.message ||
-        "Resume analysis failed. Please try again."
-      );
+      if (err.response?.status === 402) {
+        setError(
+          `Insufficient interview coins! You need ${err.response.data?.required || 10} coins to analyze a resume. Please recharge your balance.`
+        );
+      } else {
+        setError(
+          err.response?.data?.message ||
+          err.message ||
+          "Resume analysis failed. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }

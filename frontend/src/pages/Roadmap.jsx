@@ -4,7 +4,6 @@ import { FiCheck, FiChevronDown, FiClock, FiFileText, FiRefreshCw, FiSend, FiUpl
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { BsRocketTakeoff } from "react-icons/bs";
-import { useCoins } from '../apis/user.api'
 import api from '../utils/axios'
 import { useDispatch, useSelector } from 'react-redux'
 import { setResume } from '../redux/resumeSlice'
@@ -100,18 +99,6 @@ function Roadmap({ user, setUser }) {
             setModalUploading(true);
             setModalError("");
 
-            try {
-                const coinRes = await useCoins({ coins: 10, action: "resume-scorer" });
-                setUser((prev) => ({
-                    ...prev,
-                    interviewCoin: coinRes?.interviewCoin,
-                }));
-            } catch (coinErr) {
-                setModalUploading(false);
-                setModalError("Insufficient coins or coin deduction failed.");
-                return;
-            }
-
             const formData = new FormData();
             formData.append("resume", modalFile);
             if (role && role.trim()) {
@@ -121,6 +108,12 @@ function Roadmap({ user, setUser }) {
             const response = await api.post("/api/resume/upload", formData);
             if (response?.data?.data) {
                 const uploadedResume = response.data.data;
+                if (typeof response?.data?.interviewCoin === "number") {
+                    setUser((prev) => ({
+                        ...prev,
+                        interviewCoin: response.data.interviewCoin,
+                    }));
+                }
                 dispatch(setResume(uploadedResume));
                 setUseResume(true);
                 setShowResumeModal(false);
@@ -138,7 +131,11 @@ function Roadmap({ user, setUser }) {
             }
         } catch (err) {
             console.error("Roadmap resume modal upload error:", err);
-            setModalError(err.response?.data?.message || "Failed to analyze resume. Please try again.");
+            if (err.response?.status === 402) {
+                setModalError(`Insufficient interview coins! You need ${err.response.data?.required || 10} coins to analyze a resume.`);
+            } else {
+                setModalError(err.response?.data?.message || "Failed to analyze resume. Please try again.");
+            }
         } finally {
             setModalUploading(false);
         }
@@ -149,17 +146,6 @@ function Roadmap({ user, setUser }) {
         setLoading(true);
         setError("");
         try {
-            try {
-                const coinResponse = await useCoins({ coins: 20, action: "roadmap-builder" })
-                setUser((prev) => ({
-                    ...prev, interviewCoin: coinResponse?.interviewCoin,
-                }))
-            } catch (error) {
-                setLoading(false)
-                alert("Failed to use coins.")
-                return;
-            }
-
             const payload = {
                 role: role.trim(),
                 targetPackage,
@@ -167,18 +153,28 @@ function Roadmap({ user, setUser }) {
                 resume: useResume ? resume : null,
             };
 
-            const response = await api.post("/api/roadmap/generate", payload)
-            setRoadmap(response.data.data)
-            getAllRoadmaps()
-            setLoading(false)
+            const response = await api.post("/api/roadmap/generate", payload);
+            if (typeof response.data?.interviewCoin === "number") {
+                setUser((prev) => ({
+                    ...prev,
+                    interviewCoin: response.data.interviewCoin,
+                }));
+            }
+            setRoadmap(response.data.data);
+            getAllRoadmaps();
+            setLoading(false);
 
         } catch (error) {
             console.error("Failed to generate roadmap:", error);
-            const errMsg = error.response?.data?.message || "Something went wrong while generating your roadmap. Please try again.";
-            setError(errMsg);
-            setLoading(false)
+            if (error.response?.status === 402) {
+                setError(`Insufficient interview coins! You need ${error.response.data?.required || 20} coins to generate a roadmap. Please recharge your balance.`);
+            } else {
+                const errMsg = error.response?.data?.message || "Something went wrong while generating your roadmap. Please try again.";
+                setError(errMsg);
+            }
+            setLoading(false);
         }
-    }
+    };
 
     return (
         <div className='min-h-screen bg-white text-[#0A0A0A] flex flex-col'>

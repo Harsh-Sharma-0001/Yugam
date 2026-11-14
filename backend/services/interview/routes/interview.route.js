@@ -6,10 +6,12 @@ const interviewRouter = express.Router()
 
 // Code Execution Engine Routes
 interviewRouter.post("/code/run", runCode)
+interviewRouter.post("/code/execute", runCode)
 interviewRouter.get("/code/status/:token", getExecutionStatus)
 
 interviewRouter.post("/start", startInterview)
 interviewRouter.post("/answer", submitAnswer)
+interviewRouter.post("/submit", submitAnswer)
 interviewRouter.get("/all", getAllInterviews)
 interviewRouter.get("/:id", getInterview)
 

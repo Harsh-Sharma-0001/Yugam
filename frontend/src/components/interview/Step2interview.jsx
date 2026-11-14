@@ -16,6 +16,7 @@ const navigate = useNavigate()
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   const [timeLeft, setTimeLeft] = useState(interviewData.question.timer || 60);
   const [timerActive, setTimerActive] = useState(true); // paused once the answer is submitted
 
@@ -36,6 +37,32 @@ const navigate = useNavigate()
   const userVideoRef = useRef(null);
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
+  const micOnRef = useRef(micOn);
+
+  // Sync micOnRef with micOn state to avoid stale closures in speech synthesis callbacks
+  useEffect(() => {
+    micOnRef.current = micOn;
+  }, [micOn]);
+
+  // Comprehensive unmount cleanup for media streams, speech recognition, and speech synthesis
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort ? recognitionRef.current.abort() : recognitionRef.current.stop();
+        } catch (e) {
+          // ignore cleanup errors on unmount
+        }
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
 
   const videoSource = voiceGender === "female" ? femaleVideo : maleVideo
@@ -147,7 +174,7 @@ const navigate = useNavigate()
         utter.onend=()=>{
           aiVideoRef.current?.pause()
           setIsAIPlaying(false)
-          if(micOn) startMic()
+          if(micOnRef.current) startMic()
             setTimeout(()=>{ setSubtitle("");resolve() },300)
         }
         setSubtitle(text)
@@ -198,18 +225,29 @@ const navigate = useNavigate()
 
 
 
-  useEffect(()=>{
-    if(timeLeft !== 0)return;
+  useEffect(() => {
+    if (timeLeft !== 0) return;
     const autoSubmit = async () => {
       await speakText("Time is up. Submitting your answer now.");
       const finalAnswer = answer.trim() || "No answer provided. Time over.";
 
-      setLoading(true)
+      setLoading(true);
+      setSubmitError(null);
 
-    const res = await submitAnswer({ interviewId: interviewData.interviewId, answer:finalAnswer})
+      const res = await submitAnswer({
+        interviewId: interviewData.interviewId,
+        answer: finalAnswer,
+        questionIndex: currentIndex,
+      });
 
-    if(res.completed){
-       setFeedback(res.feedback);
+      if (!res || !res.success) {
+        setLoading(false);
+        setSubmitError(res?.message || "Failed to submit answer. Please retry.");
+        return;
+      }
+
+      if (res.completed) {
+        setFeedback(res.feedback);
         await new Promise((r) => setTimeout(r, 700));
         await speakText(
           res.feedback?.feedback ||
@@ -218,9 +256,9 @@ const navigate = useNavigate()
         setLoading(false);
         navigate(`/interview/${interviewData.interviewId}/report`);
         return;
-    }
+      }
 
-     setFeedback(res.feedback);
+      setFeedback(res.feedback);
       await new Promise((r) => setTimeout(r, 700));
       await speakText(
         res.feedback?.feedback ||
@@ -231,51 +269,56 @@ const navigate = useNavigate()
       setCurrentIndex(res.currentQuestion);
       setAnswer("");
       setFeedback(null);
+    };
+
+    autoSubmit();
+  }, [timeLeft]);
 
 
+  const submit = async () => {
+    if (!answer.trim() || loading) return;
+
+    setTimerActive(false);
+    setLoading(true);
+    setSubmitError(null);
+
+    const res = await submitAnswer({
+      interviewId: interviewData.interviewId,
+      answer: answer.trim(),
+      questionIndex: currentIndex,
+    });
+
+    if (!res || !res.success) {
+      setLoading(false);
+      setTimerActive(true); // resume timer if submission failed
+      setSubmitError(res?.message || "Failed to submit answer. Please try again.");
+      return;
     }
 
-
-    autoSubmit()
-   
-
-  },[timeLeft])
-
-
-  const submit =async ()=>{
-
-    if(!answer.trim())return;
-
-    setTimerActive(false)
-    setLoading(true)
-
-    const res = await submitAnswer({ interviewId: interviewData.interviewId, answer})
-
-    if(res.completed){
-       setFeedback(res.feedback);
-        await new Promise((r) => setTimeout(r, 700));
-        await speakText(
-          res.feedback?.feedback ||
-          "Great job! Your interview is complete. Preparing your report now."
-        );
-        setLoading(false);
-        navigate(`/interview/${interviewData.interviewId}/report`);
-        return;
-    }
-
-     setFeedback(res.feedback);
+    if (res.completed) {
+      setFeedback(res.feedback);
       await new Promise((r) => setTimeout(r, 700));
       await speakText(
         res.feedback?.feedback ||
-        "Noted your answer. Let's move to the next question."
+        "Great job! Your interview is complete. Preparing your report now."
       );
       setLoading(false);
-      setQuestion(res.question);
-      setCurrentIndex(res.currentQuestion);
-      setAnswer("");
-      setFeedback(null);
+      navigate(`/interview/${interviewData.interviewId}/report`);
+      return;
+    }
 
-  }
+    setFeedback(res.feedback);
+    await new Promise((r) => setTimeout(r, 700));
+    await speakText(
+      res.feedback?.feedback ||
+      "Noted your answer. Let's move to the next question."
+    );
+    setLoading(false);
+    setQuestion(res.question);
+    setCurrentIndex(res.currentQuestion);
+    setAnswer("");
+    setFeedback(null);
+  };
 
   
 
@@ -467,14 +510,30 @@ const navigate = useNavigate()
           </div>
 
           <div className='flex-1 flex flex-col min-h-0'>
+            {submitError && (
+              <div className='mb-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10 flex items-center justify-between text-xs text-red-300 gap-2'>
+                <span className='truncate'>{submitError}</span>
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={loading}
+                  className='px-2.5 py-1 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition disabled:opacity-50 shrink-0'
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             <label className='text-xs font-medium text-zinc-400 mb-1.5'>Your Answer</label>
             <textarea
-            onChange={(e)=>setAnswer(e.target.value)}
-            value={answer}
-            rows={5}
-            onKeyDown={(e)=>{if(e.ctrlKey && e.key === "Enter") submit()}}
-            placeholder='Write your answer here… or speak if mic is on'
-             className='flex-1 w-full rounded-xl bg-[#17181E] border border-white/8 p-4 text-sm text-white outline-none resize-none focus:border-white/25 transition placeholder-white/20'/>
+              onChange={(e) => {
+                setAnswer(e.target.value);
+                if (submitError) setSubmitError(null);
+              }}
+              value={answer}
+              rows={5}
+              onKeyDown={(e) => { if (e.ctrlKey && e.key === "Enter") submit(); }}
+              placeholder='Write your answer here… or speak if mic is on'
+              className='flex-1 w-full rounded-xl bg-[#17181E] border border-white/8 p-4 text-sm text-white outline-none resize-none focus:border-white/25 transition placeholder-white/20' />
           </div>
 
           <div className='mt-3 min-h-[0px]'>

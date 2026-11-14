@@ -2,6 +2,7 @@ import express from "express"
 import dotenv from "dotenv"
 import { connectDB } from "./config/db.js"
 import interviewRouter from "./routes/interview.route.js"
+import { verifyGatewayOrigin } from "./middleware/gatewayAuth.js"
 dotenv.config()
 
 const app = express()
@@ -14,7 +15,7 @@ app.get("/" , (req,res)=>{
     res.send("Hello from Interview-service")
 })
 
-
+app.use(verifyGatewayOrigin)
 app.use("/",interviewRouter)
 
 

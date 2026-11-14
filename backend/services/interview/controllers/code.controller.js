@@ -1,8 +1,14 @@
 import { validateCodeboxPayload } from "../utils/codebox.js";
+import redis from "../../../shared/redis/redis.js";
 
 const getCodeboxConfig = () => {
   const codeboxUrl = (process.env.CODEBOX_URL || "http://localhost:3000").replace(/\/+$/, "");
-  const codeboxToken = process.env.CODEBOX_AUTH_TOKEN || "dev-token";
+  const codeboxToken = process.env.CODEBOX_AUTH_TOKEN;
+  if (!codeboxToken) {
+    const error = new Error("Code execution engine is not configured (missing CODEBOX_AUTH_TOKEN).");
+    error.statusCode = 503;
+    throw error;
+  }
   return { codeboxUrl, codeboxToken };
 };
 
@@ -17,6 +23,28 @@ const isConnectionError = (error) => {
 
 export const runCode = async (req, res) => {
   try {
+    const userId = req.headers["x-user-id"];
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Missing user credentials.",
+      });
+    }
+
+    // Per-user execution rate limiting: 15 runs per minute
+    const rateLimitKey = `ratelimit:code:${userId}`;
+    const currentCount = await redis.incr(rateLimitKey);
+    if (currentCount === 1) {
+      await redis.expire(rateLimitKey, 60);
+    }
+    if (currentCount > 15) {
+      const ttl = await redis.ttl(rateLimitKey);
+      return res.status(429).json({
+        success: false,
+        message: `Too many code execution requests. Rate limit is 15 executions per minute. Please try again in ${ttl > 0 ? ttl : 60} seconds.`,
+      });
+    }
+
     const { language, source_code, stdin } = req.body || {};
 
     const validation = validateCodeboxPayload({
@@ -72,6 +100,9 @@ export const runCode = async (req, res) => {
       });
     }
 
+    // Bind execution token to userId in Redis for 1 hour (3600 seconds)
+    await redis.set(`codebox:token:${data.token}`, String(userId), "EX", 3600);
+
     return res.status(200).json({
       success: true,
       token: data.token,
@@ -79,10 +110,10 @@ export const runCode = async (req, res) => {
   } catch (error) {
     console.error("Code execution runCode error:", error);
 
-    if (isConnectionError(error)) {
+    if (error?.statusCode === 503 || isConnectionError(error)) {
       return res.status(503).json({
         success: false,
-        message: "Code execution engine is currently unavailable.",
+        message: error?.statusCode === 503 ? error.message : "Code execution engine is currently unavailable.",
       });
     }
 
@@ -95,6 +126,14 @@ export const runCode = async (req, res) => {
 
 export const getExecutionStatus = async (req, res) => {
   try {
+    const userId = req.headers["x-user-id"];
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Missing user credentials.",
+      });
+    }
+
     const token = req.params?.token;
 
     if (!token || typeof token !== "string" || !token.trim()) {
@@ -104,10 +143,21 @@ export const getExecutionStatus = async (req, res) => {
       });
     }
 
+    const cleanToken = token.trim();
+
+    // Verify token ownership
+    const ownerId = await redis.get(`codebox:token:${cleanToken}`);
+    if (!ownerId || ownerId !== String(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Execution token does not belong to you.",
+      });
+    }
+
     const { codeboxUrl, codeboxToken } = getCodeboxConfig();
 
     const response = await fetch(
-      `${codeboxUrl}/submissions/${encodeURIComponent(token.trim())}`,
+      `${codeboxUrl}/submissions/${encodeURIComponent(cleanToken)}`,
       {
         method: "GET",
         headers: {
@@ -145,10 +195,10 @@ export const getExecutionStatus = async (req, res) => {
   } catch (error) {
     console.error("Code execution getExecutionStatus error:", error);
 
-    if (isConnectionError(error)) {
+    if (error?.statusCode === 503 || isConnectionError(error)) {
       return res.status(503).json({
         success: false,
-        message: "Code execution engine is currently unavailable.",
+        message: error?.statusCode === 503 ? error.message : "Code execution engine is currently unavailable.",
       });
     }
 

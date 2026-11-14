@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import resumeRouter from "./routes/resume.route.js";
+import { verifyGatewayOrigin } from "./middleware/gatewayAuth.js";
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.get("/", (req, res) => {
   res.send("Hello from Resume-service");
 });
 
+app.use(verifyGatewayOrigin);
 app.use("/", resumeRouter);
 
 const startServer = async () => {

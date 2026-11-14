@@ -54,6 +54,14 @@ export const createOrder = async (req, res) => {
 
 export const verifyPayment = async (req, res) => {
     try {
+        const userId = req.headers["x-user-id"];
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized: Missing user authentication",
+            });
+        }
+
         const {
             razorpay_order_id,
             razorpay_payment_id,
@@ -67,15 +75,29 @@ export const verifyPayment = async (req, res) => {
             });
         }
 
-        // Step A — Signature Check: Verify Razorpay HMAC signature
+        // Query stored order record using both razorpayOrderId and authenticated userId
+        const existingOrder = await Billing.findOne({
+            razorpayOrderId: razorpay_order_id,
+            userId,
+        });
+
+        if (!existingOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found or does not belong to the authenticated user.",
+            });
+        }
+
+        // Step A — Signature Check: Verify HMAC signature using stored existingOrder.razorpayOrderId
         const genSign = crypto
             .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+            .update(`${existingOrder.razorpayOrderId}|${razorpay_payment_id}`)
             .digest("hex");
 
         if (genSign !== razorpay_signature) {
+            // Scope failed status update strictly to existingOrder and userId in created status
             await Billing.findOneAndUpdate(
-                { razorpayOrderId: razorpay_order_id },
+                { _id: existingOrder._id, userId, status: "created" },
                 { status: "failed" }
             );
             return res.status(400).json({
@@ -85,26 +107,19 @@ export const verifyPayment = async (req, res) => {
         }
 
         // Step B — Check Already Paid
-        const existingPayment = await Billing.findOne({ razorpayOrderId: razorpay_order_id });
-        if (!existingPayment) {
-            return res.status(404).json({
-                success: false,
-                message: "Payment not found",
-            });
-        }
-
-        if (existingPayment.status === "paid") {
+        if (existingOrder.status === "paid") {
             return res.status(200).json({
                 success: true,
                 message: "Payment already verified and credited.",
             });
         }
 
-        // Step C — Atomic Lock (created -> processing, with 30s stale recovery)
+        // Step C — Atomic Lock (created / stale processing -> processing, with 30s stale recovery)
         const staleThreshold = new Date(Date.now() - 30 * 1000);
         const payment = await Billing.findOneAndUpdate(
             {
-                razorpayOrderId: razorpay_order_id,
+                _id: existingOrder._id,
+                userId,
                 $or: [
                     { status: "created" },
                     { status: "processing", processingStartedAt: { $lt: staleThreshold } }
@@ -144,7 +159,7 @@ export const verifyPayment = async (req, res) => {
                 body: JSON.stringify({
                     userId: String(payment.userId),
                     amount: payment.interviewCoins,
-                    idempotencyKey: razorpay_order_id,
+                    idempotencyKey: existingOrder.razorpayOrderId,
                     sessionId: sessionId || undefined,
                 }),
             });
@@ -165,12 +180,15 @@ export const verifyPayment = async (req, res) => {
         }
 
         // Step E — Finalize to "paid"
-        await Billing.findByIdAndUpdate(payment._id, {
-            $set: {
-                status: "paid",
-                paidAt: new Date(),
+        await Billing.findOneAndUpdate(
+            { _id: payment._id, userId },
+            {
+                $set: {
+                    status: "paid",
+                    paidAt: new Date(),
+                }
             }
-        });
+        );
 
         return res.status(200).json({
             success: true,

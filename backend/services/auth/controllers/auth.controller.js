@@ -7,6 +7,7 @@ import { app } from "../configs/firebase.js";
 import User from "../model/user.model.js";
 import CoinTransaction from "../models/CoinTransaction.js";
 import redis from "../../../shared/redis/redis.js";
+import { FEATURE_COIN_COSTS } from "../constants/coinPricing.js";
 
 
 export const login = async (req, res) => {
@@ -182,7 +183,9 @@ export const useInterviewCoins = async (req, res) => {
     }
 
     const { coins, action } = req.body;
-    const cost = Number(coins);
+    const cost = action && FEATURE_COIN_COSTS[action] !== undefined
+      ? FEATURE_COIN_COSTS[action]
+      : Number(coins);
 
     if (isNaN(cost) || cost <= 0) {
       return res.status(400).json({
@@ -316,6 +319,189 @@ export const addCoins = async (req, res) => {
     });
   } catch (error) {
     console.error("addCoins error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const deductFeatureCoins = async (req, res) => {
+  try {
+    const { userId, action, reservationId, sessionId } = req.body;
+
+    if (!userId || !action || !reservationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters (userId, action, reservationId).",
+      });
+    }
+
+    const cost = FEATURE_COIN_COSTS[action];
+    if (cost === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid or unallowlisted action: ${action}`,
+      });
+    }
+
+    // Idempotency check: if this reservation was already processed, return existing state
+    const existingTx = await CoinTransaction.findOne({ idempotencyKey: reservationId });
+    if (existingTx) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: existingTx.balanceAfter,
+        deducted: -existingTx.amount,
+      });
+    }
+
+    // Atomically decrement user's coin balance with condition interviewCoin >= cost
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId, interviewCoin: { $gte: cost } },
+      { $inc: { interviewCoin: -cost } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      const existingUser = await User.findById(userId);
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+      return res.status(402).json({
+        success: false,
+        message: "Insufficient interview coins.",
+        interviewCoin: existingUser.interviewCoin,
+        required: cost,
+      });
+    }
+
+    // Record immutable ledger entry
+    try {
+      await CoinTransaction.create({
+        idempotencyKey: reservationId,
+        userId: updatedUser._id,
+        amount: -cost,
+        type: "FEATURE_DEDUCTION",
+        balanceAfter: updatedUser.interviewCoin,
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        // Concurrent race condition: duplicate reservation processed
+        await User.findByIdAndUpdate(userId, { $inc: { interviewCoin: cost } });
+        const record = await CoinTransaction.findOne({ idempotencyKey: reservationId });
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin + cost,
+          deducted: cost,
+        });
+      }
+      throw err;
+    }
+
+    // Sync Redis sessions for active tabs
+    const activeSessionId = sessionId || req.cookies?.session;
+    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, activeSessionId);
+
+    return res.status(200).json({
+      success: true,
+      interviewCoin: updatedUser.interviewCoin,
+      deducted: cost,
+    });
+  } catch (error) {
+    console.error("deductFeatureCoins error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const refundFeatureCoins = async (req, res) => {
+  try {
+    const { userId, action, reservationId, sessionId } = req.body;
+
+    if (!userId || !action || !reservationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters (userId, action, reservationId).",
+      });
+    }
+
+    const cost = FEATURE_COIN_COSTS[action];
+    if (cost === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid or unallowlisted action: ${action}`,
+      });
+    }
+
+    const refundKey = `refund:${reservationId}`;
+
+    // Idempotency check: if this refund has already executed, return current state
+    const existingRefund = await CoinTransaction.findOne({ idempotencyKey: refundKey });
+    if (existingRefund) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: existingRefund.balanceAfter,
+        refunded: existingRefund.amount,
+      });
+    }
+
+    // Atomically increment user's coin balance by cost
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { interviewCoin: cost } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Record immutable ledger entry for the refund
+    try {
+      await CoinTransaction.create({
+        idempotencyKey: refundKey,
+        userId: updatedUser._id,
+        amount: cost,
+        type: "FEATURE_REFUND",
+        balanceAfter: updatedUser.interviewCoin,
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        // Concurrent refund attempt - rollback our extra credit
+        await User.findByIdAndUpdate(userId, { $inc: { interviewCoin: -cost } });
+        const record = await CoinTransaction.findOne({ idempotencyKey: refundKey });
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin - cost,
+          refunded: cost,
+        });
+      }
+      throw err;
+    }
+
+    // Sync Redis sessions for active tabs
+    const activeSessionId = sessionId || req.cookies?.session;
+    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, activeSessionId);
+
+    return res.status(200).json({
+      success: true,
+      interviewCoin: updatedUser.interviewCoin,
+      refunded: cost,
+    });
+  } catch (error) {
+    console.error("refundFeatureCoins error:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
