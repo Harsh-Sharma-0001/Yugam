@@ -22,7 +22,14 @@ import {
   getScheduledInterviews,
   scheduleInterview,
   updateScheduleStatus,
+  deleteScheduledInterview,
 } from "../controllers/schedule.controller.js";
+import {
+  joinLiveRoom,
+  completeLiveRoom,
+  getLiveRoomReport,
+  getLiveRoomBySchedule,
+} from "../controllers/liveInterview.controller.js";
 import { requireRole } from "../middleware/roleAuth.js";
 
 const interviewRouter = express.Router();
@@ -47,7 +54,15 @@ interviewRouter.get("/students-directory", requireRole("admin", "trainer"), getS
 interviewRouter.post("/schedule", requireRole("admin", "trainer"), scheduleInterview);
 interviewRouter.get("/schedule", requireRole("student", "trainer", "admin"), getScheduledInterviews);
 interviewRouter.patch("/schedule/:id/status", requireRole("admin", "trainer"), updateScheduleStatus);
+interviewRouter.delete("/schedule/:id", requireRole("admin", "trainer"), deleteScheduledInterview);
 interviewRouter.get("/schedule/:id", requireRole("student", "trainer", "admin"), getScheduleById);
+
+// Live Video Interview Room Routes (Mounted before /:id)
+interviewRouter.post("/live/join/:scheduleId", joinLiveRoom);
+interviewRouter.post("/live/:liveId/complete", requireRole("admin", "trainer"), completeLiveRoom);
+interviewRouter.get("/live/by-schedule/:scheduleId", getLiveRoomBySchedule);
+interviewRouter.get("/live/schedule/:scheduleId", getLiveRoomBySchedule);
+interviewRouter.get("/live/:liveId", getLiveRoomReport);
 
 // AI Mock Interview Routes
 interviewRouter.post("/start", startInterview);

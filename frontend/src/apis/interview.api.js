@@ -147,3 +147,53 @@ export const updateScheduleStatus = async (id, data) => {
     throw error;
   }
 };
+
+export const deleteScheduledInterview = async (id) => {
+  try {
+    const response = await api.delete(`/api/interview/schedule/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("deleteScheduledInterview error:", error);
+    return error.response?.data || { success: false, message: error.message };
+  }
+};
+
+export const joinLiveRoom = async (scheduleId) => {
+  try {
+    const response = await api.post(`/api/interview/live/join/${scheduleId}`);
+    return response.data;
+  } catch (error) {
+    console.error("joinLiveRoom error:", error);
+    return error.response?.data || { success: false, message: error.message };
+  }
+};
+
+export const completeLiveRoom = async (liveId, data) => {
+  try {
+    const response = await api.post(`/api/interview/live/${liveId}/complete`, data);
+    return response.data;
+  } catch (error) {
+    console.error("completeLiveRoom error:", error);
+    return error.response?.data || { success: false, message: error.message };
+  }
+};
+
+export const getLiveRoomReport = async (liveId) => {
+  try {
+    const response = await api.get(`/api/interview/live/${liveId}`);
+    return response.data;
+  } catch (error) {
+    console.error("getLiveRoomReport error:", error);
+    return error.response?.data || { success: false, message: error.message };
+  }
+};
+
+export const getLiveRoomBySchedule = async (scheduleId) => {
+  try {
+    const response = await api.get(`/api/interview/live/schedule/${scheduleId}`);
+    return response.data;
+  } catch (error) {
+    console.error("getLiveRoomBySchedule error:", error);
+    return error.response?.data || { success: false, message: error.message };
+  }
+};

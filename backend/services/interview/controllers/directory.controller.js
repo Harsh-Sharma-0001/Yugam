@@ -1,5 +1,6 @@
 import xlsx from "xlsx";
 import Interview from "../models/interview.model.js";
+import LiveInterview from "../models/liveInterview.model.js";
 import ScheduledInterview from "../models/scheduledInterview.model.js";
 import { generateCsvString, sanitizeFormula } from "../utils/exportSanitizer.js";
 
@@ -40,13 +41,19 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
 
   const studentIds = rawStudents.map((s) => s._id);
 
-  // Fetch only completed interviews
-  const [completedInterviews, pendingScheduled] = await Promise.all([
+  // Fetch only completed interviews across AI and Live collections
+  const [completedAiInterviews, completedLiveInterviews, pendingScheduled] = await Promise.all([
     Interview.find({
       userId: { $in: studentIds },
       status: "completed",
     })
       .select("userId overallScore mode createdAt type role")
+      .lean(),
+    LiveInterview.find({
+      studentId: { $in: studentIds },
+      status: "completed",
+    })
+      .select("studentId evaluation createdAt role interviewType")
       .lean(),
     ScheduledInterview.find({
       institutionId,
@@ -57,9 +64,20 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
       .lean(),
   ]);
 
+  const liveFormatted = completedLiveInterviews.map((l) => ({
+    userId: l.studentId,
+    overallScore: l.evaluation?.overallScore ?? 0,
+    mode: "live",
+    createdAt: l.createdAt,
+    type: l.interviewType || "technical",
+    role: l.role,
+  }));
+
+  const allCompletedInterviews = [...completedAiInterviews, ...liveFormatted];
+
   // Group interviews by studentId
   const interviewMap = new Map();
-  completedInterviews.forEach((interview) => {
+  allCompletedInterviews.forEach((interview) => {
     const sid = String(interview.userId);
     if (!interviewMap.has(sid)) {
       interviewMap.set(sid, []);
@@ -254,7 +272,7 @@ export const getStudentsDirectory = async (req, res) => {
     const allStudents = await fetchAggregatedStudents(institutionId, req.query);
 
     const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 20));
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 20));
 
     const startIndex = (page - 1) * limit;
     const paginatedStudents = allStudents.slice(startIndex, startIndex + limit);

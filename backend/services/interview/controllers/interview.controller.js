@@ -3,6 +3,7 @@ import crypto from "crypto";
 import redis from "../../../shared/redis/redis.js";
 import graph from "../graph/graph.js";
 import Interview from "../models/interview.model.js";
+import LiveInterview from "../models/liveInterview.model.js";
 import { deductCoins, refundCoins } from "../utils/coinClient.js";
 
 export const startInterview = async (req, res) => {
@@ -320,7 +321,46 @@ export const getAllInterviews = async (req, res) => {
             return res.status(200).json(JSON.parse(cache));
         }
 
-        const interviews = await Interview.find({ userId }).sort({ createdAt: -1 });
+        const [aiInterviews, liveInterviews] = await Promise.all([
+            Interview.find({ userId }).sort({ createdAt: -1 }),
+            LiveInterview.find({ studentId: userId, status: "completed" }).sort({ createdAt: -1 }),
+        ]);
+
+        const liveFormatted = liveInterviews.map((l) => ({
+            _id: l._id,
+            userId: l.studentId,
+            mode: "live",
+            role: l.role,
+            type: l.interviewType || "technical",
+            status: l.status,
+            createdAt: l.createdAt,
+            overallScore: l.evaluation?.overallScore || 0,
+            summary: l.evaluation?.summaryFeedback || "",
+            strengths: l.evaluation?.strengths || [],
+            weaknesses: l.evaluation?.weaknesses || [],
+            trainerName: l.trainerName,
+            questions: (l.questions || []).map((q) => ({
+                question: q.questionText,
+                userAnswer: q.submittedCode
+                    ? `${q.studentAnswer}\n--- Code ---\n${q.submittedCode}`
+                    : q.studentAnswer,
+                difficulty: q.difficulty || "medium",
+                feedback: {
+                    score: q.score,
+                    feedback: q.feedback,
+                    correctness: l.evaluation?.criteria?.correctness || 0,
+                    clarity: l.evaluation?.criteria?.clarity || 0,
+                    relevance: l.evaluation?.criteria?.relevance || 0,
+                    efficiency: l.evaluation?.criteria?.efficiency || 0,
+                    communication: l.evaluation?.criteria?.communication || 0,
+                    problemSolving: l.evaluation?.criteria?.problemSolving || 0,
+                },
+            })),
+        }));
+
+        const interviews = [...aiInterviews, ...liveFormatted].sort(
+            (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        );
 
         const completed = interviews.filter((item) => item.status === "completed");
 

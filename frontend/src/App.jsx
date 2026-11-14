@@ -9,6 +9,7 @@ import InterviewPage from './pages/InterviewPage'
 import InterviewReport from './pages/InterviewReport'
 import Roadmap from './pages/Roadmap'
 import Billing from './pages/Billing'
+import LiveInterviewRoom from './pages/LiveInterviewRoom'
 import { getCurrentUser } from './apis/user.api'
 import { getResume } from './apis/resume.api'
 import { useDispatch } from 'react-redux'
@@ -109,6 +110,11 @@ function App() {
         <Route 
           path='/roadmap' 
           element={user ? <Roadmap user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+        />
+
+        <Route 
+          path='/live-interview/:scheduleId' 
+          element={user ? <LiveInterviewRoom user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
         />
 
         <Route 

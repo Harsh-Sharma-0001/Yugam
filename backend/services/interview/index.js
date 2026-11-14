@@ -1,12 +1,18 @@
 import "dotenv/config";
 import express from "express";
+import http from "http";
 import mongoose from "mongoose";
 import { connectDB } from "./config/db.js";
 import interviewRouter from "./routes/interview.route.js";
 import { verifyGatewayOrigin } from "./middleware/gatewayAuth.js";
 import redis from "../../shared/redis/redis.js";
+import { initLiveRoomSocket } from "./socket/liveRoom.socket.js";
 
 const app = express();
+const server = http.createServer(app);
+
+// Initialize real-time Socket.IO signaling & live workspace sync
+initLiveRoomSocket(server);
 
 app.use(express.json());
 
@@ -43,8 +49,8 @@ const startServer = async () => {
             }
         }
 
-        app.listen(PORT, () => {
-            console.log(`Interview-service Started on ${PORT}`);
+        server.listen(PORT, () => {
+            console.log(`Interview-service (HTTP + Socket.IO) Started on ${PORT}`);
         });
     } catch (error) {
         console.error("Interview service startup failed:", error);

@@ -176,3 +176,124 @@ describe("3. RBAC on Performance Directory & Scheduling Endpoints", () => {
     assert.equal(adminPassed, true);
   });
 });
+
+describe("4. Flexible Student Identifier Resolution (Email, Roll Number, MongoDB _id)", () => {
+  const institutionStudents = [
+    {
+      _id: "6735e5d31122334455667788",
+      name: "Harsh Sharma",
+      email: "harshsharmasharma257@gmail.com",
+      profile: { rollNumber: "21BCSE101", section: "CSE-A" },
+    },
+    {
+      _id: "6735e5d31122334455667799",
+      name: "Rahul Verma",
+      email: "rahul.verma@college.edu",
+      profile: { rollNumber: "21BCSE102", section: "CSE-B" },
+    },
+  ];
+
+  // Helper matching the resolution logic in schedule.controller.js
+  const resolveStudent = (input, students) => {
+    const rawInput = (input || "").trim();
+    const cleanInput = rawInput.toLowerCase();
+    return students.find((s) => {
+      const sId = String(s._id);
+      const sEmail = (s.email || "").toLowerCase();
+      const sRoll = (s.profile?.rollNumber || "").toLowerCase();
+      return sId === rawInput || sEmail === cleanInput || sRoll === cleanInput;
+    });
+  };
+
+  test("Resolves student by exact Email (case-insensitive)", () => {
+    const student = resolveStudent("harshsharmasharma257@gmail.com", institutionStudents);
+    assert.ok(student, "Student should be found by email");
+    assert.equal(student.name, "Harsh Sharma");
+    assert.equal(student._id, "6735e5d31122334455667788");
+
+    // Case insensitive check
+    const studentUpper = resolveStudent("HARSHSHARMASHARMA257@GMAIL.COM", institutionStudents);
+    assert.ok(studentUpper);
+    assert.equal(studentUpper._id, "6735e5d31122334455667788");
+  });
+
+  test("Resolves student by University Roll Number (case-insensitive)", () => {
+    const student = resolveStudent("21BCSE101", institutionStudents);
+    assert.ok(student, "Student should be found by roll number");
+    assert.equal(student.name, "Harsh Sharma");
+    assert.equal(student.email, "harshsharmasharma257@gmail.com");
+
+    const studentLower = resolveStudent("21bcse101", institutionStudents);
+    assert.ok(studentLower);
+    assert.equal(studentLower._id, "6735e5d31122334455667788");
+  });
+
+  test("Resolves student by MongoDB _id", () => {
+    const student = resolveStudent("6735e5d31122334455667799", institutionStudents);
+    assert.ok(student, "Student should be found by MongoDB _id");
+    assert.equal(student.name, "Rahul Verma");
+    assert.equal(student.profile.rollNumber, "21BCSE102");
+  });
+
+  test("Returns undefined/404 for non-existent identifier", () => {
+    const student = resolveStudent("nonexistent@domain.com", institutionStudents);
+    assert.equal(student, undefined, "Non-existent student should not be found");
+
+    const studentRoll = resolveStudent("INVALID_ROLL", institutionStudents);
+    assert.equal(studentRoll, undefined);
+  });
+});
+
+describe("5. Scheduled Interview Deletion Authorization & Scoping", () => {
+  const scheduledDoc = {
+    _id: "sched-501",
+    institutionId: "COLLEGE_ALPHA",
+    studentId: "student-1",
+    trainerId: "trainer-101",
+    role: "Fullstack Engineer",
+  };
+
+  const canDeleteScheduled = (user, sched) => {
+    if (user.institutionId !== sched.institutionId) return { allowed: false, status: 403, reason: "Cross-institution" };
+    if (user.userRole === "student") return { allowed: false, status: 403, reason: "Student role not permitted" };
+    if (user.userRole === "trainer" && String(user.userId) !== String(sched.trainerId)) {
+      return { allowed: false, status: 403, reason: "Trainer can only delete own sessions" };
+    }
+    return { allowed: true, status: 200 };
+  };
+
+  test("Allows assigned trainer to delete own scheduled interview", () => {
+    const trainerUser = { userId: "trainer-101", userRole: "trainer", institutionId: "COLLEGE_ALPHA" };
+    const res = canDeleteScheduled(trainerUser, scheduledDoc);
+    assert.equal(res.allowed, true);
+    assert.equal(res.status, 200);
+  });
+
+  test("Allows institution Admin to delete any scheduled interview", () => {
+    const adminUser = { userId: "admin-999", userRole: "admin", institutionId: "COLLEGE_ALPHA" };
+    const res = canDeleteScheduled(adminUser, scheduledDoc);
+    assert.equal(res.allowed, true);
+    assert.equal(res.status, 200);
+  });
+
+  test("Rejects unassigned trainer from deleting another trainer's session", () => {
+    const otherTrainer = { userId: "trainer-102", userRole: "trainer", institutionId: "COLLEGE_ALPHA" };
+    const res = canDeleteScheduled(otherTrainer, scheduledDoc);
+    assert.equal(res.allowed, false);
+    assert.equal(res.status, 403);
+  });
+
+  test("Rejects student role from deleting scheduled interview", () => {
+    const studentUser = { userId: "student-1", userRole: "student", institutionId: "COLLEGE_ALPHA" };
+    const res = canDeleteScheduled(studentUser, scheduledDoc);
+    assert.equal(res.allowed, false);
+    assert.equal(res.status, 403);
+  });
+
+  test("Rejects cross-institution scheduled interview deletion", () => {
+    const adminOtherCollege = { userId: "admin-888", userRole: "admin", institutionId: "COLLEGE_BETA" };
+    const res = canDeleteScheduled(adminOtherCollege, scheduledDoc);
+    assert.equal(res.allowed, false);
+    assert.equal(res.status, 403);
+  });
+});

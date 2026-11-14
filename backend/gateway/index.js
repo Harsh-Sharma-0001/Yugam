@@ -1,9 +1,11 @@
 import "dotenv/config";
+import http from "http";
 import express from "express";
 import proxy from "express-http-proxy";
 import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import redis from "../shared/redis/redis.js";
 import { getCurrentUser } from "./controllers/user.controller.js";
 import { isAuth } from "./middleware/isAuth.js";
@@ -74,6 +76,15 @@ const optionalAuth = async (req, res, next) => {
     next();
 };
 
+// Socket.IO WebSocket and polling proxy to Interview Service
+const socketProxy = createProxyMiddleware({
+    target: process.env.INTERVIEW_SERVICE_URL || "http://localhost:6003",
+    ws: true,
+    changeOrigin: true,
+});
+
+app.use("/socket.io", socketProxy);
+
 app.use("/api/auth", optionalAuth, proxyWithHeaders(process.env.AUTH_SERVICE_URL));
 app.use("/api/resume", isAuth, proxyWithHeaders(process.env.RESUME_SERVICE_URL));
 app.use("/api/interview", isAuth, proxyWithHeaders(process.env.INTERVIEW_SERVICE_URL));
@@ -83,6 +94,13 @@ app.use("/api/billing", isAuth, proxyWithHeaders(process.env.BILLING_SERVICE_URL
 app.get("/api/me", isAuth, getCurrentUser);
 app.get("/api/auth/me", isAuth, getCurrentUser);
 
-app.listen(PORT, () => {
-    console.log(`Gateway Started on ${PORT}`);
+const server = http.createServer(app);
+server.on("upgrade", (req, socket, head) => {
+    if (req.url && req.url.startsWith("/socket.io")) {
+        socketProxy.upgrade(req, socket, head);
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`Gateway (HTTP + WebSocket Proxy) Started on ${PORT}`);
 });

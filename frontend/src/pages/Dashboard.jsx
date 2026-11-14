@@ -7,9 +7,11 @@ import InterviewDetailView from "../components/interview/InterviewDetailView";
 import EditProfileModal from "../components/EditProfileModal";
 import StudentDirectory from "../components/StudentDirectory";
 import ScheduleInterviewModal from "../components/ScheduleInterviewModal";
+import AdminTrainersView from "../components/AdminTrainersView";
 import {
   getAllInterviews,
   getScheduledInterviews,
+  deleteScheduledInterview,
 } from "../apis/interview.api";
 import {
   getCurrentUser,
@@ -32,6 +34,7 @@ import {
   FiEdit2,
   FiCheckCircle,
   FiXCircle,
+  FiX,
   FiAlertCircle,
   FiPlus,
   FiSearch,
@@ -45,6 +48,7 @@ import {
   FiExternalLink,
   FiCalendar,
   FiPlay,
+  FiVideo,
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -177,6 +181,23 @@ function Dashboard() {
       }
     } catch (e) {
       console.error("fetchScheduledList error:", e);
+    }
+  };
+
+  // Delete / Cancel a Scheduled Interview (Admin & Trainer)
+  const handleDeleteScheduled = async (id) => {
+    if (!window.confirm("Are you sure you want to cancel and remove this scheduled interview?")) {
+      return;
+    }
+    try {
+      const res = await deleteScheduledInterview(id);
+      if (res?.success) {
+        setScheduledInterviews((prev) => prev.filter((item) => item._id !== id));
+      } else {
+        alert(res?.message || "Failed to remove scheduled interview.");
+      }
+    } catch (err) {
+      alert("Error removing interview: " + (err.response?.data?.message || err.message));
     }
   };
 
@@ -570,8 +591,8 @@ function Dashboard() {
               {/* TAB 1: OVERVIEW */}
               {activeTab === "overview" && (
                 <div className="space-y-6">
-                  {/* Upcoming Scheduled Interviews Strip for Students */}
-                  {role === "student" && scheduledInterviews.length > 0 && (
+                  {/* Upcoming Scheduled Interviews Strip */}
+                  {scheduledInterviews.length > 0 && (
                     <div className="bg-[#0E1016] border border-white/10 rounded-2xl p-5 text-white shadow-xl">
                       <div className="flex items-center justify-between mb-3.5">
                         <div className="flex items-center gap-2">
@@ -608,19 +629,32 @@ function Dashboard() {
                                   {item.role}
                                 </h5>
                                 <p className="text-xs text-zinc-400">
-                                  Scheduled by: {item.trainerName}
+                                  {role === "student"
+                                    ? `Scheduled by: ${item.trainerName}`
+                                    : `Candidate: ${item.studentName} (${item.studentRollNumber || "Enrolled"})`}
                                 </p>
                               </div>
 
-                              <div className="text-right">
-                                <span className="text-xs text-zinc-300 block font-semibold">
-                                  {new Date(item.scheduledAt).toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
+                              <div className="text-right flex flex-col items-end gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-zinc-300 block font-semibold">
+                                    {new Date(item.scheduledAt).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                  {(role === "admin" || role === "trainer") && (
+                                    <button
+                                      onClick={() => handleDeleteScheduled(item._id)}
+                                      className="p-1 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition ml-1"
+                                      title="Delete / Cancel Scheduled Interview"
+                                    >
+                                      <FiX size={13} />
+                                    </button>
+                                  )}
+                                </div>
                                 <span className="text-[10px] text-zinc-500">
                                   {item.durationMinutes} Mins
                                 </span>
@@ -640,17 +674,31 @@ function Dashboard() {
                               </span>
 
                               {item.mode === "ai" ? (
-                                <button
-                                  onClick={() => navigate("/interview")}
-                                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm"
-                                >
-                                  <FiPlay size={11} />
-                                  <span>Start AI Interview</span>
-                                </button>
+                                role === "student" ? (
+                                  <button
+                                    onClick={() => navigate("/interview")}
+                                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    <FiPlay size={11} />
+                                    <span>Start AI Interview</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-zinc-400">AI Practice Session</span>
+                                )
                               ) : (
-                                <span className="text-xs font-bold text-purple-400">
-                                  Video Link Provided by Trainer
-                                </span>
+                                role === "admin" ? (
+                                  <span className="text-xs text-purple-400 font-semibold flex items-center gap-1">
+                                    <span>Assigned Trainer: {item.trainerName}</span>
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => navigate(`/live-interview/${item._id}`)}
+                                    className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    <FiVideo size={12} />
+                                    <span>{role === "student" ? "Join Live Room" : "Start Live Room"}</span>
+                                  </button>
+                                )
                               )}
                             </div>
                           </div>
@@ -939,52 +987,13 @@ function Dashboard() {
 
               {/* TAB 4: TRAINERS DIRECTORY (Admin Only) */}
               {activeTab === "trainers" && role === "admin" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold text-[#0A0A0A]">
-                        Trainers & Faculty Directory ({trainers.length})
-                      </h3>
-                      <p className="text-xs text-black/50">
-                        Review appointed technical instructors, specializations, and coaching experience.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {trainers.map((t) => (
-                      <div
-                        key={t._id}
-                        className="bg-[#0E1016] border border-white/10 rounded-2xl p-5 text-white shadow-lg space-y-3"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h4 className="text-base font-bold text-white">{t.name}</h4>
-                            <p className="text-xs text-zinc-400">{t.email}</p>
-                          </div>
-                          <span className="bg-purple-500/15 text-purple-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-purple-500/30">
-                            TRAINER
-                          </span>
-                        </div>
-
-                        <div className="bg-[#17181E] border border-white/5 rounded-xl p-3 text-xs space-y-1">
-                          <p className="text-zinc-300">
-                            <span className="text-zinc-500 font-medium">Department: </span>
-                            {t.profile?.department || "Computer Science"}
-                          </p>
-                          <p className="text-zinc-300">
-                            <span className="text-zinc-500 font-medium">Designation: </span>
-                            {t.profile?.designation || "Technical Trainer"}
-                          </p>
-                          <p className="text-zinc-300">
-                            <span className="text-zinc-500 font-medium">Experience: </span>
-                            {t.profile?.yearsOfExperience ? `${t.profile.yearsOfExperience} Years` : "—"}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <AdminTrainersView
+                  trainers={trainers}
+                  onScheduleTrainer={() => {
+                    setSelectedStudentForSchedule(null);
+                    setScheduleModalOpen(true);
+                  }}
+                />
               )}
 
               {/* TAB 5: PERMISSIONS, ACADEMIC VERIFICATION & HYBRID PROVISIONING (Admin Only) */}
