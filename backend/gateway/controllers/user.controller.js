@@ -1,4 +1,3 @@
-
 import redis from "../../shared/redis/redis.js";
 
 export const getCurrentUser = async (req, res) => {
@@ -28,6 +27,11 @@ export const getCurrentUser = async (req, res) => {
                             name: data.user.name || currentUser?.name,
                             email: data.user.email || currentUser?.email,
                             interviewCoin: data.user.interviewCoin,
+                            role: data.user.role || currentUser?.role || "student",
+                            institutionId: data.user.institutionId || currentUser?.institutionId || "DEFAULT_COLLEGE",
+                            status: data.user.status || currentUser?.status || "active",
+                            permissions: data.user.permissions || currentUser?.permissions || [],
+                            profile: data.user.profile || currentUser?.profile || {},
                         };
 
                         // Synchronize Redis session cache so all subsequent reads are consistent

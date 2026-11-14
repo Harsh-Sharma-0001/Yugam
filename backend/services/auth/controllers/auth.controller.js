@@ -1,19 +1,14 @@
 import crypto from "crypto";
-
 import { getAuth } from "firebase-admin/auth";
-
-
 import { app } from "../configs/firebase.js";
 import User from "../model/user.model.js";
 import CoinTransaction from "../models/CoinTransaction.js";
+import AuditLog from "../models/auditLog.model.js";
 import redis from "../../../shared/redis/redis.js";
 import { FEATURE_COIN_COSTS } from "../constants/coinPricing.js";
 
-
 export const login = async (req, res) => {
-
   try {
-
     const { token } = req.body;
 
     const decoded = await getAuth(app).verifyIdToken(token);
@@ -23,53 +18,65 @@ export const login = async (req, res) => {
     });
 
     if (!user) {
-
-      user = await User.create({
-
-        firebaseUid: decoded.uid,
-
-        email: decoded.email,
-
-        name: decoded.name
-
-      });
-
+      // Check if user was pre-provisioned by email
+      const existingByEmail = await User.findOne({ email: decoded.email?.toLowerCase() });
+      if (existingByEmail) {
+        existingByEmail.firebaseUid = decoded.uid;
+        if (!existingByEmail.name && decoded.name) {
+          existingByEmail.name = decoded.name;
+        }
+        user = await existingByEmail.save();
+      } else {
+        user = await User.create({
+          firebaseUid: decoded.uid,
+          email: decoded.email?.toLowerCase(),
+          name: decoded.name || decoded.email?.split("@")[0],
+          role: "student",
+          institutionId: "DEFAULT_COLLEGE",
+          status: "active",
+        });
+      }
     }
 
     const sessionId = crypto.randomUUID();
 
-    await redis.set(`session:${sessionId}`, JSON.stringify({
+    await redis.set(
+      `session:${sessionId}`,
+      JSON.stringify({
         userId: user._id,
         name: user.name,
         email: user.email,
-        interviewCoin: user.interviewCoin
-      }), "EX", 60 * 60 * 24 * 7);
+        interviewCoin: user.interviewCoin,
+        role: user.role || "student",
+        institutionId: user.institutionId || "DEFAULT_COLLEGE",
+        status: user.status || "active",
+        permissions: user.permissions || [],
+        profile: user.profile || {},
+      }),
+      "EX",
+      60 * 60 * 24 * 7
+    );
 
     // Track active session in the user's session set
     await redis.sadd(`userSessions:${user._id}`, sessionId);
     await redis.expire(`userSessions:${user._id}`, 60 * 60 * 24 * 7);
 
     res.cookie("session", sessionId, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 1000 * 60 * 60 * 24 * 7,
-      }
-    );
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    });
 
     return res.json({ success: true, user });
-
   } catch (error) {
     console.log(error);
     return res.status(401).json({ message: error.message });
-
   }
-
 };
 
 export const logout = async (req, res) => {
   try {
-
     const sessionId = req.cookies?.session;
 
     if (sessionId) {
@@ -97,24 +104,32 @@ export const logout = async (req, res) => {
       success: true,
       message: "Logged out successfully",
     });
-
   } catch (error) {
-
     return res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
 };
-export const syncUserSessionsInRedis = async (userId, updatedCoins, specificSessionId) => {
+
+export const syncFullUserDataInRedis = async (userId, updatedUser, specificSessionId) => {
   try {
-    // 1. If a specific sessionId is known, update it directly
+    const patchData = (sessionData) => {
+      if (updatedUser.name !== undefined) sessionData.name = updatedUser.name;
+      if (updatedUser.email !== undefined) sessionData.email = updatedUser.email;
+      if (updatedUser.interviewCoin !== undefined) sessionData.interviewCoin = updatedUser.interviewCoin;
+      if (updatedUser.role !== undefined) sessionData.role = updatedUser.role;
+      if (updatedUser.institutionId !== undefined) sessionData.institutionId = updatedUser.institutionId;
+      if (updatedUser.status !== undefined) sessionData.status = updatedUser.status;
+      if (updatedUser.permissions !== undefined) sessionData.permissions = updatedUser.permissions;
+      if (updatedUser.profile !== undefined) sessionData.profile = updatedUser.profile;
+      return sessionData;
+    };
+
     if (specificSessionId) {
       const cached = await redis.get(`session:${specificSessionId}`);
       if (cached) {
-        const sessionData = JSON.parse(cached);
-        sessionData.interviewCoin = updatedCoins;
+        const sessionData = patchData(JSON.parse(cached));
         const ttl = await redis.ttl(`session:${specificSessionId}`);
         await redis.set(
           `session:${specificSessionId}`,
@@ -125,7 +140,6 @@ export const syncUserSessionsInRedis = async (userId, updatedCoins, specificSess
       }
     }
 
-    // 2. Query all active session IDs tracked in the user's session set
     const userSessionsKey = `userSessions:${userId}`;
     const sessionIds = await redis.smembers(userSessionsKey);
 
@@ -134,8 +148,7 @@ export const syncUserSessionsInRedis = async (userId, updatedCoins, specificSess
         if (sid === specificSessionId) continue;
         const cached = await redis.get(`session:${sid}`);
         if (cached) {
-          const sessionData = JSON.parse(cached);
-          sessionData.interviewCoin = updatedCoins;
+          const sessionData = patchData(JSON.parse(cached));
           const ttl = await redis.ttl(`session:${sid}`);
           await redis.set(
             `session:${sid}`,
@@ -144,19 +157,22 @@ export const syncUserSessionsInRedis = async (userId, updatedCoins, specificSess
             ttl > 0 ? ttl : 60 * 60 * 24 * 7
           );
         } else {
-          // Clean up expired session ID
           await redis.srem(userSessionsKey, sid);
         }
       }
     }
   } catch (err) {
-    console.error("syncUserSessionsInRedis error:", err);
+    console.error("syncFullUserDataInRedis error:", err);
   }
+};
+
+export const syncUserSessionsInRedis = async (userId, updatedCoins, specificSessionId) => {
+  return syncFullUserDataInRedis(userId, { interviewCoin: updatedCoins }, specificSessionId);
 };
 
 export const useInterviewCoins = async (req, res) => {
   try {
-    const sessionId = req.cookies?.session;
+    const sessionId = req.cookies?.session || req.headers["x-session-id"];
     if (!sessionId) {
       return res.status(401).json({
         success: false,
@@ -290,27 +306,24 @@ export const addCoins = async (req, res) => {
         idempotencyKey,
         userId: updatedUser._id,
         amount: addAmount,
-        type: "PURCHASE_CREDIT",
+        type: "PURCHASE",
         balanceAfter: updatedUser.interviewCoin,
       });
     } catch (err) {
-      // In case of concurrent race condition causing duplicate key violation (E11000)
       if (err.code === 11000) {
-        // Roll back the duplicate increment
-        await User.findByIdAndUpdate(userId, { $inc: { interviewCoin: -addAmount } });
+        // Race condition: concurrent execution already recorded ledger
         const record = await CoinTransaction.findOne({ idempotencyKey });
         return res.status(200).json({
           success: true,
           duplicate: true,
-          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin - addAmount,
+          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin,
         });
       }
       throw err;
     }
 
     // Synchronize all active Redis sessions for this user
-    const activeSessionId = sessionId || req.cookies?.session;
-    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, activeSessionId);
+    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, sessionId);
 
     return res.status(200).json({
       success: true,
@@ -345,18 +358,18 @@ export const deductFeatureCoins = async (req, res) => {
       });
     }
 
-    // Idempotency check: if this reservation was already processed, return existing state
+    // Idempotency check: if this reservation has already executed, return current state
     const existingTx = await CoinTransaction.findOne({ idempotencyKey: reservationId });
     if (existingTx) {
       return res.status(200).json({
         success: true,
         duplicate: true,
         interviewCoin: existingTx.balanceAfter,
-        deducted: -existingTx.amount,
+        deducted: cost,
       });
     }
 
-    // Atomically decrement user's coin balance with condition interviewCoin >= cost
+    // Atomic conditional deduction
     const updatedUser = await User.findOneAndUpdate(
       { _id: userId, interviewCoin: { $gte: cost } },
       { $inc: { interviewCoin: -cost } },
@@ -373,9 +386,9 @@ export const deductFeatureCoins = async (req, res) => {
       }
       return res.status(402).json({
         success: false,
-        message: "Insufficient interview coins.",
+        message: `Insufficient coins for ${action}. Required: ${cost}, Available: ${existingUser.interviewCoin}`,
         interviewCoin: existingUser.interviewCoin,
-        required: cost,
+        requiredCoins: cost,
       });
     }
 
@@ -449,11 +462,11 @@ export const refundFeatureCoins = async (req, res) => {
         success: true,
         duplicate: true,
         interviewCoin: existingRefund.balanceAfter,
-        refunded: existingRefund.amount,
+        refunded: cost,
       });
     }
 
-    // Atomically increment user's coin balance by cost
+    // Atomically refund coins back to the user
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $inc: { interviewCoin: cost } },
@@ -467,7 +480,7 @@ export const refundFeatureCoins = async (req, res) => {
       });
     }
 
-    // Record immutable ledger entry for the refund
+    // Record refund in the ledger
     try {
       await CoinTransaction.create({
         idempotencyKey: refundKey,
@@ -478,7 +491,7 @@ export const refundFeatureCoins = async (req, res) => {
       });
     } catch (err) {
       if (err.code === 11000) {
-        // Concurrent refund attempt - rollback our extra credit
+        // Duplicate refund caught by unique idempotencyKey index
         await User.findByIdAndUpdate(userId, { $inc: { interviewCoin: -cost } });
         const record = await CoinTransaction.findOne({ idempotencyKey: refundKey });
         return res.status(200).json({
@@ -512,7 +525,7 @@ export const refundFeatureCoins = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id).select("-__v");
+    const user = await User.findById(id).select("-__v -firebaseUid");
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -527,6 +540,11 @@ export const getUserById = async (req, res) => {
         name: user.name,
         email: user.email,
         interviewCoin: user.interviewCoin,
+        role: user.role || "student",
+        institutionId: user.institutionId || "DEFAULT_COLLEGE",
+        status: user.status || "active",
+        permissions: user.permissions || [],
+        profile: user.profile || {},
       },
     });
   } catch (error) {
@@ -535,5 +553,464 @@ export const getUserById = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+/**
+ * PUT /api/auth/profile
+ * Authenticated user updates their name and role-tailored profile.
+ * Academic Integrity Guard: Changes to student marks/CGPA enter pending verification.
+ */
+export const updateProfile = async (req, res) => {
+  try {
+    const userId = req.userId || req.headers["x-user-id"];
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized: Missing user identity." });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const { name, profile: newProfile = {} } = req.body;
+
+    if (name && typeof name === "string") {
+      user.name = name.trim();
+    }
+
+    const currentProfile = user.profile ? (typeof user.profile.toObject === "function" ? user.profile.toObject() : { ...user.profile }) : {};
+
+    if (user.role === "student") {
+      // Immediate updates permitted
+      if (newProfile.contactNumber !== undefined) currentProfile.contactNumber = String(newProfile.contactNumber).trim();
+      if (newProfile.resumeUrl !== undefined) currentProfile.resumeUrl = String(newProfile.resumeUrl).trim();
+      if (newProfile.collegeName !== undefined) currentProfile.collegeName = String(newProfile.collegeName).trim();
+      if (newProfile.course !== undefined) currentProfile.course = String(newProfile.course).trim();
+      if (newProfile.section !== undefined) currentProfile.section = String(newProfile.section).trim();
+      if (newProfile.rollNumber !== undefined) currentProfile.rollNumber = String(newProfile.rollNumber).trim();
+
+      // Academic fields check: currentCGPA, semester, year, tenthPercentage, twelfthPercentage
+      const hasAcademicChange =
+        newProfile.currentCGPA !== undefined ||
+        newProfile.semester !== undefined ||
+        newProfile.year !== undefined ||
+        newProfile.tenthPercentage !== undefined ||
+        newProfile.twelfthPercentage !== undefined ||
+        newProfile.academics?.tenthPercentage !== undefined ||
+        newProfile.academics?.twelfthPercentage !== undefined;
+
+      if (hasAcademicChange) {
+        const tenth =
+          newProfile.academics?.tenthPercentage !== undefined
+            ? Number(newProfile.academics.tenthPercentage)
+            : newProfile.tenthPercentage !== undefined
+            ? Number(newProfile.tenthPercentage)
+            : currentProfile.academics?.tenthPercentage;
+
+        const twelfth =
+          newProfile.academics?.twelfthPercentage !== undefined
+            ? Number(newProfile.academics.twelfthPercentage)
+            : newProfile.twelfthPercentage !== undefined
+            ? Number(newProfile.twelfthPercentage)
+            : currentProfile.academics?.twelfthPercentage;
+
+        const cgpa =
+          newProfile.currentCGPA !== undefined
+            ? Number(newProfile.currentCGPA)
+            : currentProfile.currentCGPA;
+
+        const sem =
+          newProfile.semester !== undefined
+            ? Number(newProfile.semester)
+            : currentProfile.semester;
+
+        const yr =
+          newProfile.year !== undefined
+            ? Number(newProfile.year)
+            : currentProfile.year;
+
+        currentProfile.pendingAcademicUpdate = {
+          currentCGPA: cgpa,
+          semester: sem,
+          year: yr,
+          tenthPercentage: tenth,
+          twelfthPercentage: twelfth,
+          submittedAt: new Date(),
+        };
+        currentProfile.academicVerificationStatus = "pending";
+
+        // Log to AuditLog for transparency
+        await AuditLog.create({
+          institutionId: user.institutionId || "DEFAULT_COLLEGE",
+          actorId: user._id,
+          actorRole: user.role,
+          action: "ACADEMICS_UPDATE_SUBMITTED",
+          targetId: user._id,
+          details: { pendingAcademicUpdate: currentProfile.pendingAcademicUpdate },
+        });
+      }
+    } else if (user.role === "trainer") {
+      if (newProfile.employeeId !== undefined) currentProfile.employeeId = String(newProfile.employeeId).trim();
+      if (newProfile.collegeName !== undefined) currentProfile.collegeName = String(newProfile.collegeName).trim();
+      if (newProfile.department !== undefined) currentProfile.department = String(newProfile.department).trim();
+      if (newProfile.designation !== undefined) currentProfile.designation = String(newProfile.designation).trim();
+      if (newProfile.specializations !== undefined) {
+        currentProfile.specializations = Array.isArray(newProfile.specializations)
+          ? newProfile.specializations
+          : String(newProfile.specializations)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+      }
+      if (newProfile.yearsOfExperience !== undefined) currentProfile.yearsOfExperience = Number(newProfile.yearsOfExperience);
+      if (newProfile.contactNumber !== undefined) currentProfile.contactNumber = String(newProfile.contactNumber).trim();
+      if (newProfile.bio !== undefined) currentProfile.bio = String(newProfile.bio).trim();
+    } else if (user.role === "admin") {
+      if (newProfile.employeeId !== undefined) currentProfile.employeeId = String(newProfile.employeeId).trim();
+      if (newProfile.collegeName !== undefined) currentProfile.collegeName = String(newProfile.collegeName).trim();
+      if (newProfile.department !== undefined) currentProfile.department = String(newProfile.department).trim();
+      if (newProfile.designation !== undefined) currentProfile.designation = String(newProfile.designation).trim();
+      if (newProfile.contactNumber !== undefined) currentProfile.contactNumber = String(newProfile.contactNumber).trim();
+    }
+
+    user.profile = currentProfile;
+    await user.save();
+
+    const sessionId = req.cookies?.session || req.headers["x-session-id"];
+    await syncFullUserDataInRedis(user._id, user, sessionId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully.",
+      user,
+    });
+  } catch (error) {
+    console.error("updateProfile error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PATCH /api/auth/students/:studentId/verify-academics
+ * Allowed: admin, trainer
+ */
+export const verifyStudentAcademics = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { status = "verified", remarks } = req.body;
+
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, message: "Student not found." });
+    }
+
+    if (req.institutionId && student.institutionId !== req.institutionId) {
+      return res.status(403).json({ success: false, message: "Forbidden: Cross-institution action not permitted." });
+    }
+
+    if (student.role !== "student") {
+      return res.status(400).json({ success: false, message: "Target user is not a student." });
+    }
+
+    const studentProfile = student.profile ? (typeof student.profile.toObject === "function" ? student.profile.toObject() : { ...student.profile }) : {};
+
+    if (status === "verified") {
+      if (studentProfile.pendingAcademicUpdate) {
+        const update = studentProfile.pendingAcademicUpdate;
+        if (update.currentCGPA !== undefined) studentProfile.currentCGPA = update.currentCGPA;
+        if (update.semester !== undefined) studentProfile.semester = update.semester;
+        if (update.year !== undefined) studentProfile.year = update.year;
+
+        studentProfile.academics = studentProfile.academics || {};
+        if (update.tenthPercentage !== undefined) studentProfile.academics.tenthPercentage = update.tenthPercentage;
+        if (update.twelfthPercentage !== undefined) studentProfile.academics.twelfthPercentage = update.twelfthPercentage;
+      }
+      studentProfile.academicVerificationStatus = "verified";
+      studentProfile.pendingAcademicUpdate = null;
+    } else {
+      studentProfile.academicVerificationStatus = "unsubmitted";
+      studentProfile.pendingAcademicUpdate = null;
+    }
+
+    student.profile = studentProfile;
+    await student.save();
+
+    await AuditLog.create({
+      institutionId: student.institutionId || req.institutionId || "DEFAULT_COLLEGE",
+      actorId: req.userId,
+      actorRole: req.userRole || "admin",
+      action: "ACADEMICS_VERIFIED",
+      targetId: student._id,
+      details: { status, remarks, verifiedAt: new Date() },
+    });
+
+    await syncFullUserDataInRedis(student._id, student);
+
+    return res.status(200).json({
+      success: true,
+      message: `Student academic status marked as ${status}.`,
+      user: student,
+    });
+  } catch (error) {
+    console.error("verifyStudentAcademics error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PATCH /api/auth/users/:targetUserId/role
+ * Allowed: admin only
+ */
+export const updateUserRole = async (req, res) => {
+  try {
+    const { targetUserId } = req.params;
+    const { role, permissions, status } = req.body;
+
+    const targetUser = await User.findById(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    if (req.institutionId && targetUser.institutionId !== req.institutionId) {
+      return res.status(403).json({ success: false, message: "Forbidden: Cross-institution action not permitted." });
+    }
+
+    // Last active admin demotion/suspension guard
+    if (
+      targetUser.role === "admin" &&
+      ((role && role !== "admin") || (status && status !== "active"))
+    ) {
+      const activeAdminCount = await User.countDocuments({
+        institutionId: targetUser.institutionId,
+        role: "admin",
+        status: "active",
+      });
+
+      if (activeAdminCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Action rejected: Cannot demote or suspend the last active administrator of this institution.",
+        });
+      }
+    }
+
+    if (role) {
+      if (!["student", "trainer", "admin"].includes(role)) {
+        return res.status(400).json({ success: false, message: `Invalid role: ${role}` });
+      }
+      targetUser.role = role;
+    }
+
+    if (permissions && Array.isArray(permissions)) {
+      targetUser.permissions = permissions;
+    }
+
+    if (status) {
+      if (!["active", "suspended", "pending"].includes(status)) {
+        return res.status(400).json({ success: false, message: `Invalid status: ${status}` });
+      }
+      targetUser.status = status;
+    }
+
+    await targetUser.save();
+
+    await AuditLog.create({
+      institutionId: targetUser.institutionId || req.institutionId || "DEFAULT_COLLEGE",
+      actorId: req.userId,
+      actorRole: req.userRole || "admin",
+      action: "ROLE_UPDATED",
+      targetId: targetUser._id,
+      details: { newRole: targetUser.role, permissions: targetUser.permissions, status: targetUser.status },
+    });
+
+    await syncFullUserDataInRedis(targetUser._id, targetUser);
+
+    return res.status(200).json({
+      success: true,
+      message: "User role and permissions updated successfully.",
+      user: targetUser,
+    });
+  } catch (error) {
+    console.error("updateUserRole error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * POST /api/auth/admin/provision-users
+ * Allowed: admin only
+ */
+export const provisionUsers = async (req, res) => {
+  try {
+    const { users } = req.body;
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({ success: false, message: "Valid users array is required." });
+    }
+
+    const institutionId = req.institutionId || "DEFAULT_COLLEGE";
+    const provisioned = [];
+
+    for (const record of users) {
+      if (!record.email) continue;
+      const email = String(record.email).toLowerCase().trim();
+      let user = await User.findOne({ email });
+
+      if (user) {
+        user.name = record.name || user.name;
+        user.role = record.role || user.role || "student";
+        user.institutionId = institutionId;
+        user.profile = user.profile || {};
+        if (record.rollNumber) user.profile.rollNumber = record.rollNumber;
+        if (record.course) user.profile.course = record.course;
+        if (record.section) user.profile.section = record.section;
+        if (record.year) user.profile.year = Number(record.year);
+        if (record.semester) user.profile.semester = Number(record.semester);
+        if (record.currentCGPA !== undefined) user.profile.currentCGPA = Number(record.currentCGPA);
+        if (record.tenthPercentage !== undefined || record.twelfthPercentage !== undefined) {
+          user.profile.academics = user.profile.academics || {};
+          if (record.tenthPercentage !== undefined) user.profile.academics.tenthPercentage = Number(record.tenthPercentage);
+          if (record.twelfthPercentage !== undefined) user.profile.academics.twelfthPercentage = Number(record.twelfthPercentage);
+        }
+        if (record.employeeId) user.profile.employeeId = record.employeeId;
+        if (record.department) user.profile.department = record.department;
+        if (record.designation) user.profile.designation = record.designation;
+        user.profile.academicVerificationStatus = "verified";
+        await user.save();
+        await syncFullUserDataInRedis(user._id, user);
+        provisioned.push(user);
+      } else {
+        const placeholderUid = `provisioned_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        user = await User.create({
+          firebaseUid: placeholderUid,
+          email,
+          name: record.name || email.split("@")[0],
+          role: record.role || "student",
+          institutionId,
+          status: "active",
+          profile: {
+            rollNumber: record.rollNumber,
+            course: record.course,
+            section: record.section,
+            year: record.year ? Number(record.year) : undefined,
+            semester: record.semester ? Number(record.semester) : undefined,
+            currentCGPA: record.currentCGPA !== undefined ? Number(record.currentCGPA) : undefined,
+            academics: {
+              tenthPercentage: record.tenthPercentage ? Number(record.tenthPercentage) : undefined,
+              twelfthPercentage: record.twelfthPercentage ? Number(record.twelfthPercentage) : undefined,
+            },
+            employeeId: record.employeeId,
+            department: record.department,
+            designation: record.designation,
+            academicVerificationStatus: "verified",
+          },
+        });
+        provisioned.push(user);
+      }
+    }
+
+    await AuditLog.create({
+      institutionId,
+      actorId: req.userId,
+      actorRole: req.userRole || "admin",
+      action: "BULK_IMPORT",
+      details: { count: provisioned.length, importedAt: new Date() },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully provisioned ${provisioned.length} users.`,
+      count: provisioned.length,
+      users: provisioned,
+    });
+  } catch (error) {
+    console.error("provisionUsers error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/auth/users
+ * Allowed: admin, trainer
+ */
+export const getInstitutionUsers = async (req, res) => {
+  try {
+    const institutionId = req.institutionId || "DEFAULT_COLLEGE";
+    const { role, status, search } = req.query;
+
+    const filter = { institutionId };
+    if (role) filter.role = role;
+    if (status) filter.status = status;
+    if (search) {
+      const searchRegex = new RegExp(search, "i");
+      filter.$or = [
+        { name: searchRegex },
+        { email: searchRegex },
+        { "profile.rollNumber": searchRegex },
+        { "profile.employeeId": searchRegex },
+        { "profile.section": searchRegex },
+      ];
+    }
+
+    const users = await User.find(filter).select("-__v -firebaseUid").sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    console.error("getInstitutionUsers error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/auth/students/pending-verifications
+ * Allowed: admin, trainer
+ */
+export const getPendingVerifications = async (req, res) => {
+  try {
+    const institutionId = req.institutionId || "DEFAULT_COLLEGE";
+    const students = await User.find({
+      institutionId,
+      role: "student",
+      "profile.academicVerificationStatus": "pending",
+    })
+      .select("-__v -firebaseUid")
+      .sort({ updatedAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("getPendingVerifications error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/auth/audit-logs
+ * Allowed: admin only
+ */
+export const getAuditLogs = async (req, res) => {
+  try {
+    const institutionId = req.institutionId || "DEFAULT_COLLEGE";
+    const logs = await AuditLog.find({ institutionId })
+      .populate("actorId", "name email role")
+      .populate("targetId", "name email role")
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    return res.status(200).json({
+      success: true,
+      count: logs.length,
+      logs,
+    });
+  } catch (error) {
+    console.error("getAuditLogs error:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
