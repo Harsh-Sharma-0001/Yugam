@@ -58,11 +58,11 @@ interviewRouter.delete("/schedule/:id", requireRole("admin", "trainer"), deleteS
 interviewRouter.get("/schedule/:id", requireRole("student", "trainer", "admin"), getScheduleById);
 
 // Live Video Interview Room Routes (Mounted before /:id)
-interviewRouter.post("/live/join/:scheduleId", joinLiveRoom);
-interviewRouter.post("/live/:liveId/complete", requireRole("admin", "trainer"), completeLiveRoom);
-interviewRouter.get("/live/by-schedule/:scheduleId", getLiveRoomBySchedule);
-interviewRouter.get("/live/schedule/:scheduleId", getLiveRoomBySchedule);
-interviewRouter.get("/live/:liveId", getLiveRoomReport);
+interviewRouter.post("/live/join/:scheduleId", requireRole("student", "trainer"), joinLiveRoom);
+interviewRouter.post("/live/:liveId/complete", requireRole("trainer"), completeLiveRoom);
+interviewRouter.get("/live/by-schedule/:scheduleId", requireRole("student", "trainer", "admin"), getLiveRoomBySchedule);
+interviewRouter.get("/live/schedule/:scheduleId", requireRole("student", "trainer", "admin"), getLiveRoomBySchedule);
+interviewRouter.get("/live/:liveId", requireRole("student", "trainer", "admin"), getLiveRoomReport);
 
 // AI Mock Interview Routes
 interviewRouter.post("/start", startInterview);

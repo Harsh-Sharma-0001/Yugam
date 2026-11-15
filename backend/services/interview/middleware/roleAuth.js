@@ -54,6 +54,13 @@ export const requireRole = (...allowedRoles) => {
       req.userId = String(userId);
       req.userRole = role || "student";
       req.institutionId = institutionId || "DEFAULT_COLLEGE";
+      if (!req.userName && req.headers["x-user-name"]) {
+        try {
+          req.userName = decodeURIComponent(req.headers["x-user-name"]);
+        } catch (_) {
+          req.userName = req.headers["x-user-name"];
+        }
+      }
 
       if (allowedRoles.length > 0 && !allowedRoles.includes(req.userRole)) {
         return res.status(403).json({

@@ -69,7 +69,7 @@ describe("1. Live Video Interview Room Authorization & Institution Boundary", ()
     assert.equal(canJoinLiveRoom(adminCaller, scheduled), false, "Admins must be strictly blocked from live video rooms");
   });
 
-  test("Authorizes strictly assigned student and assigned trainer", () => {
+  test("Authorizes assigned student and any trainer in the same institution", () => {
     const scheduled = {
       _id: "sched-101",
       institutionId: "COLLEGE_ALPHA",
@@ -77,20 +77,26 @@ describe("1. Live Video Interview Room Authorization & Institution Boundary", ()
       trainerId: "trainer-1",
     };
 
-    const studentCaller = { userId: "student-1", userRole: "student" };
-    const trainerCaller = { userId: "trainer-1", userRole: "trainer" };
-    const unassignedTrainer = { userId: "trainer-99", userRole: "trainer" };
+    const studentCaller = { userId: "student-1", userRole: "student", institutionId: "COLLEGE_ALPHA" };
+    const assignedTrainer = { userId: "trainer-1", userRole: "trainer", institutionId: "COLLEGE_ALPHA" };
+    const colleagueTrainer = { userId: "trainer-99", userRole: "trainer", institutionId: "COLLEGE_ALPHA" };
+    const otherCollegeTrainer = { userId: "trainer-55", userRole: "trainer", institutionId: "COLLEGE_BETA" };
+    const otherStudent = { userId: "student-2", userRole: "student", institutionId: "COLLEGE_ALPHA" };
 
     const canJoinLiveRoom = (user, sched) => {
       if (user.userRole === "admin") return false;
       const isStudent = String(sched.studentId) === String(user.userId);
-      const isTrainer = String(sched.trainerId) === String(user.userId);
-      return isStudent || isTrainer;
+      const isAssignedTrainer = String(sched.trainerId) === String(user.userId);
+      const isInstitutionTrainer =
+        user.userRole === "trainer" && String(sched.institutionId) === String(user.institutionId);
+      return isStudent || isAssignedTrainer || isInstitutionTrainer;
     };
 
-    assert.equal(canJoinLiveRoom(studentCaller, scheduled), true);
-    assert.equal(canJoinLiveRoom(trainerCaller, scheduled), true);
-    assert.equal(canJoinLiveRoom(unassignedTrainer, scheduled), false, "Unassigned trainer cannot join another trainer's room");
+    assert.equal(canJoinLiveRoom(studentCaller, scheduled), true, "Assigned student must be authorized");
+    assert.equal(canJoinLiveRoom(assignedTrainer, scheduled), true, "Assigned trainer must be authorized");
+    assert.equal(canJoinLiveRoom(colleagueTrainer, scheduled), true, "Colleague trainer in same college must be authorized");
+    assert.equal(canJoinLiveRoom(otherCollegeTrainer, scheduled), false, "Trainer from different institution must be rejected");
+    assert.equal(canJoinLiveRoom(otherStudent, scheduled), false, "Different student must be rejected");
   });
 });
 

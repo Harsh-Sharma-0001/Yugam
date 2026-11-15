@@ -27,6 +27,7 @@ app.use((req, res, next) => {
     delete req.headers["x-user-id"];
     delete req.headers["x-user-role"];
     delete req.headers["x-institution-id"];
+    delete req.headers["x-user-name"];
     delete req.headers["x-gateway-secret"];
     next();
 });
