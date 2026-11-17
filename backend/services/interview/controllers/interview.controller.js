@@ -1,9 +1,11 @@
 import { json } from "express";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import redis from "../../../shared/redis/redis.js";
 import graph from "../graph/graph.js";
 import Interview from "../models/interview.model.js";
 import LiveInterview from "../models/liveInterview.model.js";
+import ScheduledInterview from "../models/scheduledInterview.model.js";
 import { deductCoins, refundCoins } from "../utils/coinClient.js";
 
 export const startInterview = async (req, res) => {
@@ -289,7 +291,10 @@ export const getInterview = async (req, res) => {
         const { id } = req.params;
 
         // 1. First attempt to find in AI Interview model
-        const aiInterview = await Interview.findById(id);
+        let aiInterview = null;
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            aiInterview = await Interview.findById(id);
+        }
         if (aiInterview) {
             const isOwner = String(aiInterview.userId) === String(userId);
             if (userRole === "student" && !isOwner) {
@@ -306,7 +311,19 @@ export const getInterview = async (req, res) => {
         }
 
         // 2. If not found in AI Interview, attempt to find in LiveInterview model
-        const liveDoc = await LiveInterview.findById(id);
+        let liveDoc = null;
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            liveDoc = await LiveInterview.findById(id);
+            if (!liveDoc) {
+                liveDoc = await LiveInterview.findOne({ scheduledInterviewId: id });
+            }
+            if (!liveDoc) {
+                const sched = await ScheduledInterview.findById(id);
+                if (sched && sched.linkedInterviewId) {
+                    liveDoc = await LiveInterview.findById(sched.linkedInterviewId);
+                }
+            }
+        }
         if (!liveDoc) {
             return res.status(404).json({
                 success: false,

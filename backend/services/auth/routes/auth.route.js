@@ -24,7 +24,9 @@ const authRouter = express.Router();
 
 // Public / Session Auth
 authRouter.post("/login", login);
+authRouter.post("/signup", login);
 authRouter.get("/logout", logout);
+authRouter.post("/logout", logout);
 
 // Profile Management (Authenticated user)
 authRouter.put("/profile", requireRole("student", "trainer", "admin"), updateProfile);

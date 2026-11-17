@@ -15,6 +15,8 @@ import {
   FiBriefcase,
   FiGrid,
   FiLayers,
+  FiUser,
+  FiAward,
 } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaCirclePlus } from 'react-icons/fa6';
@@ -338,80 +340,101 @@ function Sidebar({
         </AnimatePresence>
 
         {/* Profile Card & Role Pill */}
-        <div
-          className={`flex items-center gap-2 ${
-            sidebarOpen ? '' : 'justify-center'
-          }`}
-        >
-          <div
-            onClick={() => onOpenEditProfile && onOpenEditProfile()}
-            className="w-7 h-7 rounded-full bg-[#000000] flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-black/20 transition"
-            title="Click to edit profile"
-          >
-            <span className="text-white font-bold text-[10px]">{avatar}</span>
-          </div>
-
-          <AnimatePresence>
+        {!user ? (
+          <div className={`flex items-center gap-2 ${sidebarOpen ? '' : 'justify-center'} py-1 animate-pulse`}>
+            <div className="w-7 h-7 rounded-full bg-zinc-200 shrink-0" />
             {sidebarOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => onOpenEditProfile && onOpenEditProfile()}
-                className="flex-1 min-w-0 cursor-pointer group"
-              >
-                <div className="flex items-center gap-1.5">
-                  <p className="text-[#0A0A0A] text-[11px] font-semibold truncate group-hover:text-blue-600 transition">
-                    {user?.name ?? 'User'}
-                  </p>
-                  <span
-                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
-                      role === 'admin'
-                        ? 'bg-emerald-500/15 text-emerald-700'
-                        : role === 'trainer'
-                        ? 'bg-purple-500/15 text-purple-700'
-                        : 'bg-blue-500/15 text-blue-700'
-                    }`}
-                  >
-                    {role}
-                  </span>
-                </div>
-                <p className="text-black/35 text-[9px] truncate">
-                  {user?.email ?? 'user@email.com'}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {sidebarOpen && (
-              <div className="flex items-center gap-1 ml-auto">
-                <motion.button
-                  onClick={() => onOpenEditProfile && onOpenEditProfile()}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  whileHover={{ scale: 1.15 }}
-                  title="Edit Profile"
-                  className="text-black/30 hover:text-[#0A0A0A] transition-colors p-1"
-                >
-                  <FiEdit2 size={12} />
-                </motion.button>
-                <motion.button
-                  onClick={onLogout}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  whileHover={{ scale: 1.15 }}
-                  title="Logout"
-                  className="text-black/30 hover:text-red-600 transition-colors p-1"
-                >
-                  <FiLogOut size={13} />
-                </motion.button>
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <div className="h-3 bg-zinc-200 rounded w-16" />
+                <div className="h-2 bg-zinc-100 rounded w-24" />
               </div>
             )}
-          </AnimatePresence>
-        </div>
+          </div>
+        ) : (
+          <div
+            className={`flex items-center gap-2 ${
+              sidebarOpen ? '' : 'justify-center'
+            }`}
+          >
+            <div
+              onClick={() => onOpenEditProfile && onOpenEditProfile()}
+              className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-black/20 transition ${
+                role === 'admin'
+                  ? 'bg-emerald-600 text-white'
+                  : role === 'trainer'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-black text-white'
+              }`}
+              title="Click to edit profile"
+            >
+              <span className="font-bold text-[10px]">{avatar}</span>
+            </div>
+
+            <AnimatePresence>
+              {sidebarOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => onOpenEditProfile && onOpenEditProfile()}
+                  className="flex-1 min-w-0 cursor-pointer group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[#0A0A0A] text-[11px] font-semibold truncate group-hover:text-blue-600 transition">
+                      {user.name || user.email?.split('@')[0]}
+                    </p>
+                    <span
+                      className={`inline-flex items-center gap-1 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${
+                        role === 'admin'
+                          ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30'
+                          : role === 'trainer'
+                          ? 'bg-purple-500/15 text-purple-700 border-purple-500/30'
+                          : 'bg-blue-500/15 text-blue-700 border-blue-500/30'
+                      }`}
+                    >
+                      {role === 'admin' && <FiShield size={9} />}
+                      {role === 'trainer' && <FiAward size={9} />}
+                      {role === 'student' && <FiUser size={9} />}
+                      <span>{role}</span>
+                    </span>
+                  </div>
+                  <p className="text-black/35 text-[9px] truncate">
+                    {user.email}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {sidebarOpen && (
+                <div className="flex items-center gap-1 ml-auto">
+                  <motion.button
+                    onClick={() => onOpenEditProfile && onOpenEditProfile()}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    whileHover={{ scale: 1.15 }}
+                    title="Edit Profile"
+                    className="text-black/30 hover:text-[#0A0A0A] transition-colors p-1"
+                  >
+                    <FiEdit2 size={12} />
+                  </motion.button>
+                  <motion.button
+                    onClick={onLogout}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    whileHover={{ scale: 1.15 }}
+                    title="Logout"
+                    className="text-black/30 hover:text-red-600 transition-colors p-1"
+                  >
+                    <FiLogOut size={13} />
+                  </motion.button>
+                </div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </div>
   );

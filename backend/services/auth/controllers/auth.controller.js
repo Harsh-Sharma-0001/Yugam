@@ -9,32 +9,100 @@ import { FEATURE_COIN_COSTS } from "../constants/coinPricing.js";
 
 export const login = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, idToken, intendedRole, authMode, collegeName, rollNumber, employeeId } = req.body;
+    const authToken = token || idToken;
 
-    const decoded = await getAuth(app).verifyIdToken(token);
+    if (!authToken) {
+      return res.status(400).json({ success: false, message: "Authentication token is required." });
+    }
+
+    const decoded = await getAuth(app).verifyIdToken(authToken);
+    const email = decoded.email?.toLowerCase();
 
     let user = await User.findOne({
-      firebaseUid: decoded.uid,
+      $or: [{ firebaseUid: decoded.uid }, { email }],
     });
 
-    if (!user) {
-      // Check if user was pre-provisioned by email
-      const existingByEmail = await User.findOne({ email: decoded.email?.toLowerCase() });
-      if (existingByEmail) {
-        existingByEmail.firebaseUid = decoded.uid;
-        if (!existingByEmail.name && decoded.name) {
-          existingByEmail.name = decoded.name;
-        }
-        user = await existingByEmail.save();
-      } else {
+    // 1. If user already exists in MongoDB
+    if (user) {
+      // Connect firebaseUid if not yet associated
+      if (!user.firebaseUid) {
+        user.firebaseUid = decoded.uid;
+        await user.save();
+      }
+
+      // Role check: if caller passed an intendedRole that mismatches registered role
+      if (intendedRole && user.role !== intendedRole) {
+        const roleTitles = {
+          student: "Student",
+          trainer: "Technical Trainer",
+          admin: "College Admin",
+        };
+        const actualTitle = roleTitles[user.role] || user.role;
+        return res.status(403).json({
+          success: false,
+          roleMismatch: true,
+          currentRole: user.role,
+          message: `This account is registered as a ${actualTitle}. Please select the ${actualTitle} tab or contact your College Administrator.`,
+        });
+      }
+    } else {
+      // 2. New user registration
+      const targetRole = intendedRole || "student";
+
+      if (targetRole === "student") {
         user = await User.create({
           firebaseUid: decoded.uid,
-          email: decoded.email?.toLowerCase(),
-          name: decoded.name || decoded.email?.split("@")[0],
+          email,
+          name: decoded.name || email?.split("@")[0] || "Student",
           role: "student",
-          institutionId: "DEFAULT_COLLEGE",
+          institutionId: collegeName ? collegeName.toUpperCase().replace(/\s+/g, "_") : "DEFAULT_COLLEGE",
           status: "active",
+          profile: {
+            rollNumber: rollNumber || "",
+            department: "Computer Science & Engineering",
+          },
         });
+      } else {
+        // Trainer or Admin signup:
+        const bootstrapAdmins = (process.env.BOOTSTRAP_ADMIN_EMAILS || "")
+          .toLowerCase()
+          .split(",")
+          .map((e) => e.trim())
+          .filter(Boolean);
+        const bootstrapTrainers = (process.env.BOOTSTRAP_TRAINER_EMAILS || "")
+          .toLowerCase()
+          .split(",")
+          .map((e) => e.trim())
+          .filter(Boolean);
+        const allowSelfRole =
+          process.env.ALLOW_SELF_ROLE_SIGNUP === "true" ||
+          process.env.ALLOW_ROLE_SELECTION === "true" ||
+          process.env.NODE_ENV !== "production";
+
+        const isBootstrapAdmin = targetRole === "admin" && bootstrapAdmins.includes(email);
+        const isBootstrapTrainer = targetRole === "trainer" && bootstrapTrainers.includes(email);
+
+        if (isBootstrapAdmin || isBootstrapTrainer || allowSelfRole) {
+          user = await User.create({
+            firebaseUid: decoded.uid,
+            email,
+            name: decoded.name || email?.split("@")[0] || (targetRole === "admin" ? "Admin" : "Trainer"),
+            role: targetRole,
+            institutionId: collegeName ? collegeName.toUpperCase().replace(/\s+/g, "_") : "DEFAULT_COLLEGE",
+            status: "active",
+            profile: {
+              employeeId: employeeId || "",
+              designation: targetRole === "admin" ? "Institutional Administrator" : "Technical Faculty Trainer",
+              department: "Academic Operations",
+            },
+          });
+        } else {
+          return res.status(403).json({
+            success: false,
+            message: `${targetRole === "admin" ? "College Admin" : "Technical Trainer"} accounts must be pre-provisioned by your institution. Please sign in with your college-invited email or contact your College Administrator.`,
+          });
+        }
       }
     }
 

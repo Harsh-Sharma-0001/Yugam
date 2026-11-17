@@ -52,13 +52,26 @@ import {
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { auth } from "../utils/firebase";
+import { useDispatch } from "react-redux";
+import { setResume } from "../redux/resumeSlice";
 import api from "../utils/axios";
 
-function Dashboard() {
+function Dashboard({ user: propUser, setUser: setAppUser }) {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
 
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(propUser || null);
+
+  useEffect(() => {
+    if (propUser) {
+      setUser(propUser);
+    } else if (!user) {
+      window.location.href = "/";
+    }
+  }, [propUser, user]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [moblieOpen, setMoblieOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
@@ -113,9 +126,20 @@ function Dashboard() {
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [selectedStudentForSchedule, setSelectedStudentForSchedule] = useState(null);
 
-  const activeUpcomingSchedules = (scheduledInterviews || []).filter(
-    (item) => item.status === "scheduled" || item.status === "in-progress"
-  );
+  const activeUpcomingSchedules = (scheduledInterviews || []).filter((item) => {
+    if (item.status === "completed" || item.status === "cancelled") return false;
+    const isCompletedInHistory = (interviews || []).some(
+      (h) =>
+        (h.status === "completed" || (h.overallScore && h.overallScore > 0)) &&
+        (String(h._id) === String(item._id) ||
+          String(h.id) === String(item._id) ||
+          String(h._id) === String(item.linkedInterviewId) ||
+          String(h.id) === String(item.linkedInterviewId) ||
+          String(h.scheduledInterviewId) === String(item._id))
+    );
+    if (isCompletedInHistory) return false;
+    return item.status === "scheduled" || item.status === "in-progress";
+  });
 
   // Directory & Governance Data
   const [students, setStudents] = useState([]);
@@ -152,9 +176,13 @@ function Dashboard() {
       const data = await getCurrentUser();
       if (data?.user) {
         setUser(data.user);
+        if (setAppUser) setAppUser(data.user);
+      } else {
+        window.location.href = "/";
       }
     } catch (e) {
       console.error("Dashboard fetchUser error:", e);
+      window.location.href = "/";
     }
   };
 
@@ -259,14 +287,20 @@ function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      const response = await api.get("/api/auth/logout");
-      if (response.data?.success) {
-        setUser(null);
-        navigate("/");
-      }
+      await api.get("/api/auth/logout");
+      await api.post("/api/auth/logout").catch(() => {});
     } catch (error) {
-      console.error("Logout error:", error);
+      console.warn("Logout error:", error);
     }
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn("Firebase signout error:", e);
+    }
+    dispatch(setResume(null));
+    setUser(null);
+    if (setAppUser) setAppUser(null);
+    window.location.href = "/";
   };
 
   const handleSelectInterview = (id) => {

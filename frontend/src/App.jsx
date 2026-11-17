@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Home from './pages/Home'
+import LoginPage from './pages/LoginPage'
+import SignupPage from './pages/SignupPage'
 import Dashboard from './pages/Dashboard'
 import Scorer from './pages/Scorer'
 import ResumeBuilder from './pages/ResumeBuilder'
@@ -14,6 +16,20 @@ import { getCurrentUser } from './apis/user.api'
 import { getResume } from './apis/resume.api'
 import { useDispatch } from 'react-redux'
 import { setResume } from './redux/resumeSlice'
+
+function ProtectedRoute({ user, loading, children }) {
+  if (loading) {
+    return (
+      <div className="fixed top-0 left-0 w-full h-full bg-[#0E1016] flex items-center justify-center z-[9999]">
+        <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+}
 
 function App() {
   const [user, setUser] = useState(null)
@@ -78,48 +94,99 @@ function App() {
         />
 
         <Route 
+          path='/login' 
+          element={user ? <Navigate to="/dashboard" replace /> : <LoginPage setUser={setUser} />} 
+        />
+
+        <Route 
+          path='/signup' 
+          element={user ? <Navigate to="/dashboard" replace /> : <SignupPage setUser={setUser} />} 
+        />
+
+        <Route 
           path='/dashboard' 
-          element={user ? <Dashboard user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <Dashboard user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/scorer' 
-          element={user ? <Scorer user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <Scorer user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/resume' 
-          element={user ? <ResumeBuilder user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <ResumeBuilder user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/interview' 
-          element={user ? <InterviewStart user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <InterviewStart user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/interview/:id' 
-          element={user ? <InterviewPage user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <InterviewPage user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/interview/:id/report' 
-          element={user ? <InterviewReport user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <InterviewReport user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/roadmap' 
-          element={user ? <Roadmap user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <Roadmap user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/live-interview/:scheduleId' 
-          element={user ? <LiveInterviewRoom user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <LiveInterviewRoom user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
         />
 
         <Route 
           path='/billing' 
-          element={user ? <Billing user={user} setUser={setUser} /> : <Navigate to="/" replace />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <Billing user={user} setUser={setUser} />
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path='*' 
+          element={<Navigate to="/" replace />} 
         />
       </Routes>
     </>

@@ -199,9 +199,9 @@ export const createScheduledInterview = scheduleInterview;
  */
 export const getScheduledInterviews = async (req, res) => {
   try {
-    const institutionId = req.institutionId || "DEFAULT_COLLEGE";
-    const userRole = req.userRole || "student";
-    const userId = req.userId;
+    const institutionId = req.headers["x-institution-id"] || req.institutionId || "DEFAULT_COLLEGE";
+    const userRole = req.headers["x-user-role"] || req.userRole || "student";
+    const userId = req.headers["x-user-id"] || req.userId;
 
     if (userRole === "student") {
       const filter = {
