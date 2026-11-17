@@ -117,8 +117,14 @@ function Sidebar({
       {
         icon: <FiBriefcase size={15} />,
         label: 'AI & Live Interviews',
-        action: () => navigate('/interview'),
-        isActive: location.pathname.startsWith('/interview'),
+        action: () => {
+          if (location.pathname !== '/dashboard') {
+            navigate('/dashboard?tab=interviews');
+          } else {
+            if (onSelectTab) onSelectTab('interviews');
+          }
+        },
+        isActive: location.pathname === '/dashboard' && (activeTab === 'interviews' || activeTab === 'history'),
       },
       {
         icon: <FiEdit2 size={15} />,

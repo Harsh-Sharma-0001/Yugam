@@ -11,7 +11,8 @@ import {
     FiFileText,
     FiX,
     FiPlus,
-    FiFilter
+    FiFilter,
+    FiVideo
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 
@@ -33,7 +34,10 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
         const matchesSearch =
             !query ||
             interview.role?.toLowerCase().includes(query) ||
-            interview.summary?.toLowerCase().includes(query);
+            interview.summary?.toLowerCase().includes(query) ||
+            interview.studentName?.toLowerCase().includes(query) ||
+            interview.studentRollNumber?.toLowerCase().includes(query) ||
+            interview.trainerName?.toLowerCase().includes(query);
 
         const matchesStatus =
             statusFilter === 'all' || interview.status === statusFilter;
@@ -202,14 +206,20 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                                 <div>
                                     {/* Header Row: Type pill + Status pill */}
                                     <div className="flex items-center justify-between gap-2 mb-3.5">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider ${
-                                            interview.type === 'technical'
-                                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                                        }`}>
-                                            {interview.type === 'technical' ? <FiCode size={11} /> : <FiUser size={11} />}
-                                            {interview.type === 'technical' ? 'Technical' : 'HR Track'}
-                                        </span>
+                                        {interview.isLiveInterview || interview.mode === 'live' ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                                <FiVideo size={11} /> Live Faculty
+                                            </span>
+                                        ) : (
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider ${
+                                                interview.type === 'technical'
+                                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                                    : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                            }`}>
+                                                {interview.type === 'technical' ? <FiCode size={11} /> : <FiUser size={11} />}
+                                                {interview.type === 'technical' ? 'Technical' : 'HR Track'}
+                                            </span>
+                                        )}
 
                                         {isCompleted ? (
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -222,15 +232,28 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                                         )}
                                     </div>
 
-                                    {/* Target Role & Date */}
+                                    {/* Target Role & Candidate Info */}
                                     <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-blue-300 transition-colors line-clamp-1 mb-1">
                                         {interview.role || 'Software Engineer'}
                                     </h3>
 
+                                    {interview.studentName && (
+                                        <div className="flex items-center gap-1.5 text-xs text-purple-300 font-medium mb-1.5">
+                                            <FiUser size={12} className="text-purple-400 shrink-0" />
+                                            <span className="truncate">
+                                                Candidate: <b className="text-white">{interview.studentName}</b> {interview.studentRollNumber ? `(${interview.studentRollNumber})` : ''}
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <div className="flex items-center gap-2 text-xs text-zinc-400 mb-4">
                                         <span>{formattedDate}</span>
                                         <span>•</span>
-                                        <span>{interview.useResume ? 'Resume Context' : 'Standard Track'}</span>
+                                        <span>
+                                            {interview.isLiveInterview
+                                                ? `Conducted by ${interview.trainerName || 'Faculty'}`
+                                                : (interview.useResume ? 'Resume Context' : 'Standard Track')}
+                                        </span>
                                     </div>
 
                                     {/* Score / Progress Indicator */}

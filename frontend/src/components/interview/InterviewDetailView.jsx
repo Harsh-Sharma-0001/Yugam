@@ -13,7 +13,9 @@ import {
     FiFileText,
     FiAward,
     FiTrendingUp,
-    FiTarget
+    FiTarget,
+    FiVideo,
+    FiLock
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { getInterview } from '../../apis/interview.api';
@@ -158,14 +160,20 @@ function InterviewDetailView({ interviewId, onBack }) {
                     {/* Left: Role, Type, Status, Date */}
                     <div className="flex-1 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
-                                interview.type === 'technical'
-                                    ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
-                                    : 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
-                            }`}>
-                                {interview.type === 'technical' ? <FiCode size={13} /> : <FiUser size={13} />}
-                                {interview.type === 'technical' ? 'Technical Evaluation' : 'HR & Behavioral Track'}
-                            </span>
+                            {interview.isLiveInterview ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                    <FiVideo size={13} /> Live Faculty Interview
+                                </span>
+                            ) : (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                                    interview.type === 'technical'
+                                        ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                                        : 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                                }`}>
+                                    {interview.type === 'technical' ? <FiCode size={13} /> : <FiUser size={13} />}
+                                    {interview.type === 'technical' ? 'Technical Evaluation' : 'HR & Behavioral Track'}
+                                </span>
+                            )}
 
                             {isCompleted ? (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -178,13 +186,39 @@ function InterviewDetailView({ interviewId, onBack }) {
                             )}
 
                             <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-zinc-300">
-                                {interview.useResume ? 'Tailored to Resume' : 'Standard Taxonomy'}
+                                {interview.isLiveInterview
+                                    ? `Evaluated by ${interview.trainerName || 'Faculty Instructor'}`
+                                    : (interview.useResume ? 'Tailored to Resume' : 'Standard Taxonomy')}
                             </span>
                         </div>
 
                         <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                             {interview.role || 'Software Engineering Track'}
                         </h1>
+
+                        {interview.isLiveInterview && interview.studentName && (
+                            <div className="bg-[#17181E] border border-white/5 rounded-xl p-3 inline-flex flex-wrap items-center gap-4 text-xs">
+                                <div>
+                                    <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Candidate</span>
+                                    <span className="text-white font-bold">{interview.studentName}</span>
+                                    {interview.studentRollNumber && (
+                                        <span className="text-zinc-400 ml-1.5 font-mono">({interview.studentRollNumber})</span>
+                                    )}
+                                </div>
+                                {interview.studentId && (
+                                    <div>
+                                        <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Student ID</span>
+                                        <span className="text-zinc-300 font-mono text-[11px]">{interview.studentId}</span>
+                                    </div>
+                                )}
+                                {interview.trainerName && (
+                                    <div>
+                                        <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Conducted By</span>
+                                        <span className="text-purple-300 font-bold">{interview.trainerName}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <p className="text-xs sm:text-sm text-zinc-400 flex items-center gap-2">
                             <FiClock size={13} />
@@ -285,7 +319,20 @@ function InterviewDetailView({ interviewId, onBack }) {
                 )}
             </div>
 
-            {/* Question-by-Question Transcript & AI Evaluation Section */}
+            {/* Confidential Trainer Evaluator Notes (Trainer / Admin Only) */}
+            {interview.trainerPrivateNotes && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400 mb-2.5">
+                        <FiLock size={15} />
+                        <span>Confidential Evaluator Notes (Hidden from Student)</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-amber-100/90 whitespace-pre-wrap leading-relaxed bg-black/40 border border-amber-500/20 p-4 rounded-xl">
+                        {interview.trainerPrivateNotes}
+                    </p>
+                </div>
+            )}
+
+            {/* Question-by-Question Transcript & Evaluation Section */}
             <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
@@ -310,18 +357,19 @@ function InterviewDetailView({ interviewId, onBack }) {
                 <div className="space-y-4">
                     {(interview.questions || []).map((q, idx) => {
                         const isExpanded = Boolean(expandedQuestions[idx]);
-                        const hasAnswer = Boolean(q.userAnswer && typeof q.userAnswer === 'string' && q.userAnswer.trim().length > 0);
-                        const hasFeedback = Boolean(q.feedback && (q.feedback.feedback || q.feedback.score));
+                        const rawAnswer = q.userAnswer || q.answer || '';
+                        const hasAnswer = Boolean(rawAnswer && typeof rawAnswer === 'string' && rawAnswer.trim().length > 0);
+                        const hasFeedback = Boolean(q.feedback && (q.feedback.feedback || q.feedback.score !== undefined));
 
                         // Check if answer contains formatted code
-                        const hasCodeBlock = hasAnswer && q.userAnswer.includes('--- Code ---');
-                        let textPart = q.userAnswer || '';
-                        let codePart = '';
+                        const hasCodeBlock = (hasAnswer && rawAnswer.includes('--- Code ---')) || Boolean(q.code);
+                        let textPart = rawAnswer;
+                        let codePart = q.code || '';
 
-                        if (hasCodeBlock) {
-                            const parts = q.userAnswer.split('--- Code ---');
+                        if (rawAnswer.includes('--- Code ---')) {
+                            const parts = rawAnswer.split('--- Code ---');
                             textPart = parts[0]?.trim() || '';
-                            codePart = parts.slice(1).join('--- Code ---')?.trim() || '';
+                            codePart = parts.slice(1).join('--- Code ---')?.trim() || q.code || '';
                         }
 
                         return (

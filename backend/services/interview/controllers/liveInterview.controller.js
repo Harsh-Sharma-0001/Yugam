@@ -1,5 +1,6 @@
 import LiveInterview from "../models/liveInterview.model.js";
 import ScheduledInterview from "../models/scheduledInterview.model.js";
+import redis from "../../../shared/redis/redis.js";
 
 /**
  * POST /api/interview/live/join/:scheduleId
@@ -228,6 +229,23 @@ export const completeLiveRoom = async (req, res) => {
         status: "completed",
         linkedInterviewId: liveInterview._id,
       });
+    }
+    // Also mark any scheduled interview referencing this liveInterview ID
+    await ScheduledInterview.updateMany(
+      { linkedInterviewId: liveInterview._id },
+      { status: "completed" }
+    );
+
+    // Bust Redis interview caches for student and trainer so histories immediately reflect completed state
+    try {
+      await Promise.allSettled([
+        redis.del(`interviews:student:${liveInterview.studentId}`),
+        redis.del(`interviews:trainer:${liveInterview.trainerId}`),
+        redis.del(`interviews:${liveInterview.studentId}`),
+        redis.del(`interviews:${liveInterview.trainerId}`),
+      ]);
+    } catch (cacheErr) {
+      console.warn("Failed to bust interview cache in completeLiveRoom:", cacheErr.message);
     }
 
     return res.status(200).json({

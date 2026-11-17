@@ -64,11 +64,29 @@ function Dashboard() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   // Workspace View State: "overview" | "history" | "detail"
-  const [activeView, setActiveView] = useState("overview");
+  const [activeView, setActiveView] = useState(
+    searchParams.get("tab") === "interviews" || searchParams.get("tab") === "history"
+      ? "history"
+      : "overview"
+  );
   const [selectedInterviewId, setSelectedInterviewId] = useState(null);
 
   // Active Tab inside Dashboard ("overview" | "tasks" | "students" | "trainers" | "governance")
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get("tab") === "interviews" || searchParams.get("tab") === "history"
+      ? "overview"
+      : (searchParams.get("tab") || "overview")
+  );
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "interviews" || tabParam === "history") {
+      setActiveView("history");
+    } else if (tabParam) {
+      setActiveTab(tabParam);
+      setActiveView("overview");
+    }
+  }, [searchParams]);
 
   // Interview Stats & History
   const [stats, setStats] = useState({
@@ -94,6 +112,10 @@ function Dashboard() {
   const [scheduledInterviews, setScheduledInterviews] = useState([]);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [selectedStudentForSchedule, setSelectedStudentForSchedule] = useState(null);
+
+  const activeUpcomingSchedules = (scheduledInterviews || []).filter(
+    (item) => item.status === "scheduled" || item.status === "in-progress"
+  );
 
   // Directory & Governance Data
   const [students, setStudents] = useState([]);
@@ -362,7 +384,11 @@ function Dashboard() {
         onOpenEditProfile={() => setEditProfileOpen(true)}
         onSelectTab={(tab) => {
           setActiveTab(tab);
-          setActiveView("overview");
+          if (tab === "interviews" || tab === "history") {
+            setActiveView("history");
+          } else {
+            setActiveView("overview");
+          }
         }}
         activeTab={activeTab}
         sidebarOpen={sidebarOpen}
@@ -592,7 +618,7 @@ function Dashboard() {
               {activeTab === "overview" && (
                 <div className="space-y-6">
                   {/* Upcoming Scheduled Interviews Strip */}
-                  {scheduledInterviews.length > 0 && (
+                  {activeUpcomingSchedules.length > 0 && (
                     <div className="bg-[#0E1016] border border-white/10 rounded-2xl p-5 text-white shadow-xl">
                       <div className="flex items-center justify-between mb-3.5">
                         <div className="flex items-center gap-2">
@@ -602,12 +628,12 @@ function Dashboard() {
                           </h4>
                         </div>
                         <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30">
-                          {scheduledInterviews.length} Scheduled
+                          {activeUpcomingSchedules.length} Scheduled
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {scheduledInterviews.map((item) => (
+                        {activeUpcomingSchedules.map((item) => (
                           <div
                             key={item._id}
                             className="bg-[#17181E] border border-white/5 rounded-xl p-4 flex flex-col justify-between space-y-3"
@@ -710,18 +736,18 @@ function Dashboard() {
                   {/* Statbox Metric Counters */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 md:gap-3">
                     <Statbox
-                      label="Total Interviews"
+                      label={role === "trainer" ? "Interviews Conducted" : "Total Interviews"}
                       value={stats?.totalInterviews}
-                      subHighlight="All Time"
-                      sub="Interviews Created"
+                      subHighlight={role === "trainer" ? "Live Sessions" : "All Time"}
+                      sub={role === "trainer" ? "Conducted by You" : "Interviews Created"}
                       index={0}
                     />
 
                     <Statbox
-                      label="Questions Solved"
+                      label={role === "trainer" ? "Questions Evaluated" : "Questions Solved"}
                       value={stats?.totalQuestions}
-                      subHighlight="Answered"
-                      sub="Across All Interviews"
+                      subHighlight={role === "trainer" ? "Live Rubric" : "Answered"}
+                      sub={role === "trainer" ? "Candidate Answers Assessed" : "Across All Interviews"}
                       index={1}
                     />
 
@@ -729,7 +755,7 @@ function Dashboard() {
                       label="Completed"
                       value={stats?.completed}
                       subHighlight={`${stats?.totalInterviews || 0} Total`}
-                      sub="Interviews Finished"
+                      sub={role === "trainer" ? "Evaluations Completed" : "Interviews Finished"}
                       index={2}
                     />
 
@@ -737,7 +763,7 @@ function Dashboard() {
                       label="Average Score"
                       value={`${Math.round(stats?.averageScore || 0)}/100`}
                       subHighlight="Completed Only"
-                      sub="Average Performance"
+                      sub={role === "trainer" ? "Candidate Average Given" : "Average Performance"}
                       index={3}
                     />
                   </div>

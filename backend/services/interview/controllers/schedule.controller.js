@@ -204,10 +204,19 @@ export const getScheduledInterviews = async (req, res) => {
     const userId = req.userId;
 
     if (userRole === "student") {
-      const scheduled = await ScheduledInterview.find({
+      const filter = {
         institutionId,
         studentId: userId,
-      }).sort({ scheduledAt: 1 });
+      };
+
+      if (req.query.status && req.query.status !== "all") {
+        filter.status = req.query.status;
+      } else if (!req.query.status || req.query.upcoming === "true") {
+        // Exclude completed and cancelled from active/upcoming lists by default
+        filter.status = { $in: ["scheduled", "in-progress"] };
+      }
+
+      const scheduled = await ScheduledInterview.find(filter).sort({ scheduledAt: 1 });
 
       return res.status(200).json({
         success: true,
@@ -220,7 +229,11 @@ export const getScheduledInterviews = async (req, res) => {
     const filter = { institutionId };
     if (req.query.status && req.query.status !== "all") {
       filter.status = req.query.status;
+    } else if (!req.query.status || req.query.upcoming === "true") {
+      // Exclude completed and cancelled from active/upcoming lists by default
+      filter.status = { $in: ["scheduled", "in-progress"] };
     }
+
     if (req.query.mode && req.query.mode !== "all") {
       filter.mode = req.query.mode;
     }

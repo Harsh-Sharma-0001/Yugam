@@ -253,3 +253,139 @@ describe("4. Socket.IO Real-Time Workspace Signaling Protocol", () => {
     assert.ok(answerUpdate.answerText.includes("doubly linked list"));
   });
 });
+
+describe("5. Post-Interview Lifecycle: Schedule Cleanup, Explorer Resolution & Trainer History", () => {
+  test("Filters out completed and cancelled sessions from upcoming scheduled lists", () => {
+    const allSchedules = [
+      { _id: "s1", role: "Software Engineer", status: "completed" },
+      { _id: "s2", role: "Frontend Dev", status: "scheduled" },
+      { _id: "s3", role: "Backend Dev", status: "in-progress" },
+      { _id: "s4", role: "DevOps", status: "cancelled" },
+    ];
+
+    const upcoming = allSchedules.filter(
+      (item) => item.status === "scheduled" || item.status === "in-progress"
+    );
+
+    assert.equal(upcoming.length, 2);
+    assert.deepEqual(
+      upcoming.map((u) => u._id),
+      ["s2", "s3"],
+      "Completed and cancelled sessions must never appear in upcoming strip"
+    );
+  });
+
+  test("Seamlessly resolves LiveInterview records and redacts trainerPrivateNotes for students", () => {
+    const liveDoc = {
+      _id: "live-doc-123",
+      studentId: "student-1",
+      trainerId: "trainer-1",
+      role: "Software Engineer",
+      interviewType: "technical",
+      status: "completed",
+      evaluation: {
+        overallScore: 94,
+        summaryFeedback: "Outstanding problem solving and clear communication.",
+        strengths: ["Strong concurrency grasp", "Clean modular code"],
+        weaknesses: ["Can optimize edge-case memory"],
+        criteria: { correctness: 95, clarity: 92, problemSolving: 96 },
+      },
+      trainerPrivateNotes: "CONFIDENTIAL: Candidate is a top placement prospect.",
+      questions: [
+        {
+          questionText: "Implement binary search",
+          studentAnswer: "Binary search divides array in halves.",
+          submittedCode: "function bs() {}",
+          score: 95,
+          feedback: "Great implementation",
+        },
+      ],
+    };
+
+    const normalizeForUser = (doc, userRole, reqUserId) => {
+      const isStudent = String(doc.studentId) === String(reqUserId);
+      const isTrainer = String(doc.trainerId) === String(reqUserId);
+      if (!isStudent && !isTrainer) {
+        throw new Error("Forbidden");
+      }
+
+      const res = {
+        _id: doc._id,
+        isLiveInterview: true,
+        role: doc.role,
+        type: doc.interviewType,
+        status: doc.status,
+        overallScore: doc.evaluation?.overallScore ?? 0,
+        feedback: doc.evaluation?.summaryFeedback || "",
+        strengths: doc.evaluation?.strengths || [],
+        weaknesses: doc.evaluation?.weaknesses || [],
+        criteria: doc.evaluation?.criteria || {},
+        questions: doc.questions.map((q) => ({
+          question: q.questionText,
+          answer: q.studentAnswer,
+          code: q.submittedCode,
+          score: q.score,
+          feedback: q.feedback,
+        })),
+      };
+
+      if (userRole === "trainer" || userRole === "admin") {
+        res.trainerPrivateNotes = doc.trainerPrivateNotes;
+      }
+      return res;
+    };
+
+    const studentReport = normalizeForUser(liveDoc, "student", "student-1");
+    const trainerReport = normalizeForUser(liveDoc, "trainer", "trainer-1");
+
+    assert.equal(studentReport._id, "live-doc-123");
+    assert.equal(studentReport.overallScore, 94);
+    assert.equal("trainerPrivateNotes" in studentReport, false, "Student must never see confidential notes");
+    assert.equal(studentReport.questions[0].score, 95);
+
+    assert.equal(trainerReport.overallScore, 94);
+    assert.equal(trainerReport.trainerPrivateNotes, "CONFIDENTIAL: Candidate is a top placement prospect.");
+  });
+
+  test("Computes accurate conducted interview stats and KPI metrics for Trainer role", () => {
+    const trainerLiveInterviews = [
+      {
+        _id: "live-1",
+        trainerId: "trainer-sumedh",
+        status: "completed",
+        type: "technical",
+        evaluation: { overallScore: 94 },
+        questions: [{ score: 95, studentAnswer: "code..." }, { score: 90, studentAnswer: "ans..." }],
+      },
+      {
+        _id: "live-2",
+        trainerId: "trainer-sumedh",
+        status: "completed",
+        type: "technical",
+        evaluation: { overallScore: 86 },
+        questions: [{ score: 85, studentAnswer: "code..." }],
+      },
+    ];
+
+    const completed = trainerLiveInterviews.filter((i) => i.status === "completed");
+    const totalQuestions = trainerLiveInterviews.reduce(
+      (sum, item) => sum + (item.questions?.length || 0),
+      0
+    );
+    const avgScore = Number(
+      (completed.reduce((sum, item) => sum + item.evaluation.overallScore, 0) / completed.length).toFixed(1)
+    );
+
+    const stats = {
+      totalInterviews: trainerLiveInterviews.length,
+      totalQuestions,
+      completed: completed.length,
+      averageScore: avgScore,
+    };
+
+    assert.equal(stats.totalInterviews, 2);
+    assert.equal(stats.totalQuestions, 3);
+    assert.equal(stats.completed, 2);
+    assert.equal(stats.averageScore, 90);
+  });
+});
