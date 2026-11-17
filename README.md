@@ -4,18 +4,20 @@
 
 # YUGAM (युगम्)
 
-### _Next-Generation Autonomous AI Career Intelligence & Real-Time Interview Platform_
+### _Institutional Campus Placement, Real-Time WebRTC Live Studio & Multi-Agent AI Interview Intelligence Platform_
 
 [![Microservices Architecture](https://img.shields.io/badge/Architecture-Event--Driven%20Microservices-blueviolet.svg)](#system-architecture)
 [![Frontend](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%208%20%7C%20TailwindCSS%20v4-blue.svg)](#frontend-client)
 [![Backend](https://img.shields.io/badge/Backend-Node.js%20%7C%20Express%205-green.svg)](#microservices-deep-dive)
+[![Real-Time](https://img.shields.io/badge/Real--Time-WebRTC%20%7C%20Socket.IO-yellow.svg)](#yugam-live-studio--real-time-webrtc-video-room)
+[![Testing](https://img.shields.io/badge/Tests-50%2F50%20Passing%20(17%20Suites)-brightgreen.svg)](#automated-testing-suite)
 [![AI Orchestration](https://img.shields.io/badge/AI%20Orchestration-LangChain%20%7C%20LangGraph%20%7C%20Groq-orange.svg)](#ai--langgraph-agent-workflows)
 [![Database & Cache](https://img.shields.io/badge/Storage-MongoDB%20Atlas%20%7C%20Redis-red.svg)](#data-storage--redis-caching)
 [![Payments](https://img.shields.io/badge/Payments-Razorpay-02042B.svg)](#billing-service-port-8005)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
 <p align="center">
-  <b>Yugam</b> is an enterprise-grade, microservices-driven AI career copilot designed to empower developers and job seekers. From automated <b>ATS resume scoring</b> and <b>intelligent curriculum generation with integrated YouTube/official documentation</b>, to <b>real-time conversational AI mock interviews</b> equipped with synchronized video avatars, voice synthesis, speech-to-text, and in-browser code execution—Yugam simulates the end-to-end tech hiring pipeline.
+  <b>Yugam</b> is an enterprise-grade, multi-tenant institutional assessment and career copilot platform. Engineered for universities and tech academies, Yugam connects <b>College Administrators</b>, <b>Technical Faculty Trainers</b>, and <b>Candidate Students</b> under a unified institution ecosystem. It powers end-to-end placement readiness—from <b>verifiable academic profiles</b> and <b>ATS resume scoring</b>, to <b>scheduled faculty-led WebRTC live video interviews</b> with real-time shared coding, and <b>autonomous conversational AI mock interviews</b>.
 </p>
 
 ---
@@ -24,172 +26,369 @@
 
 ## 📑 Table of Contents
 
-- [Executive Overview](#-executive-overview)
-- [Key Features](#-key-features)
+- [Executive Overview & Value Proposition](#-executive-overview--value-proposition)
+- [Key Platform Features](#-key-platform-features)
+- [Role-Based Portals & Multi-Role Authentication](#-role-based-portals--multi-role-authentication)
+  - [Dedicated Multi-Role Authentication (`/login` & `/signup`)](#dedicated-multi-role-authentication-login--signup)
+  - [1. Institutional Admin Portal](#1-institutional-admin-portal)
+  - [2. Technical Faculty Trainer Portal](#2-technical-faculty-trainer-portal)
+  - [3. Candidate Student Portal](#3-candidate-student-portal)
+- [Yugam Live Studio — Real-Time WebRTC Video Room](#-yugam-live-studio--real-time-webrtc-video-room)
+  - [Signaling Architecture & WebRTC P2P Topology](#signaling-architecture--webrtc-p2p-topology)
+  - [Real-Time Interactive Workspace](#real-time-interactive-workspace)
+  - [6-Criteria Live Candidate Evaluation Rubric](#6-criteria-live-candidate-evaluation-rubric)
+  - [Synchronized Call-Ended & Auto-Redirect Workflow](#synchronized-call-ended--auto-redirect-workflow)
+- [Student Performance Directory & Formula-Safe Exports](#-student-performance-directory--formula-safe-exports)
+  - [Expandable Directory & Discrete Academic Indicators](#expandable-directory--discrete-academic-indicators)
+  - [Server-Side Formula-Safe Excel & CSV Exports (CWE-1236)](#server-side-formula-safe-excel--csv-exports-cwe-1236)
 - [System Architecture](#-system-architecture)
-  - [High-Level Topology](#high-level-topology)
-  - [Gateway & Auth Flow](#gateway--auth-flow)
+  - [High-Level Microservices Topology](#high-level-microservices-topology)
+  - [Gateway Header Sanitization & Identity Propagation](#gateway-header-sanitization--identity-propagation)
   - [AI Agent StateGraph Architecture](#ai-agent-stategraph-architecture)
-- [Project Directory Structure](#-project-directory-structure)
 - [Microservices Deep-Dive](#-microservices-deep-dive)
-  - [1. API Gateway (`gateway`)](#1-api-gateway-port-8000)
-  - [2. Authentication Service (`auth-service`)](#2-authentication-service-port-8001)
-  - [3. Resume Intelligence Service (`resume`)](#3-resume-intelligence-service-port-8002)
-  - [4. AI Mock Interview Service (`interview`)](#4-ai-mock-interview-service-port-8003)
-  - [5. Roadmap & Resource Service (`roadmap`)](#5-roadmap--resource-service-port-8004)
-  - [6. Billing & Subscription Service (`billing`)](#6-billing--subscription-service-port-8005)
-- [Frontend Client (`frontend`)](#-frontend-client)
+  - [1. API Gateway (`gateway` :8000)](#1-api-gateway-port-8000)
+  - [2. Authentication & Governance Service (`auth` :8001)](#2-authentication--governance-service-port-8001)
+  - [3. Resume Intelligence Service (`resume` :8002)](#3-resume-intelligence-service-port-8002)
+  - [4. Interview & Live Studio Service (`interview` :8003)](#4-interview--live-studio-service-port-8003)
+  - [5. Roadmap & Resource Service (`roadmap` :8004)](#5-roadmap--resource-service-port-8004)
+  - [6. Billing & Subscription Service (`billing` :8005)](#6-billing--subscription-service-port-8005)
+  - [7. Isolated Code Execution Engine (`codebox` :3000)](#7-isolated-code-execution-engine-port-3000)
+- [Automated Testing Suite (50 Tests / 17 Suites)](#-automated-testing-suite-50-tests--17-suites)
+- [Frontend Client & Design System](#-frontend-client--design-system)
 - [Token & Coin Economics](#-token--coin-economics)
 - [API Reference Guide](#-api-reference-guide)
 - [Data Storage & Redis Caching](#-data-storage--redis-caching)
 - [Environment Variables Matrix](#-environment-variables-matrix)
 - [Getting Started & Local Setup](#-getting-started--local-setup)
-  - [Prerequisites](#prerequisites)
-  - [Docker Setup (Redis)](#docker-setup-redis)
-  - [Backend Services Launch](#backend-services-launch)
-  - [Frontend Launch](#frontend-launch)
 - [Security, Performance & Best Practices](#-security-performance--best-practices)
 - [License & Contributors](#-license--contributors)
 
 ---
 
-## 🌟 Executive Overview
+## 🌟 Executive Overview & Value Proposition
 
-Modern tech recruitment demands rigorous preparation, tailored resumes, structured roadmaps, and realistic technical evaluations. **Yugam** addresses this end-to-end lifecycle by orchestrating specialized microservices and AI agent graphs:
+Modern college placement cells and corporate recruitment drives demand more than generic AI practice tools. They require a rigorous, audit-compliant institutional infrastructure that bridges academic performance records with real technical evaluation.
 
-1. **Intelligent Resume Parsing & ATS Scoring**: Converts raw PDFs into structured entities (skills, experience, projects, education) using Groq-accelerated LLMs (`openai/gpt-oss-120b`), cross-referencing against predefined role taxonomies to spot skill gaps.
-2. **Interactive Resume Builder**: Drag-and-drop / stepped builder creating ATS-optimized resumes with live previews and single-click PDF generation via `react-to-print`.
-3. **Conversational Multi-Modal AI Interviewer**: Simulates real-world HR and Technical interviews. Features an interactive Monaco code editor, WebRTC camera preview, Web Speech API speech-to-text, real-time speech synthesis, and photorealistic AI video avatars.
-4. **Autonomous Roadmap Generator**: Builds step-by-step career path modules benchmarked to salary targets (e.g., 20 LPA, 40 LPA), dynamically resolving official developer documentation and YouTube tutorials via the YouTube Data API v3.
-5. **Gamified Virtual Credit Economy**: Built-in coin wallet with Razorpay integration for seamless credit purchasing and gated resource access.
+**Yugam** delivers this unified operational paradigm:
+
+1. **Multi-Tenant Institution Scoping**: All users, performance records, schedules, tasks, and audit logs are strictly scoped by `institutionId` (e.g. `"DEFAULT_COLLEGE"`, `"GLA_UNIVERSITY"`), dynamically resolving college identities across all portal headers and reports.
+2. **Tri-Role Institutional Hierarchy**: Dedicated capabilities for **Students** (practice & assessment), **Technical Trainers** (scheduling, live evaluation & grading), and **College Admins** (governance, verification, provisioning & audit logs).
+3. **Yugam Live Studio (`/live-interview/:scheduleId`)**: Low-latency peer-to-peer WebRTC video studio featuring Socket.IO room signaling, real-time question push, browser Speech-to-Text dictation, synchronized Monaco code editor with multi-language isolated execution, and weighted rubric grading.
+4. **Verifiable Academic Directory & Injection-Proof Exports**: Comprehensive performance tracking that keeps 10th %, 12th %, and B.Tech CGPA as discrete, verified indicators. Full-dataset Excel (`.xlsx`) and CSV (`.csv`) exports hardened against **CWE-1236 spreadsheet formula injection**.
+5. **Autonomous AI Mock Interviewer**: Conversational LangGraph-driven mock interviews with photorealistic video avatars, speech synthesis, 8-metric radar scoring, and comprehensive post-session audit reports.
 
 ---
 
-## ✨ Key Features
+## ✨ Key Platform Features
 
-| Domain                     | Features                                                                                                                                                                                                                                                                                                                                                             |
-| :------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Authentication**         | Firebase OAuth (Google popup/redirect), Redis-backed 7-day session store, secure HTTP-only cookies, automated session revocation on logout.                                                                                                                                                                                                                          |
-| **API Gateway**            | Unified reverse proxy entrypoint (`express-http-proxy`), central authentication guard (`isAuth`), transparent header decoration (`x-user-id`).                                                                                                                                                                                                                       |
-| **Resume Intelligence**    | PDF text parsing (`pdf-parse`), LangChain structured output extraction with dynamic AI domain detection (`suggestedRole`), deterministic ATS skill matching across 11+ tracks (including Cybersecurity & ML Engineering), clean `200 OK` empty-state handling, and ATS radial score meters (`recharts`).                                                             |
-| **AI Mock Interview**      | LangGraph cyclic workflows, strict Technical vs. HR domain segregation, contextual resume-backed question synthesis, 8-dimensional evaluation (Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, Creativity), comprehensive post-interview feedback report.                                                                       |
-| **Interactive Studio**     | Embedded Monaco Code Editor (`@monaco-editor/react`), Docker-Isolated Multi-Language Code Execution Engine (JavaScript [Node.js 18], Python [3.8], Java [OpenJDK 17], C++ [GCC 9]), custom `stdin` terminal drawer, real-time `stdout`/`stderr`/compilation error diagnostics, candidate WebRTC camera stream, Web Speech voice input, video avatar synchronization. |
-| **Targeted Roadmaps**      | 10 standardized engineering tracks (MERN Stack, Full-Stack, Java Backend, Frontend, Backend, Python Backend, QA Automation, DevOps, Data Analyst, ML Engineer), salary-bracketed milestones (10 to 40 LPA), dynamic resume attachment/replacement flow, automated official documentation resolution, YouTube Data API v3 video retrieval, Redis cached roadmaps.     |
-| **Monetization & Billing** | Razorpay checkout, server-side HMAC-SHA256 signature verification, instant credit balance updates.                                                                                                                                                                                                                                                                   |
+| Domain | Institutional & Platform Capabilities |
+| :--- | :--- |
+| **Authentication & RBAC** | Dedicated `/login` & `/signup` pages with a 3-role tab switcher (`Student`, `Trainer`, `Admin`), Firebase Google OAuth, role-mismatch validation, strict `ProtectedRoute` guards, and clean session logout redirects. |
+| **Academic Integrity Guard** | Student profile updates to CGPA and board percentages are diverted to a `pendingAcademicUpdate` buffer until approved or rejected by an authorized Admin or Trainer. |
+| **Governance & Security** | Last Admin Guard (`cannot demote or deactivate the last remaining admin`), immutable `AuditLog` collection, Gateway header injection sanitization, and mutual pre-shared service keys (`x-internal-service-key`). |
+| **Yugam Live Studio** | P2P WebRTC audio/video feeds, Socket.IO signaling proxied through Gateway (`/socket.io`), live question dispatch, candidate Speech-to-Text dictation, shared synchronized Monaco Code Editor, CodeBox sandbox runner, 6-criteria weighted rubric, and strictly redacted `trainerPrivateNotes`. |
+| **Performance Directory** | Searchable by Name or Roll Number, multi-criteria filtering (Section, Course, Semester, Score range, CGPA range, verification status), discrete 3-tier academic badges, and server-side formula-safe Excel/CSV exports. |
+| **Interview Scheduling** | Admin & Trainer session scheduling for individual students or full batches/sections, supporting both AI and Live modes, college-sponsored coin exemption, and complete session deletion controls. |
+| **Tasks & Assignments** | Faculty assignment authoring with deadlines, student code/text submission workflow, and trainer grading & feedback cycle. |
+| **AI Mock Interview Engine**| LangGraph StateGraph agent, strict Technical vs. HR segregation, contextual resume-backed question synthesis, 8-dimensional rubric evaluation, and radar skill analytics. |
+| **Isolated Code Execution** | External isolated CodeBox runner supporting JavaScript (Node.js 18), Python (3.8), Java (OpenJDK 17), and C++ (GCC 9) with rate-limiting and token ownership binding. |
+| **Resume Intelligence** | PDF magic-byte validation (`%PDF-`), LangChain structured parsing with automatic domain extraction (`suggestedRole`), deterministic ATS scoring across 11+ tracks, and interactive 6-step ATS Resume Builder. |
+| **Targeted Roadmaps** | 10 standardized tracks (10 to 40 LPA), 2-stage LangGraph curriculum builder, domain-allowlisted documentation resolution, and YouTube Data API v3 video retrieval. |
+
+---
+
+## 👥 Role-Based Portals & Multi-Role Authentication
+
+### Dedicated Multi-Role Authentication (`/login` & `/signup`)
+
+Yugam provides dedicated authentication pages featuring a 3-tab role selector:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                       YUGAM PORTAL                          │
+│     [ 🎓 Candidate Student ]  [ 👨‍🏫 Trainer ]  [ 🛡️ Admin ]    │
+│                                                             │
+│         [ G  Sign in with Google (College Account) ]        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Role Mismatch Guard**: When a user selects a tab (e.g. `Admin`) and authenticates with a Google account already registered as a different role (e.g. `Student`), the backend rejects the login with a clear warning: `"Selected role does not match registered account role"`.
+- **Strict Route Protection (`ProtectedRoute`)**: Unauthenticated visitors attempting to reach `/dashboard`, `/live-interview/:scheduleId`, `/interview`, or `/resume` are immediately redirected to the Home page (`/`).
+- **Clean Logout Flow**: Clicking the logout icon in the sidebar invokes the backend session invalidation endpoint, terminates the Firebase client session, clears Redux auth state, and immediately redirects all roles to `/`.
+
+---
+
+### 1. Institutional Admin Portal
+
+The **Admin Portal** gives placement cell officers and department heads full control over the college ecosystem:
+
+```mermaid
+flowchart LR
+    Admin["College Administrator"]
+    Admin --> VerificationQueue["Academic Verification Queue<br/>(One-click Approve/Reject)"]
+    Admin --> UserProvisioning["Bulk User Provisioning<br/>(CSV / JSON Batch Import)"]
+    Admin --> RBACGov["Roles Governance & Audit<br/>(Last Admin Guard & Immutable AuditLog)"]
+    Admin --> TrainerDir["Trainers Directory<br/>(Specialization, Exp, Contact)"]
+    Admin --> ScheduleMgmt["Interview Scheduling<br/>(Create & Delete Sessions)"]
+```
+
+- **Institutional KPI Counters**: Real-time counters tracking Total Students, Verified Academia Count, Pending Verifications, Scheduled Interviews, and Total Live/AI Sessions Conducted.
+- **Academic Verification Queue**: Review submitted updates to Class 10th %, Class 12th %, and B.Tech CGPA. Single-click **Approve** commits values to the verified student profile; **Reject** discards the pending update with audit logging.
+- **Permissions & Roles Governance**:
+  - Reassign user roles between `student`, `trainer`, and `admin`.
+  - **Last Admin Guard**: The system actively prevents demoting or removing the institution's last remaining Admin to eliminate governance deadlocks.
+  - **Immutable Audit Logging**: Every administrative action (role changes, academic approvals, bulk provisioning, CSV exports) is permanently appended to `AuditLog`.
+- **Bulk User Provisioning**: Upload CSV or JSON files to onboard hundreds of students or trainers in a single transaction with automatic password generation and email mapping.
+- **Interactive Trainers Directory**: Expandable cards displaying department, academic designation, technical specializations, industry experience, and direct contact details.
+- **Scheduled Interview Management**: View, filter, and delete scheduled sessions across all trainers and sections.
+
+---
+
+### 2. Technical Faculty Trainer Portal
+
+The **Trainer Portal** equips technical instructors to evaluate students both asynchronously and in real time:
+
+- **Trainer Performance Radar**: Aggregated skill radars analyzing student cohort strengths in Problem Solving, Correctness, System Architecture, and Verbal Articulation.
+- **Expandable Student Performance Directory**: Search by student name or roll number; filter by section, semester, average score, or CGPA. Expand any student row to view historical interview records and verified marks.
+- **Interview Scheduling System**:
+  - Target: **Individual Student** (with intelligent resolution by Name, Email, University Roll Number, or ObjectId) or **Batch Section** (e.g. `CS-A`, `IT-B`).
+  - Mode: **AI Mock Interview** or **Live Trainer Interview**.
+  - College-Sponsored: Scheduled sessions are **coin-exempt** for students.
+  - Full deletion support with instant card removal.
+- **Task & Assignment Hub**: Create programming or theoretical assignments with hard deadlines, inspect submitted code/documents, and record numerical marks and feedback.
+- **Yugam Live Studio Host**: Directly launch scheduled live video interview rooms as host, push real-time technical questions, and record live rubric scores.
+- **Conducted Interview History**: Access complete post-interview reports with full question transcripts, code submissions, rubric breakdowns, and **Confidential Faculty Private Notes**.
+
+---
+
+### 3. Candidate Student Portal
+
+The **Student Portal** provides developers and undergraduates with a comprehensive career acceleration hub:
+
+- **Dashboard Overview**:
+  - **Upcoming Scheduled Interviews Strip**: Displays faculty-scheduled sessions with interview type, scheduled date/time, and a direct `Join Live Room` button.
+  - **Skill Analytics & Benchmark Radar**: 8-dimensional skill radar visualizing progress over time.
+  - **KPI Cards**: Total Interviews, Questions Solved, Completed Sessions, and Average Score.
+- **Verifiable Academic Profile**: Displays discrete, verifiable academic achievements (`Class 10th %`, `Class 12th %`, `B.Tech Current CGPA`) with real-time status indicators (`Verified` vs. `Pending Approval`).
+- **Assigned Tasks Workflow**: View coursework and coding assignments from faculty trainers, submit answers, and review instructor grades.
+- **ATS Resume Intelligence**: Upload PDF resumes for instant 11-track skill gap analysis and ATS scoring; build resumes with the 6-step form wizard and export clean ATS-compliant PDFs.
+- **Career Roadmap Builder**: Generate modular learning curriculums with official documentation and YouTube tutorials tailored to salary brackets up to 40 LPA.
+
+---
+
+## 🎥 Yugam Live Studio — Real-Time WebRTC Video Room
+
+The **Yugam Live Studio (`/live-interview/:scheduleId`)** delivers a synchronized video room where technical trainers evaluate students in real time:
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ 🔴 YUGAM LIVE STUDIO   SOFTWARE ENGINEER   ⏱️ 14:32   ● Peer Connected   👨‍🏫 FACULTY TRAINER │
+├───────────────────────────────────┬────────────────────────────────────────────────────┤
+│ [ Local Camera ] [ Remote Camera] │ [ 💬 Live Answer & Voice ] [ 💻 Shared Monaco Code ] │
+│ 🎙️ Mic On   📹 Camera On          ├────────────────────────────────────────────────────┤
+│                                   │ // Synchronized Monaco Code Editor                 │
+│ 📋 Interview Questions (3)        │ function solution() {                              │
+│ ┌───────────────────────────────┐ │   // Real-time peer synchronized code...           │
+│ │ QUESTION #2            MEDIUM │ }                                                    │
+│ │ Implement an LRU Cache with   │ ├────────────────────────────────────────────────────┤
+│ │ O(1) get and put operations.  │ [ ▶ Run Code ]  Output: Terminal compiled cleanly    │
+│ └───────────────────────────────┘ ├────────────────────────────────────────────────────┤
+│ ➕ Push Question to Student       │ 📊 Live Rubric: Correctness, Problem Solving (78/100)│
+└───────────────────────────────────┴────────────────────────────────────────────────────┘
+```
+
+### Signaling Architecture & WebRTC P2P Topology
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Trainer as Faculty Trainer
+    participant GW as API Gateway (:8000)
+    participant Socket as Interview Socket.IO (:8003)
+    actor Student as Candidate Student
+
+    Note over Trainer,Student: Room Initialization & Peer Discovery
+    Trainer->>GW: POST /api/interview/live/join/:scheduleId
+    Student->>GW: POST /api/interview/live/join/:scheduleId
+    GW-->>Trainer: 200 OK (Room authorized, trainer role)
+    GW-->>Student: 200 OK (Room authorized, student role)
+
+    Trainer->>Socket: Socket Connect (/socket.io) -> live-room:join
+    Student->>Socket: Socket Connect (/socket.io) -> live-room:join
+    Socket-->>Trainer: live-room:user-joined (Student discovered)
+
+    Note over Trainer,Student: WebRTC P2P Signaling via Socket.IO
+    Trainer->>Socket: live-room:signal (SDP Offer)
+    Socket->>Student: live-room:signal (Forward SDP Offer)
+    Student->>Socket: live-room:signal (SDP Answer)
+    Socket->>Trainer: live-room:signal (Forward SDP Answer)
+    Trainer<->Student: ICE Candidates Exchange
+    Trainer<<=>>Student: Direct P2P Audio/Video Streams (Encrypted)
+
+    Note over Trainer,Student: Real-Time Collaborative Workspace
+    Trainer->>Socket: workspace:question-push (New Problem Statement)
+    Socket->>Student: workspace:question-push (Display active question)
+
+    Student->>Socket: workspace:answer-change (Voice Dictated / Typed Answer)
+    Socket->>Trainer: workspace:answer-change (Sync candidate answer)
+
+    Student->>Socket: workspace:code-change (Monaco keystrokes)
+    Socket->>Trainer: workspace:code-change (Sync code buffer)
+
+    Note over Trainer,Student: Live Rubric Grading & Session Conclusion
+    Trainer->>GW: POST /api/interview/live/:liveId/complete (Rubric & Notes)
+    GW->>Socket: workspace:peer-left (reason: concluded)
+    Socket->>Student: workspace:peer-left (Call Ended Broadcast)
+    Socket->>Trainer: workspace:peer-left (Call Ended Broadcast)
+    Note over Trainer,Student: Synchronized 3-second countdown -> Auto Redirect to /dashboard
+```
+
+### Real-Time Interactive Workspace
+
+1. **Dual WebRTC Video Feeds**: High-contrast obsidian tiles (`#111318`) with hardware-accelerated video rendering, local audio/video mute toggles, and peer connection status indicators.
+2. **Real-Time Question Push**: Trainers select difficulty (`easy`, `medium`, `hard`), type a problem statement, and push it directly into the student's studio view via `workspace:question-push`.
+3. **Speech-to-Text & Live Answer Sync**: Students dictate explanations using browser `webkitSpeechRecognition` or type in real time; all input streams live to the trainer's screen via `workspace:answer-change`.
+4. **Shared Monaco Code Editor**: Collaborative code editor with multi-language syntax highlighting (`JavaScript`, `Python`, `Java`, `C++`), synchronized tab switching, and one-click execution in the isolated **CodeBox** sandbox.
+5. **Dashboard-Matched Studio UI**: Crisp light canvas (`bg-[#F8F9FA] text-gray-900`) paired with obsidian black cards (`#111318`), vibrant pills, and an **animated dual-layer pulsing red live broadcast dot**:
+   ```jsx
+   <span className="relative flex h-3 w-3">
+     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+     <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+   </span>
+   ```
+
+### 6-Criteria Live Candidate Evaluation Rubric
+
+Trainers evaluate candidates across 6 weighted dimensions saved directly into the unified student performance record:
+
+| Criteria | Weight | Evaluation Focus |
+| :--- | :---: | :--- |
+| **Correctness** | **25%** | Solution accuracy, handling of edge cases, and logical validity. |
+| **Problem Solving** | **25%** | Algorithmic approach, decomposition, and problem-solving strategy. |
+| **Efficiency & Complexity** | **15%** | Optimal time and space complexity ($O(N)$, $O(\log N)$, $O(1)$). |
+| **Clarity & Structure** | **15%** | Clean code formatting, naming conventions, and modularity. |
+| **Technical Relevance** | **10%** | Accurate use of language paradigms, APIs, and framework idioms. |
+| **Communication** | **10%** | Verbal articulation, approach explanation, and responsiveness. |
+
+- **Tag Boards**: Interactive candidate tag boards for **Strengths** (e.g. `Fast Thinker`, `Clean Modular Code`) and **Areas for Improvement** (e.g. `Check Null Bounds`, `Optimize Space`).
+- **Summary Feedback**: Public feedback provided directly in the student's final report.
+- **Confidential Faculty Private Notes (`trainerPrivateNotes`)**: Private notes for placement cell faculty. **Strictly stripped and redacted** whenever a student queries the interview report endpoint.
+
+### Synchronized Call-Ended & Auto-Redirect Workflow
+
+When either the Trainer or Student clicks **Leave Room** or the Trainer finalizes the evaluation:
+1. `POST /api/interview/live/:liveId/leave` or `/complete` marks the session complete.
+2. The Socket.IO server broadcasts `workspace:peer-left` with participant name and reason.
+3. Both participant screens display a clean white **Interview Call Ended** modal with an animated progress bar and a 3-second countdown automatically returning them to `/dashboard`.
+
+---
+
+## 📊 Student Performance Directory & Formula-Safe Exports
+
+### Expandable Directory & Discrete Academic Indicators
+
+The **Student Performance Directory** (`/api/interview/students-directory`) provides a comprehensive tabular breakdown of candidate cohorts:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 🎓 STUDENTS PERFORMANCE DIRECTORY                                 [ Export Excel ] [ Export CSV ] │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Search: [ Harsh Sharma      ]   Section: [ CS-A  ▼ ]   CGPA: [ 8.0 - 10.0 ▼ ]  Score: [ All ▼ ] │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│ NAME / ROLL NO.       SECTION   INTERVIEW AVERAGES       CURRENT CGPA    OVERALL ACADEMIA   │
+│ Harsh Sharma          CS-A      Overall: 88/100          8.72 CGPA       10th: 92.4%        │
+│ 2315000916                      AI: 84  •  Live: 92      ● Verified      12th: 88.6%        │
+│                                                                          B.Tech: 8.72 CGPA  │
+│ [ ▼ Expand Performance Details: 4 AI Sessions, 2 Live Sessions, Verified Academic Records ] │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Non-Blending Academic Integrity**: 10th %, 12th %, and B.Tech CGPA are maintained as three separate, verified indicators. They are **never blended into a misleading single percentage**.
+- **Unified Interview Averages**: Aggregates Overall, AI Mock, and Live Trainer interview scores strictly from finalized sessions.
+- **Search & Multi-Filter**: Real-time filtering by Name, University Roll Number, Course, Semester, Section, Average Score range, CGPA range, and Academic verification status.
+
+### Server-Side Formula-Safe Excel & CSV Exports (CWE-1236)
+
+Exporting student directories to Excel or CSV introduces security risks if unverified user inputs contain spreadsheet formula injection payloads. Yugam implements robust **CWE-1236 Formula Sanitization**:
+
+1. **Formula Character Neutralization**: Every string cell starting with dangerous characters (`=`, `+`, `-`, `@`, `\t`, `\r`) is safely prefixed with a single quote (`'`), rendering it as inert text in Microsoft Excel, LibreOffice, and Google Sheets.
+2. **RFC 4180 CSV Quoting**: Fields containing commas, double quotes, or newlines are wrapped in standard double quotes, with internal quotes escaped (`""`).
+3. **UTF-8 BOM Header**: CSV streams prepend the UTF-8 Byte Order Mark (`\uFEFF`), ensuring Excel opens Unicode student names correctly without garbled character encoding.
+4. **Excel Workbook Generation (`.xlsx`)**: Structured workbooks generated via `exceljs` with bold headers, defined column widths, centered alignment, and audit logging.
 
 ---
 
 ## 🏗️ System Architecture
 
-### High-Level Topology
+### High-Level Microservices Topology
 
 ```mermaid
 flowchart TB
     Client["Client Browser<br/>(React 19 + Vite 8 + Tailwind v4)"]
 
-    subgraph GatewayLayer ["Gateway Layer (Port 8000)"]
-        GW["API Gateway<br/>(Express 5 + Reverse Proxy)"]
-        AuthMiddleware["isAuth Middleware<br/>(Validates Session Cookie)"]
+    subgraph GatewayLayer ["API Gateway (Port 8000)"]
+        GW["Express 5 Reverse Proxy"]
+        HeaderSanitizer["Header Sanitization<br/>(Strips Spoofed x-user-* Headers)"]
+        AuthMiddleware["isAuth Guard<br/>(Redis Session Verification)"]
+        SocketProxy["Socket.IO Proxy & WS Upgrade<br/>(/socket.io -> :8003)"]
     end
 
     subgraph SharedInfra ["Shared Infrastructure"]
-        Redis[("Redis 6379<br/>Session Store & Cache")]
-        Mongo[("MongoDB Atlas<br/>Multi-Database Cluster")]
+        Redis[("Redis 6379<br/>Sessions, Rate Limits & Cache")]
+        Mongo[("MongoDB Atlas<br/>Multi-Tenant Database Cluster")]
     end
 
     subgraph Services ["Backend Microservices Network"]
-        AuthSvc["Auth Service :8001<br/>Firebase Admin & User Ledger"]
-        ResumeSvc["Resume Service :8002<br/>PDF Parse & Skill Gap Agent"]
-        InterviewSvc["Interview Service :8003<br/>LangGraph Mock Interview Engine"]
-        RoadmapSvc["Roadmap Service :8004<br/>LangGraph Path & YouTube Agent"]
-        BillingSvc["Billing Service :8005<br/>Razorpay Order & Verification"]
+        AuthSvc["Auth Service :8001<br/>RBAC, Academic Queue, AuditLog & Provisioning"]
+        ResumeSvc["Resume Service :8002<br/>PDF Magic-Byte, LangChain Extraction & ATS Matcher"]
+        InterviewSvc["Interview & Live Studio :8003<br/>Live Video WebRTC, Socket.IO, LangGraph & Directory"]
+        RoadmapSvc["Roadmap Service :8004<br/>LangGraph Career Paths & YouTube API v3"]
+        BillingSvc["Billing Service :8005<br/>Razorpay Checkout & Webhook Verification"]
     end
 
     subgraph ExecutionLayer ["Isolated Execution Sandbox"]
-        ExecutionEngine["Docker-Isolated Code Execution Engine :3000<br/>(Node.js 18, Python 3.8, OpenJDK 17, GCC 9)"]
-    end
-
-    subgraph ExternalAPIs ["External Intelligence & Cloud APIs"]
-        Firebase["Google Firebase Auth"]
-        Groq["Groq Cloud LLM API<br/>(openai/gpt-oss-120b)"]
-        YouTube["YouTube Data API v3"]
-        Razorpay["Razorpay Payment Gateway"]
+        ExecutionEngine["Docker-Isolated CodeBox Engine :3000<br/>(Node.js 18, Python 3.8, OpenJDK 17, GCC 9)"]
     end
 
     Client -->|"HTTP / REST (Cookies)"| GW
-    GW --> AuthMiddleware
+    Client <-->|"WebSockets (Socket.IO)"| SocketProxy
+    SocketProxy <-->|"WS Upgrade"| InterviewSvc
+
+    GW --> HeaderSanitizer
+    HeaderSanitizer --> AuthMiddleware
     AuthMiddleware <-->|"Validate session:${id}"| Redis
 
     GW -->|"/api/auth/*"| AuthSvc
-    GW -->|"/api/resume/* [x-user-id, x-gateway-secret]"| ResumeSvc
-    GW -->|"/api/interview/* [x-user-id, x-gateway-secret]"| InterviewSvc
-    GW -->|"/api/roadmap/* [x-user-id, x-gateway-secret]"| RoadmapSvc
-    GW -->|"/api/billing/* [x-user-id, x-gateway-secret]"| BillingSvc
+    GW -->|"/api/resume/* [x-user-id, x-user-role, x-institution-id]"| ResumeSvc
+    GW -->|"/api/interview/* [x-user-id, x-user-role, x-institution-id]"| InterviewSvc
+    GW -->|"/api/roadmap/* [x-user-id, x-user-role, x-institution-id]"| RoadmapSvc
+    GW -->|"/api/billing/* [x-user-id, x-user-role, x-institution-id]"| BillingSvc
 
-    ResumeSvc -.->|"Internal Deduct/Refund [x-internal-service-key]"| AuthSvc
-    InterviewSvc -.->|"Internal Deduct/Refund [x-internal-service-key]"| AuthSvc
-    RoadmapSvc -.->|"Internal Deduct/Refund [x-internal-service-key]"| AuthSvc
-
-    InterviewSvc -->|"Async Submissions [X-Auth-Token]"| ExecutionEngine
+    InterviewSvc -->|"Code Run / Poll"| ExecutionEngine
+    ResumeSvc -.->|"Internal Coin Deduct / Refund"| AuthSvc
+    InterviewSvc -.->|"Internal Coin Deduct / Refund / Audit"| AuthSvc
 
     AuthSvc <--> Mongo
-    AuthSvc <--> Redis
-    AuthSvc --> Firebase
-
     ResumeSvc <--> Mongo
-    ResumeSvc <--> Redis
-    ResumeSvc --> Groq
-
     InterviewSvc <--> Mongo
-    InterviewSvc <--> Redis
-    InterviewSvc --> Groq
-
     RoadmapSvc <--> Mongo
-    RoadmapSvc <--> Redis
-    RoadmapSvc --> Groq
-    RoadmapSvc --> YouTube
-
     BillingSvc <--> Mongo
-    BillingSvc --> Razorpay
 ```
 
-### Gateway & Auth Flow
+### Gateway Header Sanitization & Identity Propagation
 
-```mermaid
-sequenceDiagram
-    autonumber
+To guarantee that client requests cannot spoof user identity or elevate privileges:
+1. **Sanitization**: The Gateway immediately deletes `x-user-id`, `x-user-role`, `x-institution-id`, `x-user-name`, and `x-gateway-secret` from all incoming HTTP headers.
+2. **Session Verification**: The Gateway validates the session cookie against Redis (`session:<sessionId>`).
+3. **Decoration**: The Gateway injects verified server-side session headers before proxying requests downstream:
+   - `x-user-id: <MongoObjectId>`
+   - `x-user-role: "student" | "trainer" | "admin"`
+   - `x-institution-id: "DEFAULT_COLLEGE" | "<InstitutionName>"`
+   - `x-user-name: "<UserFullName>"`
+   - `x-gateway-secret: "<PreSharedSecret>"`
+4. **Downstream Role Enforcement (`requireRole`)**: Downstream microservices evaluate `req.headers["x-user-role"]` to enforce endpoint access rules, returning `403 Forbidden` on unauthorized access attempts.
 
-    actor User as User Browser
-    participant GW as API Gateway
-    participant Redis as Redis Session Store
-    participant Auth as Auth Service
-    participant DS as Downstream Services (Resume, Interview, Roadmap)
-
-    User->>Auth: POST Login with Firebase ID Token
-    Auth->>Auth: Verify Firebase Token
-    Auth->>Auth: Find or Create User in MongoDB
-    Auth->>Redis: Create User Session (7-Day TTL)
-    Auth-->>User: Return Session Cookie
-
-    Note over User,GW: Protected AI & Core Feature Requests
-
-    User->>GW: Send API Request with Session Cookie
-    GW->>Redis: Validate Session Key (session:${sessionId})
-    Redis-->>GW: Return User Session Data
-    GW->>GW: Decorate x-user-id & x-gateway-secret
-    GW->>DS: Forward Request with Verified Origin Headers
-    DS->>Auth: POST /internal/coins/deduct (Upfront Atomic Check & Lock)
-    Auth-->>DS: Coins Reserved & Updated
-    DS->>DS: Execute Heavy AI / LLM Operation
-    alt Operation Succeeds
-        DS-->>GW: Return 200 OK + Updated interviewCoin Balance
-    else Operation Fails
-        DS->>Auth: POST /internal/coins/refund (Automatic Idempotent Re-credit)
-        Auth-->>DS: Coins Restored
-        DS-->>GW: Return Error + Restored interviewCoin Balance
-    end
-    GW-->>User: Send API Response
-```
+---
 
 ### AI Agent StateGraph Architecture
 
@@ -204,7 +403,7 @@ stateDiagram-v2
     Router --> interviewAgent: action == "start"
     Router --> feedbackAgent: action == "feedback"
 
-    interviewAgent --> END: Generate 6 questions (HR or Technical)
+    interviewAgent --> END: Generate 6 questions (Technical or HR)
 
     feedbackAgent --> FeedbackRouter: Evaluate answer against 8 criteria
 
@@ -212,7 +411,7 @@ stateDiagram-v2
     FeedbackRouter --> summaryAgent: completed == true (Last question answered)
     FeedbackRouter --> END: completed == false (Next question ready)
 
-    summaryAgent --> END: Generate final overall report & recommendations
+    summaryAgent --> END: Generate final overall report & radar metrics
     END --> [*]
 ```
 
@@ -227,333 +426,307 @@ flowchart LR
 
 ---
 
-## 📂 Project Directory Structure
-
-```text
-Yugam/
-├── backend/
-│   ├── docker-compose.yml              # Local container orchestration (Redis)
-│   ├── package.json                    # Backend root dependencies (ioredis)
-│   │
-│   ├── gateway/                        # Reverse Proxy & Authentication Entrypoint (Port 8000)
-│   │   ├── controllers/
-│   │   │   └── user.controller.js      # /api/me handler
-│   │   ├── middleware/
-│   │   │   └── isAuth.js               # Redis session cookie verification
-│   │   ├── utils/
-│   │   │   └── proxyWithHeaders.js     # Downstream proxy with x-user-id header decoration
-│   │   ├── index.js                    # Gateway Express application
-│   │   ├── Dockerfile
-│   │   └── package.json
-│   │
-│   ├── services/
-│   │   ├── auth/                       # Port 8001: Firebase Auth & Session Management
-│   │   │   ├── configs/                # DB (Mongoose) & Firebase Admin SDK configs
-│   │   │   ├── controllers/            # Login, logout, coin credit/debit operations
-│   │   │   ├── model/                  # User MongoDB Schema
-│   │   │   ├── routes/                 # /login, /logout, /add-coins, /use-coins
-│   │   │   ├── serviceAccountKey.json  # Firebase Admin private key
-│   │   │   ├── index.js
-│   │   │   ├── Dockerfile
-│   │   │   └── package.json
-│   │   │
-│   │   ├── resume/                     # Port 8002: Resume Extraction & Role Skill Matcher
-│   │   │   ├── agents/                 # resume.agent.js (LangChain structured parser with suggestedRole extraction)
-│   │   │   ├── config/                 # Mongoose DB, Groq LLM, PDF extraction & roleSkills.js (11+ role profiles)
-│   │   │   ├── controllers/            # uploadResume, getResume, getResumeRoles
-│   │   │   ├── middleware/             # Multer temporary disk storage
-│   │   │   ├── models/                 # Resume MongoDB schema (nested education, exp, projects)
-│   │   │   ├── routes/                 # /upload, /get-resume, /roles
-│   │   │   ├── utils/                  # skillMatcher.js (deterministic ATS scoring & dynamic custom role fallback)
-│   │   │   ├── index.js
-│   │   │   ├── Dockerfile
-│   │   │   └── package.json
-│   │   │
-│   │   ├── interview/                  # Port 8003: LangGraph Conversational Interview Engine
-│   │   │   ├── agents/                 # interview.agent.js, feedback.agent.js, summary.agent.js
-│   │   │   ├── config/                 # DB & Groq LLM setup (openai/gpt-oss-120b)
-│   │   │   ├── controllers/            # interview.controller.js & code.controller.js (isolated code runner)
-│   │   │   ├── graph/                  # LangGraph StateGraph, nodes, and conditional routers
-│   │   │   ├── models/                 # Interview schema with 8-dimensional scoring subdocument
-│   │   │   ├── prompts/                # Strict domain segregation: hrInterviewPrompt.js, technicalInterviewPrompt.js
-│   │   │   ├── routes/                 # interview.route.js (/code/run, /code/status/:token, /start, /answer, /all, /:id)
-│   │   │   ├── utils/                  # codebox.js (runtime ID mappings & payload validation)
-│   │   │   ├── index.js
-│   │   │   ├── Dockerfile
-│   │   │   └── package.json
-│   │   │
-│   │   ├── roadmap/                    # Port 8004: Career Roadmap & Learning Resource Engine
-│   │   │   ├── agents/                 # roadmap.agent.js & resource.agent.js
-│   │   │   ├── configs/                # DB, Groq LLM (6,000 max tokens), roadmap.prompt.js, youtube.js
-│   │   │   ├── controllers/            # generateRoadmap, getAllRoadmap, getRoadmapbyId
-│   │   │   ├── graph/                  # 2-stage LangGraph execution pipeline
-│   │   │   ├── models/                 # Roadmap & nested Module MongoDB schemas
-│   │   │   ├── routes/                 # /generate, /all, /:id
-│   │   │   ├── index.js
-│   │   │   ├── Dockerfile
-│   │   │   └── package.json
-│   │   │
-│   │   └── billing/                    # Port 8005: Razorpay Checkout & Webhook Verification
-│   │       ├── configs/                # DB & Razorpay instance configuration
-│   │       ├── controllers/            # createOrder & verifyPayment (HMAC-SHA256 signature check)
-│   │       ├── models/                 # Billing payment order schema
-│   │       ├── routes/                 # /create, /verify
-│   │       ├── index.js
-│   │       ├── Dockerfile
-│   │       └── package.json
-│   │
-│   └── shared/
-│       └── redis/
-│           └── redis.js                # Centralized ioredis client singleton
-│
-└── frontend/                           # React 19 Client SPA (Port 5173)
-    ├── public/                         # Static assets
-    ├── src/
-    │   ├── apis/                       # Axios endpoints (user, resume, interview)
-    │   ├── assets/                     # AI avatar video loops (male-ai.mp4, female-ai.mp4)
-    │   ├── components/
-    │   │   ├── interview/              # CodeEditor (Monaco + Terminal I/O), Timer, Step1setup, Step2interview, Step3report
-    │   │   ├── resume/                 # ATSTemplate, PreviewResume, ResumeForm, DownloadBtn
-    │   │   ├── roadmap/                # ModuleCard, RoadmapResult
-    │   │   ├── InterviewGraph.jsx      # Radar & Bar visualizer for candidate metrics
-    │   │   ├── LoginModel.jsx          # Firebase Google Authentication modal
-    │   │   ├── PricingCard.jsx         # Coin purchase pricing card
-    │   │   ├── Sidebar.jsx             # Collapsible modern application navigation
-    │   │   └── Statbox.jsx             # Metric counter cards
-    │   ├── pages/
-    │   │   ├── Home.jsx                # Landing page with interactive hero
-    │   │   ├── Dashboard.jsx           # Performance charts, recent interviews & stats
-    │   │   ├── Scorer.jsx              # Resume upload, ATS score calculation, missing skills
-    │   │   ├── ResumeBuilder.jsx       # 6-step wizard resume generator
-    │   │   ├── InterviewStart.jsx      # Interview creation & coin deduction setup
-    │   │   ├── InterviewPage.jsx       # Active interview arena (Camera, Avatar, STT, Code editor)
-    │   │   ├── InterviewReport.jsx     # Post-interview audit report
-    │   │   ├── Roadmap.jsx             # Interactive career roadmap generator
-    │   │   └── Billing.jsx             # Coin top-up store with Razorpay checkout
-    │   ├── redux/
-    │   │   ├── resumeSlice.js          # Global client-side resume state
-    │   │   └── store.js                # Redux Toolkit configuration
-    │   ├── utils/
-    │   │   ├── axios.js                # Axios pre-configured with withCredentials: true
-    │   │   └── firebase.js             # Firebase client SDK initialization
-    │   ├── App.jsx                     # Route declarations & persistent auth hydrate
-    │   ├── main.jsx                    # Application entrypoint
-    │   └── index.css                   # Global styles & Tailwind CSS v4 directives
-    ├── vite.config.js                  # Vite bundler configuration
-    └── package.json
-```
-
----
-
 ## 🔬 Microservices Deep-Dive
 
 ### 1. API Gateway (Port 8000)
 
-The central ingress controller for all client requests.
+The central entrypoint and security barrier for the Yugam ecosystem.
 
-- **Reverse Proxy**: Utilizes `express-http-proxy` to route requests to upstream services without revealing downstream network ports.
-- **Authentication Guard (`isAuth.js`)**:
-  - Reads `session` cookie.
-  - Interrogates Redis for `session:<sessionId>`.
-  - Injects `req.user` payload into request context.
-- **Identity & Origin Propagation (`proxyWithHeaders.js`)**: Decorates incoming HTTP requests with `x-user-id: <MongoObjectId>` and `x-gateway-secret: <Secret>`, ensuring downstream microservices verify that requests originated strictly from the trusted API Gateway.
-- **Direct Attack Defense**: Explicitly blocks external callers from reaching `/api/auth/add-coins` or `/api/auth/internal/*` with `403 Forbidden`.
-- **Health Verification**: Exposes `GET /health` returning `200 OK` gateway uptime status.
+- **HTTP Reverse Proxy & WebSocket Upgrade**: Proxies REST traffic via `express-http-proxy` and transparently upgrades `/socket.io` connections via `http-proxy-middleware` directly to the Interview Service on `:8003`.
+- **Header Injection Defense**: Deletes client-supplied `x-user-*` headers and decorates downstream requests with verified session data.
+- **Direct Attack Defense**: Rejects external calls to `/api/auth/add-coins` or `/api/auth/internal/*` with `403 Forbidden`.
+- **Health Endpoint**: Exposes `GET /health` returning `200 OK`.
 
-### 2. Authentication Service (Port 8001)
+### 2. Authentication & Governance Service (Port 8001)
 
-Manages the user lifecycle, virtual coin economy, and immutable transaction ledger.
+Manages user identity, multi-role RBAC, academic integrity, bulk provisioning, and immutable audit logs.
 
-- **Firebase Auth Bridge**: Decodes and verifies Firebase client ID tokens using `firebase-admin`.
-- **User Upsert**: Automatically creates a record in MongoDB upon first login and assigns default starting credits (**150 Interview Coins**).
-- **Session Provisioning**: Emits cryptographically secure session IDs via `crypto.randomUUID()`, caches session objects in Redis with a 7-day TTL (`60 * 60 * 24 * 7`), and writes a secure, `httpOnly`, `sameSite: "none"` cookie.
-- **Server-Side Allowlisted Coin Economy (`FEATURE_COIN_COSTS`)**:
-  - `INTERVIEW_START`: 50 coins
-  - `RESUME_SCORE`: 10 coins
-  - `ROADMAP_GENERATE`: 20 coins
-  - `RESUME_PDF_DOWNLOAD`: 10 coins
-- **Internal Service Deduction & Refund Endpoints**:
-  - `POST /internal/coins/deduct`: Atomically verifies balance (`interviewCoin >= cost`), executes `$inc: -cost`, creates a ledger record, and syncs all active Redis sessions (`syncUserSessionsInRedis`). Guarded by `isInternalService` (`x-internal-service-key`).
-  - `POST /internal/coins/refund`: Automatically and idempotently restores deducted coins if downstream AI execution or PDF parsing fails.
-- **Immutable Transaction Ledger (`CoinTransaction`)**: Tracks all credits, feature deductions, and refunds with unique `reservationId` and `idempotencyKey` constraints to prevent double-spending and duplicate settlement.
-- **Fail-Fast Startup & Health**: Awaits MongoDB connection and Redis ping on boot; exposes `GET /health`.
+- **Firebase OAuth & Session Management**: Validates Firebase ID tokens, issues 7-day Redis sessions, and writes `httpOnly`, `sameSite: "none"` cookies.
+- **Academic Verification Engine**: Manages the `pendingAcademicUpdate` queue for student CGPA and percentage changes, logging approvals and rejections to `AuditLog`.
+- **RBAC Governance & Last Admin Guard**: Handles role updates while preventing demotion of the final administrator in an institution.
+- **Bulk User Provisioning (`POST /api/auth/admin/provision-users`)**: Parses CSV/JSON batches of students and trainers, creating accounts with mapped institutional metadata.
+- **Coin Economy Ledger (`CoinTransaction`)**: Tracks credits, feature deductions, and refunds with unique idempotency keys to prevent double spending.
 
 ### 3. Resume Intelligence Service (Port 8002)
 
-Analyzes candidate resumes against target job profiles.
+Processes candidate resumes against target job profiles.
 
-- **PDF Magic-Byte Validation**: Inspects the first 5 bytes of uploaded files to verify `%PDF-` header signature before processing, rejecting spoofed MIME types immediately with `400 Bad Request`.
-- **Server-Side Upfront Deduction**: Invokes `POST /internal/coins/deduct` for `RESUME_SCORE` (10 coins) before running compute-heavy PDF extraction and AI matching; automatically refunds on failure.
-- **Gateway Origin Verification (`verifyGatewayOrigin`)**: Rejects direct requests bypassing the API Gateway with `403 Forbidden` (`x-gateway-secret`).
-- **PDF Extraction**: Parses textual streams via `pdf-parse`.
-- **LangChain Structured Agent**: Prompts Groq LLM (`openai/gpt-oss-120b`) to convert raw text into a normalized schema comprising contact info, summary, education, technologies, experience, and projects.
-- **AI-First Domain Extraction (`suggestedRole`)**: Automatically detects the candidate's authentic domain and career specialization (e.g. `Cybersecurity Analyst`, `ML Engineer`, `Cloud Architect`) directly from parsed resume text, eliminating hardcoded role fallbacks.
-- **Deterministic Skill Gap Matcher (`roleSkills.js` & `skillMatcher.js`)**:
-  - Evaluates extracted candidate skills against 11+ curated role profiles (MERN Stack, Full-Stack, Java Backend, Frontend, Backend, Python Backend, QA Automation, DevOps, Data Analyst, ML Engineer, and Cybersecurity Engineer).
-  - Distinguishes between **Required Core Skills** and **Preferred Skills** with fuzzy alias and word boundary matching.
-  - Dynamically adapts to custom/unlisted domains without throwing runtime exceptions.
-  - Calculates deterministic ATS compatibility scores (0–100%) and formulates targeted missing skill recommendations.
-- **Clean Empty-State Handling**: For newly registered accounts without an uploaded resume, `GET /api/resume/get-resume` returns a graceful `200 OK` with `{ success: true, data: null, resume: null }` rather than an exceptional `404 Not Found`.
-- **Caching**: Persists analyzed resume entities under Redis key `resume:<userId>` for sub-millisecond retrieval.
-- **Resource Hygiene**: Automatically unlinks uploaded temporary PDF files from the local filesystem in a `finally` block.
-- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
+- **PDF Magic-Byte Validation**: Inspects the first 5 bytes for `%PDF-`, rejecting spoofed files immediately with `400 Bad Request`.
+- **LangChain Structured Parsing**: Prompts Groq LLM (`openai/gpt-oss-120b`) to convert raw text into normalized schemas with automatic domain extraction (`suggestedRole`).
+- **Deterministic Skill Matcher (`roleSkills.js`)**: Matches candidate skills against 11+ role profiles, separating required from preferred skills to calculate deterministic ATS scores.
+- **Clean Empty-State Handling**: Returns `200 OK` with `{ data: null, resume: null }` for accounts without resumes.
 
-### 4. AI Mock Interview Service (Port 8003)
+### 4. Interview & Live Studio Service (Port 8003)
 
-Orchestrates autonomous, dynamic HR and Technical interviews.
+Powers both real-time trainer-led live video rooms and autonomous AI mock interviews.
 
-- **Server-Side Upfront Deduction**: Atomically deducts `INTERVIEW_START` (50 coins) before invoking LLM question generation; automatically refunds on failure.
-- **Atomic Concurrency & Submission Validation**:
-  - Strict input validation requires `interviewId` and non-empty string `answer` (max 15,000 characters).
-  - Enforces optimistic concurrency guard on `{ currentQuestion: expectedIndex, status: { $ne: "completed" } }` via `findOneAndUpdate`, preventing race conditions or duplicate submissions with `409 Conflict`.
-- **Accurate Dashboard Metrics**: Calculates `totalQuestions` (Questions Solved) by counting strictly answered questions (`q.userAnswer && q.userAnswer.trim().length > 0`) rather than total generated questions.
-- **LangGraph StateGraph Engine**:
-  - **`interviewAgent`**: Generates 6 highly contextual, scenario-based interview questions tailored to the candidate's chosen role, difficulty level, and optional resume context.
-  - **Strict Domain Segregation**:
-    - **Technical Tracks**: Enforces 100% purely technical questions on Data Structures, Algorithms, System Design, Concurrency, Database Internals, and Framework Architecture (`technicalInterviewPrompt.js`).
-    - **HR Tracks**: Enforces 100% behavioral, situational, culture fit, and conflict resolution questions using the STAR framework (`hrInterviewPrompt.js`).
-  - **Resume Context Injection**: When `useResume: true`, dynamically formats and passes candidate project descriptions, tech stacks, experience, and growth areas directly into the interviewer prompt.
-  - **`feedbackAgent`**: Evaluates individual responses against **8 rigorous dimensions**: Correctness, Clarity, Relevance, Detail, Efficiency, Communication, Problem Solving, and Creativity.
-  - **`summaryAgent`**: Triggered upon completion of the final question. Computes overall performance metrics, pinpoints explicit candidate strengths, analyzes weaknesses, and issues actionable study recommendations.
-- **Docker-Isolated Multi-Language Code Execution Engine**:
-  - Compiles and runs user code in an external isolated sandbox service supporting **JavaScript** (Node.js 18), **Python** (3.8), **Java** (OpenJDK 17 with `Main.java` entrypoint), and **C++** (GCC 9).
-  - **Security & Access Control**: Requires mandatory `CODEBOX_AUTH_TOKEN` (rejects missing config with `503 Service Unavailable`).
-  - **Per-User Rate Limiting**: Enforces a Redis sliding window limit of **15 executions per minute** per user (`ratelimit:code:<userId>`), returning `429 Too Many Requests` when exceeded.
-  - **Token Ownership Binding**: Execution tokens are bound to the requesting user in Redis (`codebox:token:<token>` with 1-hour TTL); `GET /code/status/:token` rejects requests from unauthorized users with `403 Forbidden`.
-  - **Decoupled Workflow**: Clicking **"Run Code"** executes the solution and displays terminal output without submitting or advancing the interview question; **"Add To Answer"** appends formatted code to the active answer textarea.
-  - **Interactive Terminal Drawer**: Monaco editor integrated with a bottom tabbed drawer providing custom standard input (`stdin`), real-time execution status badges, `stdout`, `stderr`, execution time (`time`), and memory telemetry (`memory`).
-  - **Asynchronous Polling**: Submits execution jobs via `POST /code/run` and polls `GET /code/status/:token` every 400ms with a 20-second safety timeout.
-- **Analytics Caching**: Caches user interview aggregations (`stats`, `technicalData`, `hrData`) under `interviews:<userId>` in Redis for 10 minutes, invalidating automatically upon submission of answers.
-- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
+- **Socket.IO Live Room Server**: Manages real-time WebRTC room discovery, SDP/ICE signaling, synchronized Monaco code edits, live question pushes, and call termination broadcasts.
+- **Strict Live Room Access Guard**: Confirms `joinLiveRoom` callers are strictly the assigned `trainer` or `student` (or trainers from the same institution); explicitly excludes `admin` roles.
+- **Student Performance Directory & CWE-1236 Exports**: Generates multi-criteria directory views and formula-sanitized Excel/CSV exports.
+- **Interview Scheduling Engine**: Manages individual and section-wide scheduling for AI and Live sessions, including full session deletion.
+- **LangGraph AI Engine**: Coordinates 6-question HR and Technical mock interviews evaluated against 8 dimensions.
+- **Task & Assignment Hub**: Facilitates assignment creation, student submissions, and trainer evaluation.
 
 ### 5. Roadmap & Resource Service (Port 8004)
 
-Synthesizes end-to-end learning curriculums for career acceleration.
+Generates customized learning paths tailored to salary packages.
 
-- **Server-Side Upfront Deduction**: Deducts `ROADMAP_GENERATE` (20 coins) upfront via internal auth service; automatically refunds on failure.
-- **10 Standardized Engineering Tracks**: Fully supports MERN Stack Developer, Full-Stack Software Engineer, Java Backend Developer, Frontend Developer, Backend Developer, Python Backend Developer, QA Automation Engineer, DevOps Engineer, Data Analyst, and ML Engineer with salary-bracketed targets (10 LPA, 15 LPA, 20 LPA, 30 LPA, 40 LPA).
-- **Two-Stage Sequential Pipeline**:
-  - **Stage 1 (`roadmapAgent`)**: Analyzes target role, salary package tier, and user resume gaps to generate progressive learning modules categorized by timeline and difficulty (_Easy_, _Medium_, _Hard_). Configured with `maxTokens: 6000` to prevent JSON response truncation.
-  - **Stage 2 (`resourceAgent`)**: Parses each module title, invokes the LLM to locate authoritative official documentation, and calls the **YouTube Data API v3** to retrieve matching video tutorials.
-- **HTTPS & Trusted Domain Resource Validation**: Strictly validates all documentation and tutorial links against an authoritative domain allowlist (e.g. `react.dev`, `nodejs.org`, `developer.mozilla.org`, `docs.python.org`, `kubernetes.io`, `youtube.com`). Replaces insecure (`http:`) or untrusted links with safe search queries.
-- **Resume Replacement & Customization**: Features an interactive attachment and re-upload modal allowing candidates to swap resumes and re-align milestone recommendations.
-- **User-Scoped Caching Strategy**: Roadmaps are cached in Redis under `roadmap:<userId>:<roadmapId>` and `userRoadmaps:<userId>` for 1 hour (`3600s`).
-- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
+- **Two-Stage LangGraph Pipeline**: `roadmapAgent` designs modular milestones; `resourceAgent` locates authoritative official documentation and queries the **YouTube Data API v3** for matching tutorials.
+- **HTTPS & Trusted Domain Validation**: Restricts documentation links to an allowlist of authoritative developer sites (`react.dev`, `nodejs.org`, `developer.mozilla.org`, `docs.python.org`).
 
 ### 6. Billing & Subscription Service (Port 8005)
 
-Facilitates payment transactions and token replenishment.
+Manages coin purchases and credit top-ups.
 
-- **Catalog Management**: Provides tiered plans (e.g., _Starter Plan_ at ₹199 for 300 Interview Coins).
-- **Scoped User Ownership**: All order creation, lookups, and verification queries are strictly bound to the authenticated `userId`.
-- **3-State Idempotent Payment Settlement**:
-  - Orders transition through a strict state machine: `created` → `processing` → `paid`.
-  - Uses `razorpayOrderId` as an idempotency key to prevent double-crediting under duplicate webhook deliveries or race conditions.
-- **Cryptographic Verification**: Re-computes and verifies HMAC-SHA256 signatures (`crypto.createHmac("sha256", secret)`) against `razorpay_order_id` and `razorpay_payment_id`.
-- **Internal Coin Crediting**: Invokes Auth Service's internal `/internal/coins/credit` with `x-internal-service-key` to atomically credit coins and update `CoinTransaction` ledger.
-- **Fail-Fast Startup & Health**: Awaits MongoDB and Redis ping on startup; exposes `GET /health`.
+- **Razorpay Checkout**: Generates orders and verifies HMAC-SHA256 signatures before crediting coins.
+- **Idempotent 3-State Machine**: Transitions orders through `created` → `processing` → `paid` states.
+
+### 7. Isolated Code Execution Engine (Port 3000)
+
+External sandbox executing code in isolated environments.
+
+- **Supported Languages**: JavaScript (Node.js 18), Python (3.8), Java (OpenJDK 17), and C++ (GCC 9).
+- **Security & Rate Limiting**: Requires `CODEBOX_AUTH_TOKEN`, limits users to 15 runs/minute via Redis sliding windows, and binds execution tokens to the requesting user.
 
 ---
 
-## 💻 Frontend Client
+## 🧪 Automated Testing Suite (50 Tests / 17 Suites)
 
-The frontend is a single-page application built with **React 19**, **Vite 8**, and **Tailwind CSS v4**:
+Yugam includes comprehensive unit and integration tests covering security, governance, calculations, and real-time operations:
 
-- **Real-Time Speech Synthesis & Recognition**:
-  - Integrated `webkitSpeechRecognition` captures candidate voice input and transcribes spoken answers in real-time.
-  - Web Speech API synthesizes AI interviewer speech, coordinating video avatar playback (`male-ai.mp4` / `female-ai.mp4`).
-- **Interactive Coding Sandbox**:
-  - Integrated **Monaco Editor** (`@monaco-editor/react`) provides a VS Code-like coding workspace inside the interview arena, allowing candidates to write, edit, and submit code snippets directly to the AI interviewer.
-- **Dynamic Visualizations**:
-  - Interactive radar, bar, and radial charts (`recharts`, `react-circular-progressbar`) for tracking candidate skill trends across interview sessions.
-- **ATS Resume Generator**:
-  - 6-step form wizard managing personal information, summaries, technical skills, projects, employment history, and education. Includes instant ATS paper preview and single-click printing/PDF export (`react-to-print`).
-- **State Management**:
-  - **Redux Toolkit** (`resumeSlice.js`) manages cached resume state across tools.
-  - Contextual user sessions automatically hydrate on app load via `GET /api/me`.
+```bash
+npm test --prefix backend
+```
+
+```text
+# Subtest: 1. Spreadsheet Formula Injection Sanitization (CSV/Excel CWE-1236)
+  ok 1 - Neutralizes dangerous leading characters by prefixing with single quote
+  ok 2 - Leaves safe strings, numbers, and booleans untouched
+  ok 3 - RFC 4180 CSV cell escaping properly handles commas, quotes, and sanitized formulas
+  ok 4 - generateCsvString prepends UTF-8 BOM for Microsoft Excel compatibility
+ok 1 - 1. Spreadsheet Formula Injection Sanitization (CSV/Excel CWE-1236)
+
+# Subtest: 2. Student Performance Metric Aggregation & Non-Blending
+  ok 1 - Computes overall, AI, and live averages only from completed interviews
+  ok 2 - Maintains separate 3-tier academic indicators without blending percentage and CGPA
+ok 2 - 2. Student Performance Metric Aggregation & Non-Blending
+
+# Subtest: 3. RBAC on Performance Directory & Scheduling Endpoints
+  ok 1 - Rejects student role attempting to access students directory (403 Forbidden)
+  ok 2 - Allows trainer and admin roles to access students directory & scheduling
+ok 3 - 3. RBAC on Performance Directory & Scheduling Endpoints
+
+# Subtest: 4. Flexible Student Identifier Resolution (Email, Roll Number, MongoDB _id)
+  ok 1 - Resolves student by exact Email (case-insensitive)
+  ok 2 - Resolves student by University Roll Number (case-insensitive)
+  ok 3 - Resolves student by MongoDB _id
+  ok 4 - Returns undefined/404 for non-existent identifier
+ok 4 - 4. Flexible Student Identifier Resolution (Email, Roll Number, MongoDB _id)
+
+# Subtest: 5. Scheduled Interview Deletion Authorization & Scoping
+  ok 1 - Allows assigned trainer to delete own scheduled interview
+  ok 2 - Allows institution Admin to delete any scheduled interview
+  ok 3 - Rejects unassigned trainer from deleting another trainer's session
+  ok 4 - Rejects student role from deleting scheduled interview
+  ok 5 - Rejects cross-institution scheduled interview deletion
+ok 5 - 5. Scheduled Interview Deletion Authorization & Scoping
+
+# Subtest: 6. Live Video Interview Room Authorization & Institution Scoping
+  ok 1 - Allows assigned student to join live room
+  ok 2 - Allows assigned trainer to join live room
+  ok 3 - Allows alternate trainer from same institution to conduct interview
+  ok 4 - Strictly blocks institution Admin from joining live room (403 Forbidden)
+  ok 5 - Blocks unauthorized student from other sessions or institutions
+ok 6 - 6. Live Video Interview Room Authorization & Institution Scoping
+
+# Subtest: 7. Socket.IO Live Room Signaling & Event Integrity
+  ok 1 - Sanitizes live question push payloads with default text resilience
+  ok 2 - Handles code-change synchronization payload schema
+ok 7 - 7. Socket.IO Live Room Signaling & Event Integrity
+
+# Subtest: 8. Live Question Sanitization & Default Schema Resilience
+  ok 1 - LiveQuestion subdocument accepts questionText without crashing
+  ok 2 - Sanitizes existing questions missing questionText on room join
+ok 8 - 8. Live Question Sanitization & Default Schema Resilience
+
+# Subtest: 9. Live Rubric Score Normalization & Weighted Evaluation
+  ok 1 - Calculates weighted rubric overall score across 6 criteria
+  ok 2 - Clamps individual criteria scores between 0 and 100
+ok 9 - 9. Live Rubric Score Normalization & Weighted Evaluation
+
+# Subtest: 10. Strict Redaction of Faculty Private Notes for Students
+  ok 1 - Strips trainerPrivateNotes when requested by student role
+  ok 2 - Preserves trainerPrivateNotes when requested by trainer role
+  ok 3 - Preserves trainerPrivateNotes when requested by admin role
+ok 10 - 10. Strict Redaction of Faculty Private Notes for Students
+
+# Subtest: 11. Real-Time Call-Ended Broadcast & Peer-Left Coordination
+  ok 1 - Formats workspace:peer-left payload on trainer completion
+  ok 2 - Formats workspace:peer-left payload on participant leave
+ok 11 - 11. Real-Time Call-Ended Broadcast & Peer-Left Coordination
+
+# Subtest: 12. RBAC & Role Authorization Middleware
+  ok 1 - Rejects request with no credentials (401)
+  ok 2 - Rejects student role attempting to access admin route (403 Forbidden)
+  ok 3 - Allows admin role to access admin-only route
+  ok 4 - Allows trainer and admin to access multi-role endpoint
+ok 12 - 12. RBAC & Role Authorization Middleware
+
+# Subtest: 13. Gateway Header Sanitization & Injection
+  ok 1 - Strips client-supplied identity/role headers and decorates trusted server session headers
+ok 13 - 13. Gateway Header Sanitization & Injection
+
+# Subtest: 14. Academic Integrity Guard Logic
+  ok 1 - Diverts student CGPA and marks edits into pendingAcademicUpdate
+  ok 2 - Commits verified marks only upon Admin/Trainer approval
+ok 14 - 14. Academic Integrity Guard Logic
+
+# Subtest: 15. Server-Side Feature Pricing Allowlist
+  ok 1 - FEATURE_COIN_COSTS contains allowlisted pricing for key features
+  ok 2 - Rejects or flags undefined action names
+ok 15 - 15. Server-Side Feature Pricing Allowlist
+
+# Subtest: 16. Gateway-Origin Verification Middleware
+  ok 1 - Rejects request with missing x-gateway-secret header (403)
+  ok 2 - Rejects request with invalid x-gateway-secret header (403)
+  ok 3 - Passes request with valid x-gateway-secret header
+ok 16 - 16. Gateway-Origin Verification Middleware
+
+# Subtest: 17. PDF Magic-Byte Signature Validation & Domain Allowlist
+  ok 1 - Accepts valid %PDF- magic bytes header
+  ok 2 - Rejects spoofed plain text files
+  ok 3 - Rejects executable or binary files
+  ok 4 - Rejects empty or short buffers
+  ok 5 - Accepts trusted documentation URLs with https
+  ok 6 - Rejects unencrypted http:// links and falls back
+ok 17 - 17. PDF Magic-Byte Signature Validation & Domain Allowlist
+
+1..17
+# tests 50
+# suites 17
+# pass 50
+# fail 0
+```
+
+---
+
+## 💻 Frontend Client & Design System
+
+The frontend is built with **React 19**, **Vite 8**, and **Tailwind CSS v4**:
+
+- **Modern Dashboard Design**: Clean canvas background (`#F8F9FA`), high-contrast obsidian accent cards (`#111318`), and vibrant role-based badges.
+- **Dynamic Institution College Display**: Resolves and renders the student's or trainer's college name (e.g. `GLA UNIVERSITY MATHURA`) across sidebar headers and dashboard workspaces.
+- **Real-Time Speech Dictation & Audio**: Integrated browser `SpeechRecognition` for voice answer transcription paired with Web Speech synthesis for AI avatars.
+- **Monaco Code Sandbox**: Embedded Monaco Editor with dual execution tabs (Terminal Output & Stdin Drawer).
+- **Responsive Navigation**: Collapsible sidebar with active route highlights, user profile badge, and coin wallet counter.
 
 ---
 
 ## 🪙 Token & Coin Economics
 
-Yugam implements an enterprise-grade virtual credit economy with strict server-side price enforcement, distributed idempotency, and automated failure refunds:
+Yugam balances virtual credit monetization with institutional free access:
 
-- **Server-Side Allowlisted Pricing (`FEATURE_COIN_COSTS`)**: Feature costs are strictly enforced on the server; clients cannot dictate deduction amounts.
-- **Upfront Atomic Deduction**: Microservices reserve/deduct coins before initiating compute-heavy LLM pipelines or PDF processing, preventing race conditions.
-- **Automated Failure Refunds**: If an upstream AI provider or parser fails, deducted credits are automatically and idempotently re-credited via `POST /internal/coins/refund`.
-- **Immutable Transaction Ledger (`CoinTransaction`)**: Every balance event creates a persistent ledger record referencing a unique `reservationId` or `idempotencyKey`, preventing duplicate settlement or race condition exploits.
-- **3-State Payment Settlement Machine**: Razorpay payments transition through `created` → `processing` → `paid` states atomically scoped to the authenticated `userId`.
+- **College-Sponsored Interviews**: All sessions scheduled by Faculty Trainers or Admins are **100% free and coin-exempt** for students.
+- **Self-Paced AI Practice**: Individual self-started AI mock interviews and resume scoring use the coin ledger:
 
-| Event / Action            |  Coin Impact   | Description                                                                     |
-| :------------------------ | :------------: | :------------------------------------------------------------------------------ |
-| **New Account Creation**  | **+150 Coins** | Welcome bonus credited on first login.                                          |
-| **Resume ATS Scoring**    | **-10 Coins**  | Upfront deduction for PDF parsing, text extraction, and ATS skill gap analysis. |
-| **Resume PDF Download**   | **-10 Coins**  | Deducted upon generating and downloading the ATS-compliant formatted resume.    |
-| **Roadmap Generation**    | **-20 Coins**  | Upfront deduction for compiling custom modular curriculum & validated links.    |
-| **Start Mock Interview**  | **-50 Coins**  | Upfront deduction for synthesizing full 6-question HR/Technical interview set.  |
-| **Starter Plan Purchase** | **+300 Coins** | Credited upon verified payment of ₹199 via Razorpay.                            |
+| Feature / Action | Coin Impact | Description |
+| :--- | :---: | :--- |
+| **New Account Bonus** | **+150 Coins** | Welcome bonus credited upon initial signup. |
+| **Scheduled College Interview** | **0 Coins (Free)** | Fully sponsored by the institution placement cell. |
+| **Resume ATS Scoring** | **-10 Coins** | Upfront deduction for PDF parsing & skill matching. |
+| **Resume PDF Download** | **-10 Coins** | Deducted upon exporting the formatted ATS resume. |
+| **Roadmap Generation** | **-20 Coins** | Upfront deduction for modular curriculum & resource discovery. |
+| **Self-Paced AI Mock Interview**| **-50 Coins** | Upfront deduction for 6-question conversational AI session. |
+| **Starter Credit Pack** | **+300 Coins** | Top-up package purchased via Razorpay for ₹199. |
 
 ---
 
 ## 📡 API Reference Guide
 
-### Health & Monitoring (All Microservices)
+### Authentication & Governance (`/api/auth`)
 
-| Method | Endpoint  | Description                                                         | Headers / Auth | Payload |
-| :----- | :-------- | :------------------------------------------------------------------ | :------------- | :------ |
-| `GET`  | `/health` | Service health status & MongoDB readiness check (returns `200`/`503`) | Public         | None    |
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/login` / `/signup` | Authenticate with Firebase token & establish 7-day session | Public |
+| `GET` / `POST` | `/logout` | Invalidate Redis session & purge cookie | Authenticated |
+| `PUT` | `/profile` | Update profile information (diverts CGPA to pending queue) | `student`, `trainer`, `admin` |
+| `PATCH`| `/students/:id/verify-academics`| Approve or reject pending student academic marks | `trainer`, `admin` |
+| `PATCH`| `/users/:targetUserId/role` | Update user role (enforces Last Admin Guard) | `admin` |
+| `POST` | `/admin/provision-users` | Bulk onboard users via CSV / JSON | `admin` |
+| `GET` | `/users` | List institution users with filtering | `trainer`, `admin` |
+| `GET` | `/students/pending-verifications`| Fetch pending academic verification records | `trainer`, `admin` |
+| `GET` | `/audit-logs` | Fetch immutable institutional audit trail | `admin` |
 
-### Authentication & Virtual Economy (`/api/auth`)
+### Student Performance Directory & Exports (`/api/interview`)
 
-| Method | Endpoint                  | Description                                                             | Headers / Auth            | Payload                                                                     |
-| :----- | :------------------------ | :---------------------------------------------------------------------- | :------------------------ | :-------------------------------------------------------------------------- |
-| `POST` | `/login`                  | Authenticate with Firebase token & establish 7-day session              | None                      | `{ "token": "<FirebaseIdToken>" }`                                          |
-| `GET`  | `/logout`                 | Invalidate Redis session & purge session cookie                         | Cookie                    | None                                                                        |
-| `POST` | `/use-coins`              | Session-bound coin deduction with server allowlist fallback             | Cookie                    | `{ "coins": 10, "action": "download-pdf" }`                                 |
-| `POST` | `/internal/coins/deduct`  | Internal service upfront atomic coin deduction & ledger write           | `x-internal-service-key`  | `{ "userId": "...", "action": "INTERVIEW_START", "reservationId": "..." }`  |
-| `POST` | `/internal/coins/refund`  | Internal service idempotent failure refund                              | `x-internal-service-key`  | `{ "userId": "...", "action": "INTERVIEW_START", "reservationId": "..." }`  |
-| `POST` | `/internal/coins/credit`  | Internal service ledger-backed balance top-up after payment settlement   | `x-internal-service-key`  | `{ "userId": "...", "coins": 300, "idempotencyKey": "order_..." }`         |
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/students-directory` | Fetch paginated student directory with averages & discrete academic indicators | `trainer`, `admin` |
+| `GET` | `/students-directory/export` | Export directory as formula-safe `.xlsx` or `.csv` (CWE-1236 hardened) | `trainer`, `admin` |
 
-### User Profile (`/api`)
+### Interview Scheduling (`/api/interview`)
 
-| Method | Endpoint | Description                              | Headers / Auth | Payload |
-| :----- | :------- | :--------------------------------------- | :------------- | :------ |
-| `GET`  | `/me`    | Get currently authenticated user profile | Session Cookie | None    |
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/schedule` | Schedule an AI or Live interview (Individual or Batch) | `trainer`, `admin` |
+| `GET` | `/schedule` | Fetch scheduled interviews for current user or institution | `student`, `trainer`, `admin` |
+| `GET` | `/schedule/:id` | Fetch specific schedule details | `student`, `trainer`, `admin` |
+| `PATCH`| `/schedule/:id/status` | Update scheduled session status | `trainer`, `admin` |
+| `DELETE`| `/schedule/:id` | Delete a scheduled interview session | `trainer`, `admin` |
 
-### Resume Services (`/api/resume`)
+### Live Video Interview Studio (`/api/interview`)
 
-| Method | Endpoint      | Description                                                                                                      | Headers / Auth                          | Payload                                                    |
-| :----- | :------------ | :--------------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :--------------------------------------------------------- |
-| `GET`  | `/roles`      | Fetch supported target job roles & taxonomy                                                                      | `x-user-id`, `x-gateway-secret`         | None                                                       |
-| `POST` | `/upload`     | Upload resume PDF (%PDF- validated), deduct 10 coins upfront & trigger ATS analysis                              | `x-user-id`, `x-gateway-secret`         | `FormData`: `resume` (PDF), `targetRole` (Optional String) |
-| `GET`  | `/get-resume` | Retrieve user's parsed resume & gap analysis (returns `200 OK` with `{ data: null, resume: null }` if not found) | `x-user-id`, `x-gateway-secret`         | None                                                       |
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/live/join/:scheduleId` | Authorize and join live video studio room | `student`, `trainer` |
+| `POST` | `/live/:liveId/complete` | Finalize evaluation rubric and complete session | `trainer` |
+| `POST` | `/live/:liveId/leave` | Leave live video studio and broadcast disconnect | `student`, `trainer`, `admin` |
+| `GET` | `/live/by-schedule/:scheduleId`| Retrieve live room metadata by schedule ID | `student`, `trainer`, `admin` |
+| `GET` | `/live/:liveId` | Fetch report (redacts `trainerPrivateNotes` for students) | `student`, `trainer`, `admin` |
 
-### AI Interview Engine (`/api/interview`)
+### Tasks & Assignments (`/api/interview`)
 
-| Method | Endpoint              | Description                                                                        | Headers / Auth                          | Payload                                                                                       |
-| :----- | :-------------------- | :--------------------------------------------------------------------------------- | :-------------------------------------- | :-------------------------------------------------------------------------------------------- |
-| `POST` | `/start`              | Start interview session, deduct 50 coins upfront & generate questions              | `x-user-id`, `x-gateway-secret`         | `{ "type": "technical"\|"hr", "role": "Frontend Developer", "useResume": true\|false }`       |
-| `POST` | `/answer`             | Submit answer with optimistic concurrency locking & get feedback                   | `x-user-id`, `x-gateway-secret`         | `{ "interviewId": "...", "answer": "...", "questionIndex": 0 }`                               |
-| `POST` | `/submit`             | Alias for `/answer`                                                                | `x-user-id`, `x-gateway-secret`         | `{ "interviewId": "...", "answer": "...", "questionIndex": 0 }`                               |
-| `GET`  | `/all`                | Fetch user interview history, averages, and answered Questions Solved count        | `x-user-id`, `x-gateway-secret`         | None                                                                                          |
-| `GET`  | `/:id`                | Fetch specific interview details and final report                                  | `x-user-id`, `x-gateway-secret`         | None                                                                                          |
-| `POST` | `/code/run`           | Submit source code to isolated execution sandbox (Rate Limit: 15 runs/min)         | `x-user-id`, `x-gateway-secret`         | `{ "language": "javascript"\|"python"\|"java"\|"cpp", "source_code": "...", "stdin": "..." }` |
-| `GET`  | `/code/status/:token` | Poll async execution status; strictly bound to requesting user ownership           | `x-user-id`, `x-gateway-secret`         | None                                                                                          |
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/tasks` | Create a new student assignment with deadline | `trainer`, `admin` |
+| `GET` | `/tasks` | List assignments for current role | `student`, `trainer`, `admin` |
+| `POST` | `/tasks/:taskId/submit` | Submit assignment solution (code/text) | `student` |
+| `GET` | `/tasks/:taskId/submissions` | View all submissions for an assignment | `trainer`, `admin` |
+| `PATCH`| `/tasks/:taskId/submissions/:subId` | Grade submission and leave feedback | `trainer`, `admin` |
 
-### Roadmaps & Learning Paths (`/api/roadmap`)
+### AI Mock Interview Engine & Code Runner (`/api/interview`)
 
-| Method | Endpoint    | Description                                                                          | Headers / Auth                          | Payload                                                                                                                           |
-| :----- | :---------- | :----------------------------------------------------------------------------------- | :-------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/generate` | Deduct 20 coins upfront & build custom roadmap across 10 tracks with validated links | `x-user-id`, `x-gateway-secret`         | `{ "role": "MERN Stack Developer", "targetPackage": "10 LPA"\|"15 LPA"\|"20 LPA"\|"30 LPA"\|"40 LPA", "useResume": true\|false }` |
-| `GET`  | `/all`      | List all historical roadmaps created by the user                                     | `x-user-id`, `x-gateway-secret`         | None                                                                                                                              |
-| `GET`  | `/:id`      | Fetch specific roadmap details by ID                                                 | `x-user-id`, `x-gateway-secret`         | None                                                                                                                              |
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/start` | Deduct 50 coins & start 6-question AI mock interview | Authenticated |
+| `POST` | `/answer` / `/submit` | Submit answer with optimistic concurrency locking | Authenticated |
+| `GET` | `/all` | Fetch interview history, scores, and questions solved | Authenticated |
+| `GET` | `/:id` | Fetch specific interview report (redacts notes for students) | Authenticated |
+| `POST` | `/code/run` | Submit source code to CodeBox sandbox (15 runs/min limit) | Authenticated |
+| `GET` | `/code/status/:token` | Poll async code execution output | Authenticated |
 
-### Billing & Orders (`/api/billing`)
+### Resume Intelligence (`/api/resume`)
 
-| Method | Endpoint  | Description                                                                     | Headers / Auth                          | Payload                                                                                     |
-| :----- | :-------- | :------------------------------------------------------------------------------ | :-------------------------------------- | :------------------------------------------------------------------------------------------ |
-| `POST` | `/create` | Create Razorpay order scoped to authenticated user                              | `x-user-id`, `x-gateway-secret`         | `{ "planId": "starter" }`                                                                   |
-| `POST` | `/verify` | Validate cryptographic HMAC-SHA256 signature and settle payment state machine   | `x-user-id`, `x-gateway-secret`         | `{ "razorpay_order_id": "...", "razorpay_payment_id": "...", "razorpay_signature": "..." }` |
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/roles` | Fetch supported job roles and taxonomy | Authenticated |
+| `POST` | `/upload` | Upload resume PDF (`%PDF-` verified) & compute ATS score | Authenticated |
+| `GET` | `/get-resume` | Fetch parsed resume & gap analysis (200 OK empty state) | Authenticated |
+
+### Career Roadmaps (`/api/roadmap`)
+
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/generate` | Generate modular curriculum with docs & YouTube videos | Authenticated |
+| `GET` | `/all` | List all roadmaps created by user | Authenticated |
+| `GET` | `/:id` | Fetch specific roadmap details | Authenticated |
+
+### Billing & Subscription (`/api/billing`)
+
+| Method | Endpoint | Description | Allowed Roles |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/create` | Create Razorpay order for authenticated user | Authenticated |
+| `POST` | `/verify` | Verify HMAC-SHA256 signature and settle credits | Authenticated |
 
 ---
 
@@ -561,30 +734,32 @@ Yugam implements an enterprise-grade virtual credit economy with strict server-s
 
 ### MongoDB Collections
 
-- `User`: Primary user identities, Firebase UIDs, emails, profile names, and live `interviewCoin` ledger balances.
-- `CoinTransaction`: Immutable double-entry ledger documenting credits, upfront feature deductions, refunds, idempotency keys, and balances.
-- `Resume`: Full structured resume schemas including nested subdocuments for `education`, `experience`, `projects`, extracted skills, missing skills, and overall ATS scores.
-- `Interview`: Interview metadata, chosen role, type, array of question subdocuments (questions, answers, timers, 8-metric scores), and aggregate final summary reports.
-- `Roadmap`: Generated modular curriculums, target salaries, duration estimates, difficulty classifications, and resolved learning materials (YouTube URL, official doc link).
-- `Billing`: Immutable transaction records documenting Razorpay order IDs, payment IDs, verification signatures, monetary amounts, and settlement statuses (`created`, `processing`, `paid`, `failed`).
+- `User`: User profiles, Firebase UIDs, emails, roles (`student`, `trainer`, `admin`), `institutionId`, verified academia, and `pendingAcademicUpdate`.
+- `ScheduledInterview`: Scheduled AI and Live sessions with target type (`INDIVIDUAL` vs `SECTION`), assigned trainer, candidate, and date/time.
+- `LiveInterview`: Live room sessions, WebRTC signaling metadata, dynamic questions pushed, 6-criteria rubric scores, strengths/weaknesses, summary feedback, and confidential `trainerPrivateNotes`.
+- `Task`: Assignment definitions, target courses, deadlines, and submission records with grades and feedback.
+- `AuditLog`: Immutable audit trail documenting administrative role updates, academic approvals, bulk user imports, and directory exports.
+- `CoinTransaction`: Immutable double-entry virtual credit ledger tracking credits, deductions, and refunds with unique idempotency keys.
+- `Resume`: Structured resume entities (skills, experience, education, suggested role, and ATS scores).
+- `Interview`: Conversational AI mock interview records, questions, responses, 8-dimensional scores, and final reports.
+- `Roadmap`: Structured learning modules, difficulty tiers, documentation links, and YouTube tutorials.
+- `Billing`: Razorpay orders, payment signatures, and transaction settlement records.
 
 ### Redis Key Patterns & Expiry Policies
 
-| Key Pattern                       | Purpose                                        | Lifetime (TTL)      | Invalidation Trigger                      |
-| :-------------------------------- | :--------------------------------------------- | :------------------ | :---------------------------------------- |
-| `session:<sessionId>`             | Holds authenticated user session JSON          | `7 days` (604,800s) | User logout / manual session revocation   |
-| `resume:<userId>`                 | Cached structured resume & ATS analysis        | Persistent (no TTL) | User re-uploads / updates resume          |
-| `interviews:<userId>`             | Aggregated interview statistics & radar charts | `10 minutes` (600s) | New interview started or answer submitted |
-| `roadmap:<userId>:<roadmapId>`    | Cached individual user-scoped roadmap entity   | `1 hour` (3600s)    | Cache expiry                              |
-| `userRoadmaps:<userId>`           | Array of all roadmaps belonging to user        | `1 hour` (3600s)    | Generation of a new roadmap               |
-| `codebox:token:<token>`           | Binds code execution token to user ownership   | `1 hour` (3600s)    | Expiration                                |
-| `ratelimit:code:<userId>`         | Enforces sliding limit of 15 code runs/min     | `60 seconds`        | Rate limit window reset                   |
+| Key Pattern | Purpose | Lifetime (TTL) | Invalidation Trigger |
+| :--- | :--- | :--- | :--- |
+| `session:<sessionId>` | Holds authenticated user session JSON | `7 days` (604,800s) | Logout / session revocation |
+| `resume:<userId>` | Cached structured resume & ATS analysis | Persistent | Resume update / re-upload |
+| `interviews:<userId>` | Aggregated interview statistics & radar charts | `10 minutes` (600s) | New interview completed |
+| `roadmap:<userId>:<roadmapId>` | Cached individual roadmap entity | `1 hour` (3,600s) | Expiry |
+| `userRoadmaps:<userId>` | List of all user roadmaps | `1 hour` (3,600s) | New roadmap generated |
+| `codebox:token:<token>` | Binds execution token to user ownership | `1 hour` (3,600s) | Expiry |
+| `ratelimit:code:<userId>` | Enforces sliding rate limit of 15 runs/min | `60 seconds` | Window reset |
 
 ---
 
 ## 🔐 Environment Variables Matrix
-
-To run the full Yugam stack, configure the following `.env` files across services:
 
 ### 1. Gateway (`backend/gateway/.env`)
 
@@ -635,6 +810,7 @@ CODEBOX_AUTH_TOKEN="your_codebox_token"
 GATEWAY_INTERNAL_SECRET="yugam-gateway-internal-secret-key-2026"
 AUTH_SERVICE_URL="http://localhost:8001"
 INTERNAL_SERVICE_SECRET="yugam-internal-service-secret-key-2026"
+FRONTEND_URL="http://localhost:5173"
 ```
 
 ### 5. Roadmap Service (`backend/services/roadmap/.env`)
@@ -668,6 +844,8 @@ INTERNAL_SERVICE_SECRET="yugam-internal-service-secret-key-2026"
 ```ini
 VITE_BACKEND_URL="http://localhost:8000"
 VITE_FIREBASE_APIKEY="AIzaSy..."
+VITE_FIREBASE_AUTHDOMAIN="yugam-auth.firebaseapp.com"
+VITE_FIREBASE_PROJECTID="yugam-auth"
 VITE_RAZORPAY_KEY_ID="rzp_test_..."
 ```
 
@@ -680,62 +858,56 @@ VITE_RAZORPAY_KEY_ID="rzp_test_..."
 - [Node.js](https://nodejs.org/) `>= 20.x`
 - [Docker & Docker Compose](https://www.docker.com/) (for Redis)
 - [Git](https://git-scm.com/)
-- Active API keys for **Groq Cloud**, **Firebase**, **YouTube Data API v3**, and **Razorpay** (Test Mode).
+- Active API keys for **Groq Cloud**, **Firebase Admin**, **YouTube Data API v3**, and **Razorpay** (Test Mode).
 
-### Docker Setup (Redis)
+### 1. Redis Launch via Docker
 
-From the `backend/` directory, spin up the Redis container:
+From the `backend/` directory:
 
 ```bash
 cd backend
 docker-compose up -d
 ```
 
-Verify Redis is running on `localhost:6379`:
+Verify Redis is running on port `6379`:
 
 ```bash
 docker ps
 ```
 
-### Backend Services Launch
+### 2. Launch Backend Microservices
 
-Each microservice can be started in development mode using `nodemon`. Open separate terminal windows or run them concurrently:
+Start each service in development mode:
 
 ```bash
-# 1. API Gateway
-cd backend/gateway
-npm install
-npm run dev
+# 1. API Gateway (Port 8000)
+cd backend/gateway && npm install && npm run dev
 
-# 2. Auth Service
-cd backend/services/auth
-npm install
-npm run dev
+# 2. Auth Service (Port 8001)
+cd backend/services/auth && npm install && npm run dev
 
-# 3. Resume Service
-cd backend/services/resume
-npm install
-npm run dev
+# 3. Resume Service (Port 8002)
+cd backend/services/resume && npm install && npm run dev
 
-# 4. Interview Service
-cd backend/services/interview
-npm install
-npm run dev
+# 4. Interview Service (Port 8003)
+cd backend/services/interview && npm install && npm run dev
 
-# 5. Roadmap Service
-cd backend/services/roadmap
-npm install
-npm run dev
+# 5. Roadmap Service (Port 8004)
+cd backend/services/roadmap && npm install && npm run dev
 
-# 6. Billing Service
-cd backend/services/billing
-npm install
-npm run dev
+# 6. Billing Service (Port 8005)
+cd backend/services/billing && npm install && npm run dev
 ```
 
-### Frontend Launch
+### 3. Run Backend Automated Test Suite
 
-Launch the React 19 development server:
+Verify all 50 automated tests pass before launching the frontend:
+
+```bash
+npm test --prefix backend
+```
+
+### 4. Launch Frontend Client
 
 ```bash
 cd frontend
@@ -743,21 +915,22 @@ npm install
 npm run dev
 ```
 
-Navigate to `http://localhost:5173` to access the application.
+Access the application in your browser at `http://localhost:5173`.
 
 ---
 
 ## 🛡️ Security, Performance & Best Practices
 
-1. **Strict Session Isolation**: Sessions are identified by cryptographically unguessable UUIDs stored solely in Redis. Session cookies are delivered with `HttpOnly`, `SameSite=None`, and `Secure` attributes to prevent XSS-based session hijacking.
-2. **Gateway-Origin Verification (`x-gateway-secret`)**: Downstream microservices enforce shared gateway-secret checks, immediately rejecting external requests attempting to bypass the API Gateway with `403 Forbidden`.
-3. **Internal Service Authentication (`x-internal-service-key`)**: Balance manipulation endpoints (`/internal/coins/deduct`, `/internal/coins/refund`, `/internal/coins/credit`) require mutual pre-shared secret authentication and cannot be accessed through the public API Gateway.
-4. **Server-Side Allowlisted Economy & Automated Refunds**: All feature coin deductions are priced on the server. Coins are reserved upfront and automatically refunded if an AI call fails, preventing partial or duplicate charges.
-5. **PDF Magic-Byte Validation**: Resumes are verified against the `%PDF-` byte header to prevent spoofed MIME uploads, with immediate filesystem unlinking in `finally` blocks.
-6. **Roadmap Domain Allowlisting**: AI-generated educational resources and YouTube tutorials are validated for HTTPS protocol and verified against an authoritative domain allowlist before persistence.
-7. **Code Execution Sandbox Protection**: CodeBox runner requires authenticated tokens, limits users to 15 executions per minute, and binds output polling to the requesting user ID.
-8. **Cryptographic Payment Integrity**: Payment confirmations reject unverified client payloads. All transactions require strict server-side HMAC-SHA256 signature verification matching Razorpay secrets before credit top-ups are finalized.
-9. **Fail-Fast Startup & Continuous Health Probes**: All microservices await database readiness and Redis ping before accepting network traffic, exposing `/health` endpoints for orchestration probes.
+1. **Gateway Header Sanitization**: Incoming requests have all client-supplied identity headers (`x-user-*`) purged at the ingress proxy, preventing role escalation or tenant spoofing.
+2. **Spreadsheet Formula Injection Defense (CWE-1236)**: Directory exports to Excel (`.xlsx`) and CSV (`.csv`) neutralize dangerous formula characters (`=`, `+`, `-`, `@`, `\t`, `\r`) by prefixing them with `'` and applying RFC 4180 quoting.
+3. **Academic Integrity Buffer**: Student profile changes to marks and CGPA are held in `pendingAcademicUpdate` and only committed upon explicit Admin or Trainer verification.
+4. **Last Admin Guard**: The platform prevents demoting or removing an institution's last remaining administrator, protecting against administrative lockout.
+5. **Strict Live Room Authorization**: Live Video Studio access is strictly limited to the assigned trainer and student (or trainers from the same institution); college administrators are explicitly blocked from joining live candidate rooms.
+6. **Confidential Faculty Notes Redaction**: Trainer evaluation notes (`trainerPrivateNotes`) are strictly stripped from student API responses.
+7. **P2P Encrypted Video Streams**: Video and audio streams travel directly peer-to-peer via encrypted WebRTC channels with Socket.IO signaling proxied through the Gateway.
+8. **PDF Magic-Byte Verification**: Resumes are validated against the `%PDF-` byte header to prevent executable or spoofed file uploads.
+9. **Code Sandbox Isolation**: CodeBox executes code in isolated environments with token ownership binding and a sliding rate limit of 15 executions per minute.
+10. **Cryptographic Payment Integrity**: Payment settlements require server-side HMAC-SHA256 signature verification matching Razorpay secrets.
 
 ---
 
