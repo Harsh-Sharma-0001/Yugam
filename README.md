@@ -203,8 +203,8 @@ The **Yugam Live Studio (`/live-interview/:scheduleId`)** delivers a synchronize
 sequenceDiagram
     autonumber
     actor Trainer as Faculty Trainer
-    participant GW as API Gateway (:8000)
-    participant Socket as Interview Socket.IO (:8003)
+    participant GW as "API Gateway (:8000)"
+    participant Socket as "Interview Socket.IO (:8003)"
     actor Student as Candidate Student
 
     Note over Trainer,Student: Room Initialization & Peer Discovery
@@ -222,8 +222,10 @@ sequenceDiagram
     Socket->>Student: live-room:signal (Forward SDP Offer)
     Student->>Socket: live-room:signal (SDP Answer)
     Socket->>Trainer: live-room:signal (Forward SDP Answer)
-    Trainer<->Student: ICE Candidates Exchange
-    Trainer<<=>>Student: Direct P2P Audio/Video Streams (Encrypted)
+    Trainer->>Student: ICE Candidates Exchange
+    Student->>Trainer: ICE Candidates Exchange
+    Trainer->>Student: Direct P2P Audio/Video Streams (Encrypted)
+    Student->>Trainer: Direct P2P Audio/Video Streams (Encrypted)
 
     Note over Trainer,Student: Real-Time Collaborative Workspace
     Trainer->>Socket: workspace:question-push (New Problem Statement)
