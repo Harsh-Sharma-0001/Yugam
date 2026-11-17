@@ -28,6 +28,7 @@ import { io } from "socket.io-client";
 import {
   joinLiveRoom,
   completeLiveRoom,
+  leaveLiveRoomApi,
   executeCode,
   pollCodeStatus,
 } from "../apis/interview.api";
@@ -144,6 +145,68 @@ function LiveInterviewRoom({ user }) {
   const [isSubmittingEvaluation, setIsSubmittingEvaluation] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
   const [sessionCompletedReport, setSessionCompletedReport] = useState(null);
+
+  // Synchronized Call-Ended Overlay State
+  const [callEndedState, setCallEndedState] = useState({
+    active: false,
+    leftByName: "",
+    leftByRole: "",
+    reason: "",
+    countdown: 3,
+  });
+
+  const triggerCallEnded = ({ leftByName, leftByRole, reason, isLocal }) => {
+    if (isLocal && socketRef.current && room?._id) {
+      socketRef.current.emit("workspace:peer-left", {
+        liveId: room._id,
+        leftByName: leftByName || user?.name || (participantRole === "trainer" ? "Faculty Trainer" : "Candidate Student"),
+        leftByRole: leftByRole || participantRole,
+        reason: reason || "left",
+      });
+      if (room?._id) {
+        leaveLiveRoomApi(room._id).catch(() => {});
+      }
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (_) {}
+      });
+    }
+
+    if (pcRef.current) {
+      try {
+        pcRef.current.close();
+      } catch (_) {}
+    }
+
+    setCallEndedState({
+      active: true,
+      leftByName: leftByName || (participantRole === "trainer" ? "Candidate Student" : "Faculty Trainer"),
+      leftByRole: leftByRole || "participant",
+      reason: reason || "ended",
+      countdown: 3,
+    });
+  };
+
+  // Countdown timer for automatic redirect to dashboard
+  useEffect(() => {
+    if (!callEndedState.active) return;
+    const interval = setInterval(() => {
+      setCallEndedState((prev) => {
+        if (prev.countdown <= 1) {
+          clearInterval(interval);
+          navigate("/dashboard", { replace: true });
+          return { ...prev, countdown: 0 };
+        }
+        return { ...prev, countdown: prev.countdown - 1 };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [callEndedState.active, navigate]);
 
   // Timer counter
   useEffect(() => {
@@ -430,11 +493,33 @@ function LiveInterviewRoom({ user }) {
     socket.on("workspace:session-ended", ({ report }) => {
       setSessionCompletedReport(report || {});
       setShowEndModal(true);
+      triggerCallEnded({
+        leftByName: report?.evaluation?.evaluatedBy || "Technical Trainer",
+        leftByRole: "trainer",
+        reason: "concluded",
+        isLocal: false,
+      });
+    });
+
+    // Workspace: Participant left the room / concluded session
+    socket.on("workspace:peer-left", ({ leftByName, leftByRole, reason }) => {
+      triggerCallEnded({
+        leftByName,
+        leftByRole,
+        reason,
+        isLocal: false,
+      });
     });
 
     // Peer disconnected
-    socket.on("user:left", () => {
+    socket.on("user:left", (data) => {
       setPeerConnected(false);
+      triggerCallEnded({
+        leftByName: data?.userName || (participantRole === "trainer" ? "Candidate Student" : "Faculty Trainer"),
+        leftByRole: data?.role || "participant",
+        reason: "left",
+        isLocal: false,
+      });
     });
 
     return () => {
@@ -761,10 +846,10 @@ function LiveInterviewRoom({ user }) {
   // Loading State
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#07080B] flex flex-col items-center justify-center text-white px-4">
-        <div className="w-12 h-12 border-3 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <h2 className="text-lg font-bold text-white tracking-wide">Connecting to Live Interview Studio...</h2>
-        <p className="text-xs text-zinc-400 mt-1">Establishing encrypted WebRTC & Socket signaling channels</p>
+      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center text-gray-900 px-4">
+        <div className="w-12 h-12 border-3 border-gray-200 border-t-gray-900 rounded-full animate-spin mb-4" />
+        <h2 className="text-lg font-black text-gray-900 tracking-wide">Connecting to Live Interview Studio...</h2>
+        <p className="text-xs text-gray-500 mt-1">Establishing encrypted WebRTC & Socket signaling channels</p>
       </div>
     );
   }
@@ -772,16 +857,16 @@ function LiveInterviewRoom({ user }) {
   // Error State
   if (error) {
     return (
-      <div className="min-h-screen bg-[#07080B] flex flex-col items-center justify-center text-white px-4">
-        <div className="max-w-md w-full bg-[#111218] border border-red-500/20 rounded-2xl p-6 text-center shadow-2xl">
-          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto mb-4 text-red-400">
-            <FiAlertCircle size={24} />
+      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center text-gray-900 px-4">
+        <div className="max-w-md w-full bg-white border border-gray-200 rounded-3xl p-8 text-center shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center mx-auto mb-4 text-red-600">
+            <FiAlertCircle size={26} />
           </div>
-          <h3 className="text-base font-bold text-white">Live Room Access Error</h3>
-          <p className="text-xs text-zinc-400 mt-2 leading-relaxed">{error}</p>
+          <h3 className="text-base font-black text-gray-900">Live Room Access Error</h3>
+          <p className="text-xs text-gray-600 mt-2 leading-relaxed">{error}</p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition"
+            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold transition shadow-sm cursor-pointer"
           >
             <FiArrowLeft size={14} />
             <span>Return to Dashboard</span>
@@ -797,59 +882,113 @@ function LiveInterviewRoom({ user }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#07080B] text-zinc-200 flex flex-col font-sans select-none overflow-hidden">
+    <div className="min-h-screen bg-[#F8F9FA] text-gray-900 flex flex-col font-sans select-none overflow-hidden relative">
+      {/* 0. CALL-ENDED OVERLAY & COUNTDOWN REDIRECT */}
+      {callEndedState.active && (
+        <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-md flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white border border-gray-200 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-5 text-red-600 shadow-xs">
+              <FiPhoneOff size={28} />
+            </div>
+
+            <h2 className="text-xl font-black text-gray-900 tracking-tight mb-2">
+              Interview Call Ended
+            </h2>
+
+            <p className="text-xs text-gray-600 max-w-sm mx-auto leading-relaxed mb-6">
+              {callEndedState.reason === "concluded"
+                ? `${callEndedState.leftByName} has evaluated and concluded this live session.`
+                : `${callEndedState.leftByName} has left the live interview room.`}
+            </p>
+
+            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden mb-3 border border-gray-200">
+              <div
+                className="h-full bg-gray-900 transition-all duration-1000 ease-linear rounded-full"
+                style={{ width: `${(callEndedState.countdown / 3) * 100}%` }}
+              />
+            </div>
+
+            <p className="text-[11px] text-gray-500 font-semibold mb-6">
+              Redirecting to Dashboard in {callEndedState.countdown}s...
+            </p>
+
+            <button
+              onClick={() => navigate("/dashboard", { replace: true })}
+              className="w-full py-3.5 px-4 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <FiArrowLeft size={14} />
+              <span>Return to Dashboard Now</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. STUDIO HEADER */}
-      <header className="h-14 border-b border-white/10 bg-[#0C0D13]/90 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-30">
+      <header className="h-16 border-b border-gray-200 bg-white/95 backdrop-blur-md px-5 flex items-center justify-between shrink-0 z-30 shadow-xs">
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              if (confirm("Are you sure you want to exit the live interview room?")) {
-                navigate("/dashboard");
+              if (window.confirm("Are you sure you want to conclude and exit the live interview room?")) {
+                triggerCallEnded({
+                  leftByName: user?.name || (participantRole === "trainer" ? "Faculty Trainer" : "Candidate Student"),
+                  leftByRole: participantRole,
+                  reason: "left",
+                  isLocal: true,
+                });
               }
             }}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition"
-            title="Back to Dashboard"
+            className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-gray-900 transition cursor-pointer"
+            title="Exit Room"
           >
-            <FiArrowLeft size={15} />
+            <FiArrowLeft size={16} />
           </button>
 
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-            <h1 className="text-sm font-black text-white tracking-wide flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+            </span>
+            <h1 className="text-sm font-black text-gray-900 tracking-wide flex items-center gap-2">
               <span>YUGAM LIVE STUDIO</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase">
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-gray-900 text-white uppercase shadow-xs">
                 {scheduled?.role || "Technical Interview"}
               </span>
             </h1>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400 bg-white/5 px-2.5 py-1 rounded-full border border-white/5">
-            <FiClock size={12} className="text-purple-400" />
-            <span className="font-mono font-semibold">{formatTime(elapsedSeconds)}</span>
+          <div className="hidden sm:flex items-center gap-2 text-xs text-gray-700 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 shadow-xs">
+            <FiClock size={13} className="text-gray-500" />
+            <span className="font-mono font-bold">{formatTime(elapsedSeconds)}</span>
           </div>
         </div>
 
         {/* Right Header Status & Controls */}
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-xs">
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${
+              peerConnected
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
+            }`}
+          >
             <span
               className={`w-2 h-2 rounded-full ${
-                peerConnected ? "bg-emerald-400" : "bg-amber-400 animate-pulse"
+                peerConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
               }`}
             />
-            <span className="text-[11px] text-zinc-300 font-medium">
+            <span className="text-[11px]">
               {peerConnected ? `Peer: ${peerInfo.userName || "Connected"}` : "Waiting for Peer..."}
             </span>
           </div>
 
           <span
-            className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg border ${
+            className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl border ${
               participantRole === "trainer"
-                ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
-                : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                ? "bg-purple-50 text-purple-700 border-purple-200"
+                : "bg-blue-50 text-blue-700 border-blue-200"
             }`}
           >
-            {participantRole === "trainer" ? "Faculty Trainer" : "Candidate Student"}
+            {participantRole === "trainer" ? "👨‍🏫 FACULTY TRAINER" : "🎓 CANDIDATE STUDENT"}
           </span>
 
           {participantRole === "trainer" && (
@@ -858,7 +997,7 @@ function LiveInterviewRoom({ user }) {
                 calculateWeightedScore();
                 setActiveTab("rubric");
               }}
-              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <FiSliders size={13} />
               <span>Evaluate & Conclude</span>
@@ -867,11 +1006,16 @@ function LiveInterviewRoom({ user }) {
 
           <button
             onClick={() => {
-              if (confirm("Disconnect and leave this live session?")) {
-                navigate("/dashboard");
+              if (window.confirm("Disconnect and conclude this live session?")) {
+                triggerCallEnded({
+                  leftByName: user?.name || (participantRole === "trainer" ? "Faculty Trainer" : "Candidate Student"),
+                  leftByRole: participantRole,
+                  reason: "left",
+                  isLocal: true,
+                });
               }
             }}
-            className="px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 text-xs font-bold transition flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Leave Room"
           >
             <FiPhoneOff size={13} />
@@ -881,13 +1025,13 @@ function LiveInterviewRoom({ user }) {
       </header>
 
       {/* 2. SPLIT-SCREEN MAIN STUDIO WORKSPACE */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* LEFT PANEL: Dual Video Tiles + Active Question (40% width on lg) */}
-        <div className="w-full lg:w-[42%] border-r border-white/10 flex flex-col bg-[#0A0B10] overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F8F9FA]">
+        {/* LEFT PANEL: Dual Video Tiles + Active Question (42% width on lg) */}
+        <div className="w-full lg:w-[42%] border-r border-gray-200 flex flex-col bg-white overflow-hidden shadow-xs">
           {/* A. DUAL WEBRTC VIDEO TILES */}
-          <div className="p-3.5 grid grid-cols-2 gap-2.5 bg-[#08090E] border-b border-white/10 shrink-0">
+          <div className="p-4 grid grid-cols-2 gap-3 bg-gray-50 border-b border-gray-200 shrink-0">
             {/* Local Video Tile */}
-            <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-white/10 flex items-center justify-center shadow-lg group">
+            <div className="relative aspect-video rounded-2xl overflow-hidden bg-[#111318] border border-gray-200 flex items-center justify-center shadow-md group">
               <video
                 ref={localVideoRef}
                 autoPlay
@@ -899,21 +1043,21 @@ function LiveInterviewRoom({ user }) {
               />
               {!isCameraOn && (
                 <div className="flex flex-col items-center justify-center text-zinc-500">
-                  <FiVideoOff size={28} className="mb-1 text-zinc-600" />
-                  <span className="text-[10px] uppercase font-bold">Camera Off</span>
+                  <FiVideoOff size={28} className="mb-1 text-zinc-400" />
+                  <span className="text-[10px] uppercase font-bold text-zinc-400">Camera Off</span>
                 </div>
               )}
-              <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-semibold text-white flex items-center gap-1 border border-white/10">
-                <FiUser size={10} className="text-purple-400" />
+              <div className="absolute top-2.5 left-2.5 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[10px] font-bold text-white flex items-center gap-1.5 border border-white/10">
+                <FiUser size={11} className="text-zinc-300" />
                 <span>You ({participantRole === "trainer" ? "Trainer" : "Student"})</span>
               </div>
-              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] text-zinc-300 border border-white/10">
-                {isMicOn ? <FiMic size={11} className="text-emerald-400" /> : <FiMicOff size={11} className="text-red-400" />}
+              <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg text-[10px] text-zinc-300 border border-white/10">
+                {isMicOn ? <FiMic size={12} className="text-emerald-400" /> : <FiMicOff size={12} className="text-red-400" />}
               </div>
             </div>
 
             {/* Remote Peer Video Tile */}
-            <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-white/10 flex items-center justify-center shadow-lg">
+            <div className="relative aspect-video rounded-2xl overflow-hidden bg-[#111318] border border-gray-200 flex items-center justify-center shadow-md">
               <video
                 ref={remoteVideoRef}
                 autoPlay
@@ -923,18 +1067,18 @@ function LiveInterviewRoom({ user }) {
                 }`}
               />
               {(!peerConnected || !remoteStream) && (
-                <div className="flex flex-col items-center justify-center text-zinc-500 p-2 text-center">
-                  <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-1 animate-pulse">
-                    <FiUser size={14} className="text-zinc-400" />
+                <div className="flex flex-col items-center justify-center text-zinc-400 p-2 text-center">
+                  <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-1.5 animate-pulse">
+                    <FiUser size={15} className="text-white" />
                   </div>
-                  <span className="text-[11px] font-semibold text-zinc-400">
+                  <span className="text-[11px] font-bold text-zinc-200">
                     {participantRole === "trainer" ? "Waiting for Student" : "Waiting for Trainer"}
                   </span>
-                  <span className="text-[9px] text-zinc-600 mt-0.5">Connecting peer WebRTC...</span>
+                  <span className="text-[9px] text-zinc-400 mt-0.5">Connecting peer WebRTC...</span>
                 </div>
               )}
-              <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] font-semibold text-white flex items-center gap-1 border border-white/10">
-                <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? "bg-emerald-400" : "bg-amber-400"}`} />
+              <div className="absolute top-2.5 left-2.5 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[10px] font-bold text-white flex items-center gap-1.5 border border-white/10">
+                <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
                 <span>
                   {peerInfo.userName || (participantRole === "trainer" ? scheduled?.studentName || "Candidate" : scheduled?.trainerName || "Faculty")}
                 </span>
@@ -943,46 +1087,46 @@ function LiveInterviewRoom({ user }) {
           </div>
 
           {/* Media Control Toolbar */}
-          <div className="px-3.5 py-2 bg-[#0E1017] border-b border-white/10 flex items-center justify-between shrink-0">
+          <div className="px-4 py-2.5 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <button
                 onClick={toggleMic}
-                className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                   isMicOn
-                    ? "bg-zinc-800 hover:bg-zinc-700 text-white"
-                    : "bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30"
+                    ? "bg-gray-100 hover:bg-gray-200 text-gray-900 border border-gray-200"
+                    : "bg-red-50 hover:bg-red-100 text-red-600 border border-red-200"
                 }`}
                 title={isMicOn ? "Mute Microphone" : "Unmute Microphone"}
               >
-                {isMicOn ? <FiMic size={14} className="text-emerald-400" /> : <FiMicOff size={14} />}
+                {isMicOn ? <FiMic size={14} className="text-emerald-600" /> : <FiMicOff size={14} />}
                 <span className="text-[11px]">{isMicOn ? "Mic On" : "Muted"}</span>
               </button>
 
               <button
                 onClick={toggleCamera}
-                className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                   isCameraOn
-                    ? "bg-zinc-800 hover:bg-zinc-700 text-white"
-                    : "bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30"
+                    ? "bg-gray-100 hover:bg-gray-200 text-gray-900 border border-gray-200"
+                    : "bg-red-50 hover:bg-red-100 text-red-600 border border-red-200"
                 }`}
                 title={isCameraOn ? "Turn Camera Off" : "Turn Camera On"}
               >
-                {isCameraOn ? <FiVideo size={14} className="text-blue-400" /> : <FiVideoOff size={14} />}
+                {isCameraOn ? <FiVideo size={14} className="text-blue-600" /> : <FiVideoOff size={14} />}
                 <span className="text-[11px]">{isCameraOn ? "Camera On" : "Camera Off"}</span>
               </button>
             </div>
 
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
-              P2P Encrypted Stream
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">
+              🔒 P2P Encrypted Stream
             </span>
           </div>
 
           {/* B. ACTIVE QUESTION DISPLAY & SELECTOR */}
-          <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4">
+          <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4 bg-white">
             {/* Question Selector Strip */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                <FiFileText size={13} className="text-purple-400" />
+              <span className="text-xs font-black uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                <FiFileText size={14} className="text-gray-900" />
                 <span>Interview Questions ({questions.length})</span>
               </span>
 
@@ -992,10 +1136,10 @@ function LiveInterviewRoom({ user }) {
                     <button
                       key={q._id || idx}
                       onClick={() => switchQuestion(idx)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition border ${
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition border cursor-pointer ${
                         activeQuestionIndex === idx
-                          ? "bg-purple-600 text-white border-purple-500"
-                          : "bg-white/5 hover:bg-white/10 text-zinc-400 border-white/5"
+                          ? "bg-gray-900 text-white font-black border-gray-900 shadow-xs"
+                          : "bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-200"
                       }`}
                     >
                       Q{idx + 1}
@@ -1006,19 +1150,19 @@ function LiveInterviewRoom({ user }) {
             </div>
 
             {/* Active Question Card */}
-            <div className="bg-[#12141D] border border-white/10 rounded-2xl p-4.5 space-y-3 shadow-lg">
+            <div className="bg-[#111318] text-white border border-gray-900/10 rounded-2xl p-5 space-y-3 shadow-md">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
                   Question #{activeQuestionIndex + 1}
                 </span>
 
                 <span
-                  className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                  className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
                     activeQuestion.difficulty === "easy"
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                       : activeQuestion.difficulty === "hard"
-                      ? "bg-red-500/10 text-red-400 border-red-500/20"
-                      : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                      ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                      : "bg-amber-500/20 text-amber-300 border-amber-500/30"
                   }`}
                 >
                   {activeQuestion.difficulty || "medium"}
@@ -1032,16 +1176,16 @@ function LiveInterviewRoom({ user }) {
 
             {/* Trainer Only: Push New Live Question Form */}
             {participantRole === "trainer" && (
-              <div className="bg-[#12141D] border border-purple-500/20 rounded-2xl p-4 space-y-3 mt-auto">
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3 mt-auto shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <FiPlus size={13} className="text-purple-400" />
+                  <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                    <FiPlus size={14} className="text-gray-900" />
                     <span>Push New Question to Student</span>
                   </span>
                   <select
                     value={newQuestionDifficulty}
                     onChange={(e) => setNewQuestionDifficulty(e.target.value)}
-                    className="bg-[#1B1D27] border border-white/10 text-xs text-zinc-300 rounded-lg px-2 py-1 outline-none font-semibold"
+                    className="bg-white border border-gray-200 text-xs text-gray-800 rounded-xl px-2.5 py-1 outline-none font-semibold shadow-xs"
                   >
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
@@ -1054,13 +1198,13 @@ function LiveInterviewRoom({ user }) {
                   onChange={(e) => setNewQuestionText(e.target.value)}
                   placeholder="Type an interview question or problem statement to push in real-time..."
                   rows={2}
-                  className="w-full bg-[#181A24] border border-white/10 rounded-xl p-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-purple-500/50 resize-none"
+                  className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs text-gray-900 placeholder-gray-400 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 resize-none shadow-xs"
                 />
 
                 <button
                   onClick={handlePushQuestion}
                   disabled={!newQuestionText.trim() || isPushingQuestion}
-                  className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md"
+                  className="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-black disabled:opacity-40 text-white text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
                 >
                   <FiSend size={12} />
                   <span>Push to Room</span>
@@ -1071,56 +1215,56 @@ function LiveInterviewRoom({ user }) {
         </div>
 
         {/* RIGHT PANEL: Tabbed Workspace (Answer / Synced Monaco / Rubric) (58% width) */}
-        <div className="w-full lg:w-[58%] flex flex-col bg-[#0D0E15] overflow-hidden">
+        <div className="w-full lg:w-[58%] flex flex-col bg-[#F8F9FA] overflow-hidden">
           {/* Workspace Tabs Header */}
-          <div className="h-11 border-b border-white/10 bg-[#0A0B10] px-4 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-1.5">
+          <div className="h-14 border-b border-gray-200 bg-white px-5 flex items-center justify-between shrink-0 shadow-xs">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveTab("answer")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "answer"
-                    ? "bg-purple-600/20 text-purple-300 border border-purple-500/30"
-                    : "text-zinc-400 hover:text-white"
+                    ? "bg-gray-900 text-white shadow-xs font-black"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 }`}
               >
-                <FiFileText size={13} />
+                <FiFileText size={14} />
                 <span>Live Answer & Voice</span>
               </button>
 
               <button
                 onClick={() => setActiveTab("code")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === "code"
-                    ? "bg-purple-600/20 text-purple-300 border border-purple-500/30"
-                    : "text-zinc-400 hover:text-white"
+                    ? "bg-gray-900 text-white shadow-xs font-black"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 }`}
               >
-                <FiCode size={13} />
+                <FiCode size={14} />
                 <span>Shared Monaco Code</span>
               </button>
 
               {participantRole === "trainer" ? (
                 <button
                   onClick={() => setActiveTab("rubric")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === "rubric"
-                      ? "bg-emerald-600/20 text-emerald-300 border border-emerald-500/30"
-                      : "text-zinc-400 hover:text-white"
+                      ? "bg-gray-900 text-white shadow-xs font-black"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                 >
-                  <FiSliders size={13} />
+                  <FiSliders size={14} />
                   <span>Rubric & Notes (Trainer Only)</span>
                 </button>
               ) : (
                 <button
                   onClick={() => setActiveTab("guide")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === "guide"
-                      ? "bg-blue-600/20 text-blue-300 border border-blue-500/30"
-                      : "text-zinc-400 hover:text-white"
+                      ? "bg-gray-900 text-white font-black shadow-xs"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                 >
-                  <FiHelpCircle size={13} />
+                  <FiHelpCircle size={14} />
                   <span>Live Interview Guide</span>
                 </button>
               )}
@@ -1131,7 +1275,7 @@ function LiveInterviewRoom({ user }) {
                 <select
                   value={language}
                   onChange={(e) => handleLanguageChange(e.target.value)}
-                  className="bg-[#171822] border border-white/10 text-xs text-zinc-300 rounded-lg px-2 py-1 outline-none font-semibold cursor-pointer"
+                  className="bg-gray-50 border border-gray-200 text-xs text-gray-800 rounded-xl px-2.5 py-1.5 outline-none font-semibold cursor-pointer shadow-xs"
                 >
                   {LANG_OPTIONS.map((lang) => (
                     <option key={lang} value={lang}>
@@ -1143,12 +1287,12 @@ function LiveInterviewRoom({ user }) {
                 <button
                   onClick={handleRunCode}
                   disabled={isRunningCode}
-                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                  className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                 >
                   {isRunningCode ? (
-                    <FiRefreshCw size={11} className="animate-spin" />
+                    <FiRefreshCw size={12} className="animate-spin" />
                   ) : (
-                    <FiPlay size={11} />
+                    <FiPlay size={12} />
                   )}
                   <span>Run</span>
                 </button>
@@ -1160,15 +1304,15 @@ function LiveInterviewRoom({ user }) {
           <div className="flex-1 overflow-hidden flex flex-col">
             {/* TAB 1: LIVE ANSWER & SPEECH-TO-TEXT */}
             {activeTab === "answer" && (
-              <div className="flex-1 p-4 flex flex-col space-y-3 overflow-y-auto">
-                <div className="flex items-center justify-between bg-[#13141F] border border-white/5 rounded-xl p-3 shrink-0">
+              <div className="flex-1 p-5 flex flex-col space-y-3 overflow-y-auto">
+                <div className="flex items-center justify-between bg-white border border-gray-200 rounded-2xl p-4 shrink-0 shadow-xs">
                   <div>
-                    <h4 className="text-xs font-bold text-white">
+                    <h4 className="text-xs font-black text-gray-900">
                       {participantRole === "student"
                         ? "Candidate Answer Space"
                         : "Candidate's Live Streamed Response"}
                     </h4>
-                    <p className="text-[11px] text-zinc-400">
+                    <p className="text-[11px] text-gray-500 mt-0.5">
                       {participantRole === "student"
                         ? "Speak using speech-to-text dictation or type your detailed explanation below."
                         : "Watching candidate's verbal and typed response sync in real-time."}
@@ -1178,13 +1322,13 @@ function LiveInterviewRoom({ user }) {
                   {participantRole === "student" && speechSupported && (
                     <button
                       onClick={toggleDictation}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm ${
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer ${
                         isDictating
                           ? "bg-red-600 text-white animate-pulse"
-                          : "bg-purple-600 hover:bg-purple-500 text-white"
+                          : "bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold"
                       }`}
                     >
-                      <FiMic size={13} />
+                      <FiMic size={14} />
                       <span>{isDictating ? "Listening (Dictating...)" : "Voice Dictate"}</span>
                     </button>
                   )}
@@ -1200,12 +1344,15 @@ function LiveInterviewRoom({ user }) {
                         ? "Speak or type your answer here. Everything you provide is visible to the faculty trainer in real-time..."
                         : "Candidate's answer will appear here in real-time as they speak or type..."
                     }
-                    className="w-full flex-1 min-h-[300px] bg-[#10111A] border border-white/10 rounded-2xl p-4 text-sm text-white placeholder-zinc-500 outline-none focus:border-purple-500/50 resize-none font-sans leading-relaxed"
+                    className="w-full flex-1 min-h-[320px] bg-white border border-gray-200 rounded-2xl p-5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 resize-none font-sans leading-relaxed shadow-xs"
                   />
 
                   {participantRole === "student" && (
-                    <div className="mt-2 text-[11px] text-zinc-500 flex items-center justify-between">
-                      <span>Live Synced with Trainer Room</span>
+                    <div className="mt-2 text-[11px] text-gray-500 font-semibold flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        Live Synced with Trainer Room
+                      </span>
                       <span>{studentAnswer.split(/\s+/).filter(Boolean).length} words</span>
                     </div>
                   )}
@@ -1235,21 +1382,21 @@ function LiveInterviewRoom({ user }) {
                 </div>
 
                 {/* Console Output Tray */}
-                <div className="h-44 border-t border-white/10 bg-[#090A0F] flex flex-col shrink-0">
-                  <div className="h-8 border-b border-white/5 px-3 flex items-center justify-between bg-[#0E1017]">
+                <div className="h-48 border-t border-gray-200 bg-[#111318] text-white flex flex-col shrink-0">
+                  <div className="h-9 border-b border-white/10 px-4 flex items-center justify-between bg-[#161822]">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setCodeTab("output")}
-                        className={`text-[11px] font-bold px-2 py-0.5 rounded transition ${
-                          codeTab === "output" ? "bg-white/10 text-white" : "text-zinc-500"
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                          codeTab === "output" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white"
                         }`}
                       >
                         Terminal Output
                       </button>
                       <button
                         onClick={() => setCodeTab("stdin")}
-                        className={`text-[11px] font-bold px-2 py-0.5 rounded transition ${
-                          codeTab === "stdin" ? "bg-white/10 text-white" : "text-zinc-500"
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                          codeTab === "stdin" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white"
                         }`}
                       >
                         Standard Input (stdin)
@@ -1263,7 +1410,7 @@ function LiveInterviewRoom({ user }) {
                     )}
                   </div>
 
-                  <div className="flex-1 p-3 overflow-y-auto font-mono text-xs text-zinc-300">
+                  <div className="flex-1 p-3.5 overflow-y-auto font-mono text-xs text-zinc-300">
                     {codeTab === "output" ? (
                       codeOutput ? (
                         <div>
@@ -1285,7 +1432,7 @@ function LiveInterviewRoom({ user }) {
                           )}
                         </div>
                       ) : (
-                        <span className="text-zinc-600">
+                        <span className="text-zinc-500">
                           Click "Run" to compile and execute your code in an isolated sandbox.
                         </span>
                       )
@@ -1304,21 +1451,21 @@ function LiveInterviewRoom({ user }) {
 
             {/* TAB 3: TRAINER-ONLY RUBRIC EVALUATION & PRIVATE NOTES */}
             {activeTab === "rubric" && participantRole === "trainer" && (
-              <div className="flex-1 p-5 overflow-y-auto space-y-6">
-                <div className="bg-[#12131D] border border-purple-500/20 rounded-2xl p-4 flex items-center justify-between">
+              <div className="flex-1 p-6 overflow-y-auto space-y-6">
+                <div className="bg-[#111318] text-white border border-gray-900/10 rounded-2xl p-5 flex items-center justify-between shadow-md">
                   <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <FiAward className="text-purple-400" />
+                    <h3 className="text-sm font-black text-white flex items-center gap-2">
+                      <FiAward className="text-emerald-400" />
                       <span>Live Candidate Evaluation Rubric</span>
                     </h3>
-                    <p className="text-xs text-zinc-400 mt-0.5">
+                    <p className="text-xs text-zinc-400 mt-1">
                       Adjust criteria sliders. Scoring saves directly to the student's unified performance record.
                     </p>
                   </div>
 
                   <div className="text-right">
                     <span className="text-xs text-zinc-400 block font-semibold">Overall Score</span>
-                    <span className="text-2xl font-black text-purple-400">{overallScore}/100</span>
+                    <span className="text-3xl font-black text-emerald-400">{overallScore}/100</span>
                   </div>
                 </div>
 
@@ -1332,10 +1479,12 @@ function LiveInterviewRoom({ user }) {
                     { key: "relevance", label: "Technical Relevance (10%)", desc: "Domain knowledge fit" },
                     { key: "communication", label: "Communication (10%)", desc: "Verbal articulation" },
                   ].map((crit) => (
-                    <div key={crit.key} className="bg-[#11121A] border border-white/5 rounded-xl p-3.5 space-y-2">
+                    <div key={crit.key} className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2 shadow-xs">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-white">{crit.label}</span>
-                        <span className="font-mono font-bold text-purple-400">{criteria[crit.key]}/100</span>
+                        <span className="font-black text-gray-900">{crit.label}</span>
+                        <span className="font-mono font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">
+                          {criteria[crit.key]}/100
+                        </span>
                       </div>
                       <input
                         type="range"
@@ -1346,9 +1495,9 @@ function LiveInterviewRoom({ user }) {
                           const val = Number(e.target.value);
                           setCriteria((prev) => ({ ...prev, [crit.key]: val }));
                         }}
-                        className="w-full accent-purple-500 h-1.5 bg-zinc-800 rounded-lg cursor-pointer"
+                        className="w-full accent-gray-900 h-2 bg-gray-100 rounded-lg cursor-pointer"
                       />
-                      <p className="text-[10px] text-zinc-500">{crit.desc}</p>
+                      <p className="text-[10px] text-gray-500">{crit.desc}</p>
                     </div>
                   ))}
                 </div>
@@ -1357,7 +1506,7 @@ function LiveInterviewRoom({ user }) {
                 <button
                   type="button"
                   onClick={calculateWeightedScore}
-                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold border border-white/10 transition"
+                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold border border-gray-200 transition shadow-xs cursor-pointer"
                 >
                   Recalculate Weighted Overall Score
                 </button>
@@ -1365,18 +1514,18 @@ function LiveInterviewRoom({ user }) {
                 {/* Strengths & Weaknesses Tags */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Strengths */}
-                  <div className="bg-[#11121A] border border-white/5 rounded-xl p-3.5 space-y-2">
-                    <span className="text-xs font-bold text-emerald-400 block">Candidate Strengths</span>
+                  <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-2xl p-4 space-y-2.5 shadow-xs">
+                    <span className="text-xs font-black text-emerald-800 block">Candidate Strengths</span>
                     <div className="flex flex-wrap gap-1.5">
                       {strengths.map((s, i) => (
                         <span
                           key={i}
-                          className="text-[11px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-md flex items-center gap-1"
+                          className="text-[11px] bg-white border border-emerald-300 text-emerald-800 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs"
                         >
                           {s}
                           <button
                             onClick={() => setStrengths(strengths.filter((_, idx) => idx !== i))}
-                            className="hover:text-white"
+                            className="hover:text-emerald-950 font-bold cursor-pointer"
                           >
                             ×
                           </button>
@@ -1388,11 +1537,11 @@ function LiveInterviewRoom({ user }) {
                         value={newStrengthInput}
                         onChange={(e) => setNewStrengthInput(e.target.value)}
                         placeholder="Add strength tag..."
-                        className="flex-1 bg-[#171924] border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                        className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-900 outline-none focus:border-emerald-600 shadow-2xs"
                       />
                       <button
                         type="submit"
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold"
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer shadow-xs"
                       >
                         Add
                       </button>
@@ -1400,18 +1549,18 @@ function LiveInterviewRoom({ user }) {
                   </div>
 
                   {/* Weaknesses */}
-                  <div className="bg-[#11121A] border border-white/5 rounded-xl p-3.5 space-y-2">
-                    <span className="text-xs font-bold text-amber-400 block">Areas for Improvement</span>
+                  <div className="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-4 space-y-2.5 shadow-xs">
+                    <span className="text-xs font-black text-amber-800 block">Areas for Improvement</span>
                     <div className="flex flex-wrap gap-1.5">
                       {weaknesses.map((w, i) => (
                         <span
                           key={i}
-                          className="text-[11px] bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1"
+                          className="text-[11px] bg-white border border-amber-300 text-amber-800 font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-2xs"
                         >
                           {w}
                           <button
                             onClick={() => setWeaknesses(weaknesses.filter((_, idx) => idx !== i))}
-                            className="hover:text-white"
+                            className="hover:text-amber-950 font-bold cursor-pointer"
                           >
                             ×
                           </button>
@@ -1423,11 +1572,11 @@ function LiveInterviewRoom({ user }) {
                         value={newWeaknessInput}
                         onChange={(e) => setNewWeaknessInput(e.target.value)}
                         placeholder="Add improvement tag..."
-                        className="flex-1 bg-[#171924] border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                        className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-900 outline-none focus:border-amber-600 shadow-2xs"
                       />
                       <button
                         type="submit"
-                        className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-xs font-bold"
+                        className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer shadow-xs"
                       >
                         Add
                       </button>
@@ -1436,8 +1585,8 @@ function LiveInterviewRoom({ user }) {
                 </div>
 
                 {/* Summary Feedback */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-white block">
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2 shadow-xs">
+                  <label className="text-xs font-black text-gray-900 block">
                     Summary Feedback (Shared with Candidate in Report)
                   </label>
                   <textarea
@@ -1445,14 +1594,14 @@ function LiveInterviewRoom({ user }) {
                     onChange={(e) => setSummaryFeedback(e.target.value)}
                     placeholder="Provide constructive feedback for the candidate's development..."
                     rows={3}
-                    className="w-full bg-[#11121A] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-zinc-500 outline-none focus:border-purple-500/50 resize-none"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-900 placeholder-gray-400 outline-none focus:bg-white focus:border-gray-900 resize-none shadow-2xs"
                   />
                 </div>
 
                 {/* Trainer Private Notes (Strictly Hidden from Student) */}
-                <div className="bg-[#14121A] border border-amber-500/20 rounded-xl p-3.5 space-y-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                    <FiLock size={12} />
+                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 space-y-2 shadow-xs">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-amber-900">
+                    <FiLock size={13} />
                     <span>Faculty Private Notes (Confidential — Strictly Redacted from Student)</span>
                   </div>
                   <textarea
@@ -1460,7 +1609,7 @@ function LiveInterviewRoom({ user }) {
                     onChange={(e) => setTrainerPrivateNotes(e.target.value)}
                     placeholder="Confidential notes for academic records / placement cell only..."
                     rows={2}
-                    className="w-full bg-[#181520] border border-amber-500/20 rounded-lg p-2.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-amber-500/50 resize-none"
+                    className="w-full bg-white border border-amber-300 rounded-xl p-3 text-xs text-amber-950 placeholder-amber-400 outline-none focus:border-amber-600 resize-none shadow-2xs"
                   />
                 </div>
 
@@ -1468,7 +1617,7 @@ function LiveInterviewRoom({ user }) {
                 <button
                   onClick={handleSubmitEvaluation}
                   disabled={isSubmittingEvaluation}
-                  className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-bold transition flex items-center justify-center gap-2 shadow-xl"
+                  className="w-full py-3.5 rounded-2xl bg-gray-900 hover:bg-black disabled:opacity-40 text-white text-sm font-black transition flex items-center justify-center gap-2 shadow-xl cursor-pointer"
                 >
                   {isSubmittingEvaluation ? (
                     <FiRefreshCw size={15} className="animate-spin" />
@@ -1483,38 +1632,38 @@ function LiveInterviewRoom({ user }) {
             {/* TAB 3 (STUDENT VIEW): LIVE INTERVIEW GUIDE */}
             {activeTab === "guide" && (
               <div className="flex-1 p-6 overflow-y-auto space-y-4">
-                <div className="bg-[#12131D] border border-white/10 rounded-2xl p-5 space-y-3">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <FiHelpCircle className="text-blue-400" />
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4 shadow-xs">
+                  <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+                    <FiHelpCircle className="text-blue-600" />
                     <span>Live Technical Interview Guidelines</span>
                   </h3>
-                  <p className="text-xs text-zinc-300 leading-relaxed">
+                  <p className="text-xs text-gray-600 leading-relaxed">
                     Welcome to your institutional live interview. Follow these best practices to maximize your performance:
                   </p>
 
-                  <div className="space-y-2 text-xs text-zinc-400 pt-2">
-                    <div className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5" />
+                  <div className="space-y-2.5 text-xs text-gray-700 pt-1">
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0" />
                       <span>
-                        <strong className="text-white">Communicate your thoughts clearly:</strong> Explain your approach before jumping into code.
+                        <strong className="text-gray-900">Communicate your thoughts clearly:</strong> Explain your approach before jumping into code.
                       </span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5" />
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0" />
                       <span>
-                        <strong className="text-white">Use Voice Dictation or Text:</strong> You can speak to dictate your answers or type them in the Answer space.
+                        <strong className="text-gray-900">Use Voice Dictation or Text:</strong> You can speak to dictate your answers or type them in the Answer space.
                       </span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5" />
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0" />
                       <span>
-                        <strong className="text-white">Shared Monaco Editor:</strong> The faculty trainer can see your code updates in real-time. Use the "Run" button to verify output.
+                        <strong className="text-gray-900">Shared Monaco Editor:</strong> The faculty trainer can see your code updates in real-time. Use the "Run" button to verify output.
                       </span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5" />
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0" />
                       <span>
-                        <strong className="text-white">Clarify Requirements:</strong> Feel free to ask the trainer questions if a problem statement is ambiguous.
+                        <strong className="text-gray-900">Clarify Requirements:</strong> Feel free to ask the trainer questions if a problem statement is ambiguous.
                       </span>
                     </div>
                   </div>
@@ -1527,33 +1676,33 @@ function LiveInterviewRoom({ user }) {
 
       {/* 3. SESSION CONCLUSION & REPORT MODAL */}
       {showEndModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="max-w-lg w-full bg-[#10121A] border border-white/10 rounded-3xl p-6 text-white shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="max-w-lg w-full bg-white border border-gray-200 rounded-3xl p-7 text-gray-900 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mx-auto text-purple-400">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600 shadow-xs">
                 <FiCheckCircle size={28} />
               </div>
-              <h3 className="text-lg font-black text-white">Live Interview Concluded</h3>
-              <p className="text-xs text-zinc-400">
+              <h3 className="text-lg font-black text-gray-900">Live Interview Concluded</h3>
+              <p className="text-xs text-gray-500">
                 The session has been finalized and saved into the institutional performance directory.
               </p>
             </div>
 
             {sessionCompletedReport?.evaluation && (
-              <div className="bg-[#171924] border border-white/5 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                  <span className="text-xs text-zinc-400 font-semibold">Overall Evaluation Score</span>
-                  <span className="text-xl font-black text-purple-400">
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2.5">
+                  <span className="text-xs text-gray-600 font-semibold">Overall Evaluation Score</span>
+                  <span className="text-2xl font-black text-emerald-600">
                     {sessionCompletedReport.evaluation.overallScore || overallScore}/100
                   </span>
                 </div>
 
                 {sessionCompletedReport.evaluation.summaryFeedback && (
                   <div>
-                    <span className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">
+                    <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">
                       Faculty Feedback
                     </span>
-                    <p className="text-xs text-zinc-300 bg-black/30 p-2.5 rounded-xl border border-white/5">
+                    <p className="text-xs text-gray-700 bg-white p-3 rounded-xl border border-gray-200 shadow-2xs">
                       {sessionCompletedReport.evaluation.summaryFeedback}
                     </p>
                   </div>
@@ -1563,7 +1712,7 @@ function LiveInterviewRoom({ user }) {
 
             <button
               onClick={() => navigate("/dashboard")}
-              className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition shadow-lg flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-black transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Return to Dashboard</span>
               <FiChevronRight size={14} />

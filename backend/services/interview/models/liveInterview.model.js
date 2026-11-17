@@ -4,7 +4,7 @@ const liveQuestionSchema = new mongoose.Schema(
   {
     questionText: {
       type: String,
-      required: true,
+      default: "Live Interview Discussion",
       trim: true,
     },
     difficulty: {

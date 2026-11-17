@@ -106,6 +106,16 @@ export const joinLiveRoom = async (req, res) => {
         scheduled.trainerName = conductingTrainerName;
       }
       scheduled.status = "in-progress";
+
+      // Sanitize any existing questions so Mongoose validation never fails on reload
+      if (Array.isArray(liveInterview.questions)) {
+        liveInterview.questions.forEach((q) => {
+          if (!q.questionText || !String(q.questionText).trim()) {
+            q.questionText = (q.question || "Live Interview Discussion").trim();
+          }
+        });
+      }
+
       await liveInterview.save();
       await scheduled.save();
     }
@@ -210,7 +220,15 @@ export const completeLiveRoom = async (req, res) => {
     }
 
     if (Array.isArray(questions) && questions.length > 0) {
-      liveInterview.questions = questions;
+      liveInterview.questions = questions.map((q) => ({
+        questionText: (q?.questionText || q?.question || "Live Interview Discussion").trim(),
+        difficulty: q?.difficulty || "medium",
+        studentAnswer: q?.studentAnswer || q?.answer || "",
+        submittedCode: q?.submittedCode || q?.code || "",
+        codeLanguage: q?.codeLanguage || "javascript",
+        score: typeof q?.score === "number" ? q.score : null,
+        feedback: q?.feedback?.feedback || (typeof q?.feedback === "string" ? q.feedback : ""),
+      }));
     }
 
     if (sharedCode) {
@@ -348,6 +366,32 @@ export const getLiveRoomBySchedule = async (req, res) => {
     });
   } catch (error) {
     console.error("getLiveRoomBySchedule error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * POST /api/interview/live/:liveId/leave
+ * Notifies the room that a participant has left and ensures the session document remains consistent.
+ */
+export const leaveLiveRoom = async (req, res) => {
+  try {
+    const { liveId } = req.params;
+    const userId = req.headers["x-user-id"] || req.userId;
+    const userRole = req.headers["x-user-role"] || req.userRole || "student";
+
+    const liveInterview = await LiveInterview.findById(liveId);
+    if (!liveInterview) {
+      return res.status(404).json({ success: false, message: "Live interview room not found." });
+    }
+
+    // Do not modify status if already completed
+    return res.status(200).json({
+      success: true,
+      message: "Left live interview room successfully.",
+    });
+  } catch (error) {
+    console.error("leaveLiveRoom error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

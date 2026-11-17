@@ -36,6 +36,9 @@ function Sidebar({
   const navigate = useNavigate();
   const location = useLocation();
   const role = user?.role || 'student';
+  const displayCollegeName =
+    user?.profile?.collegeName?.trim() ||
+    (user?.institutionId && user.institutionId !== "DEFAULT_COLLEGE" ? user.institutionId : "DEFAULT_COLLEGE");
   const avatar = user?.name
     ? user.name
         .split(' ')
@@ -213,8 +216,11 @@ function Sidebar({
               >
                 Yugam
               </motion.span>
-              <span className="text-[9px] uppercase tracking-wider font-bold text-black/40">
-                {user?.institutionId || 'College Portal'}
+              <span
+                className="text-[9px] uppercase tracking-wider font-bold text-black/40 truncate max-w-[130px]"
+                title={displayCollegeName}
+              >
+                {displayCollegeName}
               </span>
             </div>
           </div>

@@ -178,6 +178,16 @@ export const completeLiveRoom = async (liveId, data) => {
   }
 };
 
+export const leaveLiveRoomApi = async (liveId) => {
+  try {
+    const response = await api.post(`/api/interview/live/${liveId}/leave`);
+    return response.data;
+  } catch (error) {
+    console.error("leaveLiveRoomApi error:", error);
+    return error.response?.data || { success: false, message: error.message };
+  }
+};
+
 export const getLiveRoomReport = async (liveId) => {
   try {
     const response = await api.get(`/api/interview/live/${liveId}`);

@@ -169,6 +169,9 @@ function Dashboard({ user: propUser, setUser: setAppUser }) {
   const [provisionInput, setProvisionInput] = useState("");
 
   const role = user?.role || "student";
+  const displayCollegeName =
+    user?.profile?.collegeName?.trim() ||
+    (user?.institutionId && user.institutionId !== "DEFAULT_COLLEGE" ? user.institutionId : "DEFAULT_COLLEGE");
 
   // Load User Data
   const fetchUser = async () => {
@@ -457,7 +460,7 @@ function Dashboard({ user: propUser, setUser: setAppUser }) {
                 <>
                   <div className="flex items-center gap-2">
                     <p className="text-black/40 text-[11px] md:text-xs font-semibold uppercase tracking-wider">
-                      {role} Workspace • {user?.institutionId || "College Portal"}
+                      {role} Workspace • {displayCollegeName}
                     </p>
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${

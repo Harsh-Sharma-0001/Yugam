@@ -139,12 +139,22 @@ export const initLiveRoomSocket = (httpServer) => {
     // Workspace: Trainer pushes a question to the room
     socket.on("workspace:question-push", async ({ liveId, questionText, difficulty }) => {
       try {
-        if (!liveId || !questionText) return;
+        if (!liveId) return;
+        const text = (questionText || "").trim() || "Live Interview Question";
         const liveInterview = await LiveInterview.findById(liveId);
         if (!liveInterview) return;
 
+        // Ensure all existing questions have valid questionText
+        if (Array.isArray(liveInterview.questions)) {
+          liveInterview.questions.forEach((q) => {
+            if (!q.questionText || !String(q.questionText).trim()) {
+              q.questionText = (q.question || "Live Interview Discussion").trim();
+            }
+          });
+        }
+
         const newQuestion = {
-          questionText: questionText.trim(),
+          questionText: text,
           difficulty: difficulty || "medium",
           studentAnswer: "",
           submittedCode: "",
@@ -248,6 +258,17 @@ export const initLiveRoomSocket = (httpServer) => {
       io.to(`live:${liveId}`).emit("workspace:session-ended", {
         liveId,
         report,
+      });
+    });
+
+    // Workspace: Participant left the room / concluded session
+    socket.on("workspace:peer-left", ({ liveId, leftByRole, leftByName, reason }) => {
+      if (!liveId) return;
+      io.to(`live:${liveId}`).emit("workspace:peer-left", {
+        liveId,
+        leftByRole: leftByRole || socket.data?.role || "participant",
+        leftByName: leftByName || socket.data?.userName || "Participant",
+        reason: reason || "ended",
       });
     });
 
