@@ -2,7 +2,16 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import redis from "../shared/redis/redis.js";
 import Interview from "../services/interview/models/interview.model.js";
+import LiveInterview from "../services/interview/models/liveInterview.model.js";
+import User from "../services/auth/models/user.model.js";
+import CoinTransaction from "../services/auth/models/CoinTransaction.js";
+import { addCoins, refundFeatureCoins } from "../services/auth/controllers/auth.controller.js";
+import { submitAnswer } from "../services/interview/controllers/interview.controller.js";
+import graph from "../services/interview/graph/graph.js";
+import { createAnswerUpdateHandler } from "../services/interview/socket/liveRoom.socket.js";
 import { clampScore, getInterviewCacheKey } from "../services/interview/utils/cacheKeys.js";
+
+const mongoose = User.base;
 
 after(async () => {
   try {
@@ -916,5 +925,269 @@ describe("16. Expiring Lease Recovery for Stuck AI Evaluations", () => {
     assert.equal(unlockedByA, false, "Expired Request A's finally block cannot unlock Request B's lock");
     assert.equal(docNowOwnedByB.isEvaluating, true, "Request B's evaluation remains locked");
     assert.equal(docNowOwnedByB.evaluationToken, "token-b");
+  });
+});
+
+describe("17. Direct Controller & Socket Integration Tests (Real Modules)", () => {
+  test("Real submitAnswer: expired evaluationToken cannot overwrite or unlock newer active evaluation", async () => {
+    const origFindOne = Interview.findOne;
+    const origFindOneAndUpdate = Interview.findOneAndUpdate;
+    const origUpdateOne = Interview.updateOne;
+    const origGraphInvoke = graph.invoke;
+
+    let capturedReservationQuery = null;
+    let capturedUpdateQuery = null;
+    let capturedFinallyQuery = null;
+
+    try {
+      graph.invoke = async () => ({
+        feedback: {
+          score: 85,
+          strengths: ["Clean explanation"],
+          improvements: ["Mention task queue"],
+        },
+      });
+
+      // 1. Stub findOne to return an in-progress interview
+      Interview.findOne = async () => ({
+        _id: "interview-live-1",
+        userId: "student-1",
+        status: "in-progress",
+        currentQuestion: 0,
+        questions: [{ question: "Explain event loop", difficulty: "medium" }],
+        role: "Frontend Engineer",
+        type: "technical",
+      });
+
+      // 2. Simulate concurrent scenario:
+      // Request A acquires lock with token-A.
+      // But Request A's lease expires (> 90s), Request B acquires lock with token-B.
+      // When Request A attempts atomic update, query requires token-A, but document has token-B -> returns null!
+      Interview.findOneAndUpdate = async (query, update) => {
+        if (query.$or) {
+          capturedReservationQuery = query;
+          return {
+            _id: "interview-live-1",
+            userId: "student-1",
+            currentQuestion: 0,
+            isEvaluating: true,
+            evaluationToken: "token-A",
+          };
+        } else {
+          capturedUpdateQuery = query;
+          return null; // Overtaken by Request B!
+        }
+      };
+
+      Interview.updateOne = async (filter, update) => {
+        capturedFinallyQuery = filter;
+        return { matchedCount: 0, modifiedCount: 0 };
+      };
+
+      const mockReq = {
+        headers: { "x-user-id": "student-1" },
+        body: { interviewId: "interview-live-1", answer: "Event loop manages microtasks and macrotasks", questionIndex: 0 },
+      };
+
+      let responseStatus = null;
+      let responseBody = null;
+      const mockRes = {
+        status(code) {
+          responseStatus = code;
+          return this;
+        },
+        json(data) {
+          responseBody = data;
+          return this;
+        },
+      };
+
+      await submitAnswer(mockReq, mockRes);
+
+      assert.equal(responseStatus, 409);
+      assert.equal(responseBody.success, false);
+      assert.match(responseBody.message, /Question already submitted or concurrent request in progress/);
+
+      assert.ok(capturedUpdateQuery.evaluationToken, "Update query must require evaluationToken");
+      assert.equal(capturedUpdateQuery.isEvaluating, true);
+
+      assert.equal(capturedFinallyQuery.isEvaluating, true);
+      assert.equal(capturedFinallyQuery.evaluationToken, capturedUpdateQuery.evaluationToken,
+        "Finally block must match exact evaluationToken so expired Request A never unlocks Request B"
+      );
+    } finally {
+      Interview.findOne = origFindOne;
+      Interview.findOneAndUpdate = origFindOneAndUpdate;
+      Interview.updateOne = origUpdateOne;
+      graph.invoke = origGraphInvoke;
+    }
+  });
+
+  test("Real addCoins in NODE_ENV=production enforces replica set transactions and fails fast", async () => {
+    const origEnv = process.env.NODE_ENV;
+    const origAllow = process.env.ALLOW_STANDALONE_MONGO;
+    const origStartSession = mongoose.startSession;
+    const origFindOne = CoinTransaction.findOne;
+
+    try {
+      process.env.NODE_ENV = "production";
+      process.env.ALLOW_STANDALONE_MONGO = "true"; // In production, this should be ignored!
+
+      CoinTransaction.findOne = async () => null;
+
+      // Stub mongoose.startSession to simulate standalone Mongo error (code 20)
+      mongoose.startSession = async () => {
+        const err = new Error("Transaction numbers are only allowed on a replica set member or mongos");
+        err.code = 20;
+        err.codeName = "IllegalOperation";
+        throw err;
+      };
+
+      const mockReq = {
+        body: {
+          userId: new mongoose.Types.ObjectId().toString(),
+          amount: 50,
+          idempotencyKey: "tx-prod-test-1",
+        },
+      };
+
+      let responseStatus = null;
+      let responseBody = null;
+      const mockRes = {
+        status(code) {
+          responseStatus = code;
+          return this;
+        },
+        json(data) {
+          responseBody = data;
+          return this;
+        },
+      };
+
+      await addCoins(mockReq, mockRes);
+
+      assert.equal(responseStatus, 500);
+      assert.equal(responseBody.success, false);
+      assert.match(responseBody.message, /Failed to add coins|Transaction numbers are only allowed/);
+    } finally {
+      process.env.NODE_ENV = origEnv;
+      process.env.ALLOW_STANDALONE_MONGO = origAllow;
+      mongoose.startSession = origStartSession;
+      CoinTransaction.findOne = origFindOne;
+    }
+  });
+
+  test("Real refundFeatureCoins rejects refund when requested amount exceeds verified original debit", async () => {
+    const origFindOne = CoinTransaction.findOne;
+    try {
+      CoinTransaction.findOne = async (query) => {
+        if (query.amount && query.amount.$lt === 0) {
+          return {
+            idempotencyKey: "debit-key-1",
+            userId: "user-abc",
+            amount: -10, // Only 10 coins debited
+            feature: "ROADMAP_GENERATE", // Costs 20 coins
+          };
+        }
+        return null;
+      };
+
+      const mockReq = {
+        body: {
+          userId: "user-abc",
+          action: "ROADMAP_GENERATE",
+          reservationId: "debit-key-1",
+        },
+      };
+
+      let responseStatus = null;
+      let responseBody = null;
+      const mockRes = {
+        status(code) {
+          responseStatus = code;
+          return this;
+        },
+        json(data) {
+          responseBody = data;
+          return this;
+        },
+      };
+
+      await refundFeatureCoins(mockReq, mockRes);
+
+      assert.equal(responseStatus, 400);
+      assert.equal(responseBody.success, false);
+      assert.match(responseBody.message, /exceeds original debit amount/);
+    } finally {
+      CoinTransaction.findOne = origFindOne;
+    }
+  });
+
+  test("Real student answer socket handler rejects negative, non-integer, and out-of-bounds indices", async () => {
+    const origFindById = LiveInterview.findById;
+    const origUpdateOne = LiveInterview.updateOne;
+
+    try {
+      LiveInterview.findById = (id) => ({
+        select: async () => ({
+          questions: [
+            { questionText: "Q1", studentAnswer: "" },
+            { questionText: "Q2", studentAnswer: "" },
+          ],
+        }),
+      });
+      LiveInterview.updateOne = async () => ({ matchedCount: 1, modifiedCount: 1 });
+
+      const errors = [];
+      const broadcasts = [];
+      const mockSocket = {
+        data: { verified: true, role: "student", liveId: "6afc7a9e6609754e2daaddbc" },
+        emit: (event, data) => {
+          if (event === "workspace:error") errors.push(data);
+        },
+        to: () => ({
+          emit: (event, data) => broadcasts.push({ event, data }),
+        }),
+      };
+
+      const handler = createAnswerUpdateHandler(mockSocket, {});
+
+      // Case 1: Negative index (-1)
+      errors.length = 0;
+      broadcasts.length = 0;
+      await handler({ questionIndex: -1, answerText: "Negative answer" });
+      assert.equal(errors.length, 1);
+      assert.equal(errors[0].message, "Invalid question index.");
+      assert.equal(broadcasts.length, 0);
+
+      // Case 2: Non-integer string ("abc")
+      errors.length = 0;
+      broadcasts.length = 0;
+      await handler({ questionIndex: "abc", answerText: "Non-int answer" });
+      assert.equal(errors.length, 1);
+      assert.equal(errors[0].message, "Invalid question index.");
+      assert.equal(broadcasts.length, 0);
+
+      // Case 3: Out of bounds index (2, when questions count is 2)
+      errors.length = 0;
+      broadcasts.length = 0;
+      await handler({ questionIndex: 2, answerText: "Out of bounds answer" });
+      assert.equal(errors.length, 1);
+      assert.match(errors[0].message, /Question index out of bounds/);
+      assert.equal(broadcasts.length, 0);
+
+      // Case 4: Valid index (1)
+      errors.length = 0;
+      broadcasts.length = 0;
+      await handler({ questionIndex: 1, answerText: "Valid answer for Q2" });
+      assert.equal(errors.length, 0);
+      assert.equal(broadcasts.length, 1);
+      assert.equal(broadcasts[0].event, "workspace:answer-updated");
+      assert.equal(broadcasts[0].data.questionIndex, 1);
+      assert.equal(broadcasts[0].data.answerText, "Valid answer for Q2");
+    } finally {
+      LiveInterview.findById = origFindById;
+      LiveInterview.updateOne = origUpdateOne;
+    }
   });
 });

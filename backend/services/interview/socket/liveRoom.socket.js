@@ -21,6 +21,66 @@ const queueDbUpdate = (key, updateFn, delayMs = 500) => {
 };
 
 /**
+ * Factory for student answer update socket handler.
+ * Validates role, bounded input, and stored question index bounds.
+ */
+export const createAnswerUpdateHandler = (socket, io) => async (payload = {}) => {
+  try {
+    if (!socket.data?.verified || socket.data.role !== "student") {
+      socket.emit("workspace:error", { message: "Forbidden: Only candidate students can update answers." });
+      return;
+    }
+
+    const liveId = socket.data.liveId;
+    const rawIndex = payload.questionIndex !== undefined ? payload.questionIndex : 0;
+    const questionIndex = Number(rawIndex);
+
+    if (!Number.isInteger(questionIndex) || questionIndex < 0) {
+      socket.emit("workspace:error", { message: "Invalid question index." });
+      return;
+    }
+
+    // Validate against actual stored questions length in room
+    const liveInterview = await LiveInterview.findById(liveId).select("questions");
+    const roomQuestionsCount = Array.isArray(liveInterview?.questions) ? liveInterview.questions.length : 0;
+
+    if (roomQuestionsCount === 0 || questionIndex >= roomQuestionsCount) {
+      socket.emit("workspace:error", {
+        message: `Question index out of bounds (requested ${questionIndex}, available ${roomQuestionsCount}).`,
+      });
+      return;
+    }
+
+    const answerText = String(payload.answerText || payload.answer || "");
+
+    // Enforce max bounds (15 KB)
+    if (answerText.length > 15360) {
+      return;
+    }
+
+    const roomKey = `live:${liveId}`;
+
+    // Broadcast immediately to trainer so they see live typing/speech
+    if (typeof socket.to === "function") {
+      socket.to(roomKey).emit("workspace:answer-updated", {
+        questionIndex,
+        answerText,
+      });
+    }
+
+    // Debounced persistence to MongoDB (P2-07)
+    queueDbUpdate(`answer:${liveId}:${questionIndex}`, async () => {
+      await LiveInterview.updateOne(
+        { _id: liveId },
+        { $set: { [`questions.${questionIndex}.studentAnswer`]: answerText } }
+      );
+    }, 500);
+  } catch (err) {
+    console.error("workspace:answer-update error:", err);
+  }
+};
+
+/**
  * Initializes and configures the Socket.IO server for real-time live interview rooms.
  * Enforces strict session verification, room-level authorization, and event-level RBAC.
  */
@@ -389,43 +449,7 @@ export const initLiveRoomSocket = (httpServer) => {
     });
 
     // Workspace: Real-time student answer update (P0-02 RBAC strictly student)
-    const handleAnswerUpdate = async (payload = {}) => {
-      try {
-        if (!socket.data?.verified || socket.data.role !== "student") {
-          socket.emit("workspace:error", { message: "Forbidden: Only candidate students can update answers." });
-          return;
-        }
-
-        const liveId = socket.data.liveId;
-        const questionIndex = payload.questionIndex !== undefined ? Number(payload.questionIndex) : 0;
-        const answerText = String(payload.answerText || payload.answer || "");
-
-        // Enforce max bounds (15 KB)
-        if (answerText.length > 15360) {
-          return;
-        }
-
-        const roomKey = `live:${liveId}`;
-
-        // Broadcast immediately to trainer so they see live typing/speech
-        socket.to(roomKey).emit("workspace:answer-updated", {
-          questionIndex,
-          answerText,
-        });
-
-        // Debounced persistence to MongoDB (P2-07)
-        queueDbUpdate(`answer:${liveId}:${questionIndex}`, async () => {
-          if (questionIndex >= 0) {
-            await LiveInterview.updateOne(
-              { _id: liveId },
-              { $set: { [`questions.${questionIndex}.studentAnswer`]: answerText } }
-            );
-          }
-        }, 500);
-      } catch (err) {
-        console.error("workspace:answer-update error:", err);
-      }
-    };
+    const handleAnswerUpdate = createAnswerUpdateHandler(socket, io);
 
     socket.on("workspace:answer-update", handleAnswerUpdate);
     socket.on("workspace:answer-change", handleAnswerUpdate);
