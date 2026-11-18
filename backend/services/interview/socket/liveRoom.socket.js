@@ -119,12 +119,25 @@ export const initLiveRoomSocket = (httpServer) => {
           scheduled = await ScheduledInterview.findById(targetId);
         }
 
+        // Require a valid, existing interview session (P0-02)
+        if (!liveInterview && !scheduled) {
+          socket.emit("room:error", { message: "Interview session not found." });
+          return;
+        }
+
+        // Reject joins if session is already completed or cancelled
+        const sessionStatus = String(liveInterview?.status || scheduled?.status || "").toLowerCase();
+        if (sessionStatus === "completed" || sessionStatus === "cancelled") {
+          socket.emit("room:error", { message: `Interview session is already ${sessionStatus}.` });
+          return;
+        }
+
         const roomInstitutionId = String(
-          liveInterview?.institutionId || scheduled?.institutionId || ""
+          liveInterview?.institutionId || scheduled?.institutionId || "DEFAULT_COLLEGE"
         );
 
         // Verify same institution
-        if (roomInstitutionId && roomInstitutionId !== userInstitutionId) {
+        if (roomInstitutionId !== userInstitutionId) {
           socket.emit("room:error", { message: "Forbidden: Cross-institution live room access denied." });
           return;
         }
@@ -136,7 +149,7 @@ export const initLiveRoomSocket = (httpServer) => {
         const isStudent = studentId === userId;
         const isAssignedTrainer = assignedTrainerId === userId;
         const isInstitutionTrainer =
-          userRole === "trainer" && (!roomInstitutionId || roomInstitutionId === userInstitutionId);
+          userRole === "trainer" && roomInstitutionId === userInstitutionId;
 
         if (!isStudent && !isAssignedTrainer && !isInstitutionTrainer) {
           socket.emit("room:error", { message: "Forbidden: You are not authorized to enter this live room." });
@@ -205,7 +218,7 @@ export const initLiveRoomSocket = (httpServer) => {
 
     // WebRTC Signaling: Offer
     socket.on("webrtc:offer", async ({ targetSocketId, sdp }) => {
-      if (!socket.data?.verified) return;
+      if (!socket.data?.verified || (typeof sdp === "string" && sdp.length > 65536)) return;
       if (targetSocketId) {
         const isAllowed = await verifySignalingTarget(targetSocketId);
         if (isAllowed) {
@@ -224,7 +237,7 @@ export const initLiveRoomSocket = (httpServer) => {
 
     // WebRTC Signaling: Answer
     socket.on("webrtc:answer", async ({ targetSocketId, sdp }) => {
-      if (!socket.data?.verified) return;
+      if (!socket.data?.verified || (typeof sdp === "string" && sdp.length > 65536)) return;
       if (targetSocketId) {
         const isAllowed = await verifySignalingTarget(targetSocketId);
         if (isAllowed) {
@@ -244,6 +257,7 @@ export const initLiveRoomSocket = (httpServer) => {
     // WebRTC Signaling: ICE Candidate
     socket.on("webrtc:ice-candidate", async ({ targetSocketId, candidate }) => {
       if (!socket.data?.verified) return;
+      if (candidate && typeof candidate === "string" && candidate.length > 8192) return;
       if (targetSocketId) {
         const isAllowed = await verifySignalingTarget(targetSocketId);
         if (isAllowed) {
@@ -265,20 +279,22 @@ export const initLiveRoomSocket = (httpServer) => {
       if (!socket.data?.verified) return;
       const { targetSocketId, data, sdp, candidate, type } = payload;
       const signalData = data || sdp || candidate || payload;
+      if (typeof signalData === "string" && signalData.length > 65536) return;
+      const safeType = typeof type === "string" ? type.slice(0, 50) : undefined;
       if (targetSocketId) {
         const isAllowed = await verifySignalingTarget(targetSocketId);
         if (isAllowed) {
           io.to(targetSocketId).emit("live-room:signal", {
             senderSocketId: socket.id,
             data: signalData,
-            type,
+            type: safeType,
           });
         }
       } else {
         socket.to(`live:${socket.data.liveId}`).emit("live-room:signal", {
           senderSocketId: socket.id,
           data: signalData,
-          type,
+          type: safeType,
         });
       }
     });
@@ -339,11 +355,20 @@ export const initLiveRoomSocket = (httpServer) => {
       }
     });
 
-    // Workspace: Switch active question
+    // Workspace: Switch active question (P0-02 RBAC strictly trainer)
     socket.on("workspace:active-question", ({ questionIndex } = {}) => {
-      if (!socket.data?.verified || questionIndex === undefined) return;
+      if (!socket.data?.verified) return;
+      if (socket.data.role !== "trainer") {
+        socket.emit("workspace:error", { message: "Forbidden: Only faculty trainers can switch active questions." });
+        return;
+      }
+      const idx = Number(questionIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx > 100) {
+        socket.emit("workspace:error", { message: "Invalid question index." });
+        return;
+      }
       io.to(`live:${socket.data.liveId}`).emit("workspace:active-question-switched", {
-        questionIndex: Number(questionIndex),
+        questionIndex: idx,
       });
     });
 
@@ -403,7 +428,7 @@ export const initLiveRoomSocket = (httpServer) => {
           return;
         }
 
-        const language = String(payload.language || "javascript");
+        const language = String(payload.language || "javascript").trim().slice(0, 50);
         const roomKey = `live:${liveId}`;
 
         // Broadcast to other participant(s)
@@ -432,20 +457,42 @@ export const initLiveRoomSocket = (httpServer) => {
     socket.on("workspace:code-update", handleCodeUpdate);
     socket.on("workspace:code-change", handleCodeUpdate);
 
+    // Workspace: Synced language change
+    const handleLanguageChange = async (payload = {}) => {
+      try {
+        if (!socket.data?.verified) return;
+        const liveId = socket.data.liveId;
+        const language = String(payload.language || "javascript").trim().slice(0, 50);
+        socket.to(`live:${liveId}`).emit("workspace:language-changed", { language });
+        queueDbUpdate(`lang:${liveId}`, async () => {
+          await LiveInterview.updateOne(
+            { _id: liveId },
+            { $set: { "sharedCode.language": language } }
+          );
+        }, 500);
+      } catch (err) {
+        console.error("workspace:language-change error:", err);
+      }
+    };
+
+    socket.on("workspace:language-change", handleLanguageChange);
+
     // Workspace: Code execution output sharing
     socket.on("workspace:code-output", async ({ output, status } = {}) => {
       if (!socket.data?.verified) return;
       const liveId = socket.data.liveId;
+      const safeOutput = typeof output === "string" ? output.slice(0, 51200) : JSON.stringify(output || {}).slice(0, 51200);
+      const safeStatus = typeof status === "string" ? status.slice(0, 50) : undefined;
 
       io.to(`live:${liveId}`).emit("workspace:code-output", {
-        output,
-        status,
+        output: safeOutput,
+        status: safeStatus,
       });
 
       queueDbUpdate(`output:${liveId}`, async () => {
         await LiveInterview.updateOne(
           { _id: liveId },
-          { $set: { "sharedCode.lastOutput": typeof output === "string" ? output : JSON.stringify(output) } }
+          { $set: { "sharedCode.lastOutput": safeOutput } }
         );
       }, 500);
     });
@@ -462,11 +509,12 @@ export const initLiveRoomSocket = (httpServer) => {
     // Workspace: Participant left the room / concluded session
     socket.on("workspace:peer-left", ({ reason } = {}) => {
       if (!socket.data?.verified) return;
+      const safeReason = String(reason || "ended").slice(0, 100);
       io.to(`live:${socket.data.liveId}`).emit("workspace:peer-left", {
         liveId: socket.data.liveId,
         leftByRole: socket.data.role,
         leftByName: socket.data.userName,
-        reason: reason || "ended",
+        reason: safeReason,
       });
     });
 

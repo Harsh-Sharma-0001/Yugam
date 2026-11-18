@@ -200,16 +200,27 @@ export const submitAnswer = async (req, res) => {
         const userInstitutionId = req.headers["x-institution-id"] || req.institutionId || "DEFAULT_COLLEGE";
         const userRole = req.headers["x-user-role"] || req.userRole || "student";
 
-        // Pre-LLM atomic reservation guard against concurrent requests (P1-01)
+        // Pre-LLM atomic reservation guard with expiring lease recovery (P1-01, P2-08)
+        const leaseThreshold = new Date(Date.now() - 60_000);
+        const reservationQuery = {
+            _id: interviewId,
+            userId,
+            currentQuestion: expectedIndex,
+            status: { $ne: "completed" },
+            $or: [
+                { isEvaluating: { $ne: true } },
+                { evaluatingStartedAt: { $lt: leaseThreshold } },
+            ],
+        };
+
         const reservedInterview = await Interview.findOneAndUpdate(
+            reservationQuery,
             {
-                _id: interviewId,
-                userId,
-                currentQuestion: expectedIndex,
-                status: { $ne: "completed" },
-                isEvaluating: { $ne: true },
+                $set: {
+                    isEvaluating: true,
+                    evaluatingStartedAt: new Date(),
+                },
             },
-            { $set: { isEvaluating: true } },
             { new: true }
         );
 
@@ -233,71 +244,78 @@ export const submitAnswer = async (req, res) => {
                 type: interview.type,
                 questions: interview.questions,
             });
-        } catch (llmErr) {
-            await Interview.updateOne(
-                { _id: interviewId },
-                { $set: { isEvaluating: false } }
+
+            // 5. Atomic Update with Concurrency Guard
+            const updateQuery = {
+                _id: interviewId,
+                userId,
+                currentQuestion: expectedIndex,
+                status: { $ne: "completed" },
+            };
+
+            const updateFields = {
+                $set: {
+                    [`questions.${expectedIndex}.userAnswer`]: trimmedAnswer,
+                    [`questions.${expectedIndex}.feedback`]: result.feedback || {},
+                    isEvaluating: false,
+                    evaluatingStartedAt: null,
+                },
+                $inc: {
+                    currentQuestion: 1,
+                },
+            };
+
+            if (completed) {
+                updateFields.$set.status = "completed";
+                updateFields.$set.overallScore = result.report?.overallScore || 0;
+                updateFields.$set.summary = result.report?.summary || "";
+                updateFields.$set.strengths = result.report?.strengths || [];
+                updateFields.$set.weaknesses = result.report?.weaknesses || [];
+                updateFields.$set.recommendations = result.report?.recommendations || [];
+            }
+
+            const updatedInterview = await Interview.findOneAndUpdate(
+                updateQuery,
+                updateFields,
+                { new: true }
             );
-            throw llmErr;
-        }
 
-        // 5. Atomic Update with Concurrency Guard
-        const updateQuery = {
-            _id: interviewId,
-            userId,
-            currentQuestion: expectedIndex,
-            status: { $ne: "completed" },
-        };
+            if (!updatedInterview) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Question already submitted or concurrent request in progress.",
+                });
+            }
 
-        const updateFields = {
-            $set: {
-                [`questions.${expectedIndex}.userAnswer`]: trimmedAnswer,
-                [`questions.${expectedIndex}.feedback`]: result.feedback || {},
-                isEvaluating: false,
-            },
-            $inc: {
-                currentQuestion: 1,
-            },
-        };
-
-        if (completed) {
-            updateFields.$set.status = "completed";
-            updateFields.$set.overallScore = result.report?.overallScore || 0;
-            updateFields.$set.summary = result.report?.summary || "";
-            updateFields.$set.strengths = result.report?.strengths || [];
-            updateFields.$set.weaknesses = result.report?.weaknesses || [];
-            updateFields.$set.recommendations = result.report?.recommendations || [];
-        }
-
-        const updatedInterview = await Interview.findOneAndUpdate(
-            updateQuery,
-            updateFields,
-            { new: true }
-        );
-
-        if (!updatedInterview) {
-            return res.status(409).json({
-                success: false,
-                message: "Question already submitted or concurrent request in progress.",
+            await invalidateInterviewCache(redis, {
+                userId,
+                institutionId: userInstitutionId,
+                userRole,
             });
-        }
 
-        await invalidateInterviewCache(redis, {
-            userId,
-            institutionId: userInstitutionId,
-            userRole,
-        });
+            if (completed) {
+                return res.status(200).json({
+                    success: true,
+                    completed: true,
+                    interview: updatedInterview,
+                    feedback: result.feedback,
+                });
+            }
 
-        if (completed) {
             return res.status(200).json({
                 success: true,
-                completed: true,
-                interview: updatedInterview,
+                completed: false,
+                currentQuestion: updatedInterview.currentQuestion,
+                question: updatedInterview.questions[updatedInterview.currentQuestion],
                 feedback: result.feedback,
             });
+        } finally {
+            // Always ensure lease is cleared in case of unhandled error or exception
+            await Interview.updateOne(
+                { _id: interviewId, isEvaluating: true },
+                { $set: { isEvaluating: false, evaluatingStartedAt: null } }
+            ).catch(() => {});
         }
-
-        return res.status(200).json({
             success: true,
             completed: false,
             currentQuestion: updatedInterview.currentQuestion,

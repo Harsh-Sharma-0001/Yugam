@@ -1,13 +1,11 @@
-version: "3.8"
-
 services:
   redis:
     image: redis:7-alpine
     container_name: yugam-redis
     command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -27,14 +25,15 @@ services:
     environment:
       - PORT=8000
       - NODE_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
       - AUTH_SERVICE_URL=http://auth:8001
       - RESUME_SERVICE_URL=http://resume:8002
       - INTERVIEW_SERVICE_URL=http://interview:8003
       - ROADMAP_SERVICE_URL=http://roadmap:8004
       - BILLING_SERVICE_URL=http://billing:8005
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -49,17 +48,19 @@ services:
       dockerfile: services/auth/Dockerfile
     container_name: yugam-auth
     restart: unless-stopped
-    ports:
-      - "8001:8001"
+    expose:
+      - "8001"
     environment:
       - PORT=8001
       - NODE_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MONGO_URI=${MONGO_URI}
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
-      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=${MONGODB_URL_AUTH:-${MONGODB_URL_USER:-${MONGODB_URL:-mongodb://mongo:27017/user}}}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      - ALLOW_SELF_ROLE_SIGNUP=${ALLOW_SELF_ROLE_SIGNUP:-true}
+      - BOOTSTRAP_ADMIN_EMAILS=${BOOTSTRAP_ADMIN_EMAILS:-}
+      - BOOTSTRAP_TRAINER_EMAILS=${BOOTSTRAP_TRAINER_EMAILS:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -70,16 +71,17 @@ services:
       dockerfile: services/resume/Dockerfile
     container_name: yugam-resume
     restart: unless-stopped
-    ports:
-      - "8002:8002"
+    expose:
+      - "8002"
     environment:
       - PORT=8002
       - NODE_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MONGO_URI=${MONGO_URI}
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
-      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=${MONGODB_URL_RESUME:-${MONGODB_URL:-mongodb://mongo:27017/resume}}
+      - AUTH_SERVICE_URL=http://auth:8001
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -92,18 +94,19 @@ services:
       dockerfile: services/interview/Dockerfile
     container_name: yugam-interview
     restart: unless-stopped
-    ports:
-      - "8003:8003"
+    expose:
+      - "8003"
     environment:
       - PORT=8003
       - NODE_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MONGO_URI=${MONGO_URI}
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=${MONGODB_URL_INTERVIEW:-${MONGODB_URL:-mongodb://mongo:27017/interview}}
       - AUTH_SERVICE_URL=http://auth:8001
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
-      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+      - CODEBOX_URL=${CODEBOX_URL:-http://localhost:3000}
+      - CODEBOX_AUTH_TOKEN=${CODEBOX_AUTH_TOKEN:-}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -116,19 +119,23 @@ services:
       dockerfile: services/roadmap/Dockerfile
     container_name: yugam-roadmap
     restart: unless-stopped
-    ports:
-      - "8004:8004"
+    expose:
+      - "8004"
     environment:
       - PORT=8004
       - NODE_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MONGO_URI=${MONGO_URI}
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
-      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=${MONGODB_URL_ROADMAP:-${MONGODB_URL:-mongodb://mongo:27017/Roadmap}}
+      - AUTH_SERVICE_URL=http://auth:8001
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
     depends_on:
       redis:
         condition: service_healthy
+      auth:
+        condition: service_started
 
   billing:
     build:
@@ -136,18 +143,18 @@ services:
       dockerfile: services/billing/Dockerfile
     container_name: yugam-billing
     restart: unless-stopped
-    ports:
-      - "8005:8005"
+    expose:
+      - "8005"
     environment:
       - PORT=8005
       - NODE_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MONGO_URI=${MONGO_URI}
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=${MONGODB_URL_BILLING:-${MONGODB_URL:-mongodb://mongo:27017/Billing}}
       - AUTH_SERVICE_URL=http://auth:8001
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
-      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
     depends_on:
       redis:
         condition: service_healthy

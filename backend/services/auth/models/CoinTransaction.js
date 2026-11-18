@@ -19,7 +19,7 @@ const coinTransactionSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["PURCHASE_CREDIT", "PURCHASE", "INTERVIEW_DEDUCTION", "FEATURE_DEDUCTION", "FEATURE_REFUND", "BONUS"],
+    enum: ["PURCHASE_CREDIT", "FEATURE_DEBIT", "INTERVIEW_DEDUCTION", "FEATURE_DEDUCTION", "FEATURE_REFUND", "BONUS"],
     default: "PURCHASE_CREDIT",
   },
   feature: {

@@ -26,14 +26,15 @@ const withTransaction = async (operation) => {
         await session.abortTransaction();
       } catch (_) {}
     }
-    // Fallback if replica set / transactions are unsupported in standalone dev/test
-    if (
-      err.message &&
-      (err.message.includes("replica set") ||
-        err.message.includes("Transactions are not supported") ||
-        err.message.includes("standalone") ||
-        err.message.includes("session"))
-    ) {
+    // Fallback ONLY when MongoDB explicitly indicates standalone-server transactions unsupported (code 20 / IllegalOperation)
+    const isStandaloneUnsupported =
+      err.code === 20 ||
+      err.codeName === "IllegalOperation" ||
+      (err.message &&
+        (err.message.includes("Transaction numbers are only allowed on a replica set member or mongos") ||
+          err.message.includes("Transactions are not supported")));
+
+    if (isStandaloneUnsupported) {
       return await operation(null);
     }
     throw err;
@@ -667,6 +668,23 @@ export const refundFeatureCoins = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Refund rejected: No matching debit transaction found for this user and reservation.",
+      });
+    }
+
+    // Verify feature matches original debit
+    if (debitTx.feature && debitTx.feature !== action) {
+      return res.status(400).json({
+        success: false,
+        message: `Refund rejected: Debit feature mismatch (${debitTx.feature} vs ${action}).`,
+      });
+    }
+
+    // Validate requested refund amount does not exceed verified original debit's amount
+    const originalDebitAmount = Math.abs(debitTx.amount);
+    if (cost > originalDebitAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Refund rejected: Requested refund (${cost}) exceeds original debit amount (${originalDebitAmount}).`,
       });
     }
 

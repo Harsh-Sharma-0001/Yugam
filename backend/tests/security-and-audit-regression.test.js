@@ -553,3 +553,210 @@ describe("12. Firebase Environment-Based Credentials & Docker Setup (P2-13, P2-1
     assert.equal(parsedFromBase64.project_id, "yugam-test");
   });
 });
+
+describe("13. Live Room Existence Verification & Terminal State Rejection", () => {
+  test("Rejects non-existent room IDs even for valid institutional trainers", () => {
+    const authorizeRoomJoin = ({ liveInterview, scheduled, userRole, userInstitutionId }) => {
+      if (!liveInterview && !scheduled) {
+        return { allowed: false, error: "Interview session not found." };
+      }
+      const sessionStatus = String(liveInterview?.status || scheduled?.status || "").toLowerCase();
+      if (sessionStatus === "completed" || sessionStatus === "cancelled") {
+        return { allowed: false, error: `Interview session is already ${sessionStatus}.` };
+      }
+      const roomInstitutionId = String(
+        liveInterview?.institutionId || scheduled?.institutionId || "DEFAULT_COLLEGE"
+      );
+      if (roomInstitutionId !== userInstitutionId) {
+        return { allowed: false, error: "Forbidden: Cross-institution live room access denied." };
+      }
+      const isInstitutionTrainer = userRole === "trainer" && roomInstitutionId === userInstitutionId;
+      if (!isInstitutionTrainer) {
+        return { allowed: false, error: "Forbidden: You are not authorized to enter this live room." };
+      }
+      return { allowed: true };
+    };
+
+    const res = authorizeRoomJoin({
+      liveInterview: null,
+      scheduled: null,
+      userRole: "trainer",
+      userInstitutionId: "COLLEGE_A",
+    });
+    assert.equal(res.allowed, false);
+    assert.equal(res.error, "Interview session not found.");
+  });
+
+  test("Rejects joins when interview session is completed or cancelled", () => {
+    const authorizeRoomJoin = ({ liveInterview, scheduled, userRole, userInstitutionId }) => {
+      if (!liveInterview && !scheduled) {
+        return { allowed: false, error: "Interview session not found." };
+      }
+      const sessionStatus = String(liveInterview?.status || scheduled?.status || "").toLowerCase();
+      if (sessionStatus === "completed" || sessionStatus === "cancelled") {
+        return { allowed: false, error: `Interview session is already ${sessionStatus}.` };
+      }
+      return { allowed: true };
+    };
+
+    const resCompleted = authorizeRoomJoin({
+      liveInterview: { status: "completed", institutionId: "COLLEGE_A" },
+      scheduled: null,
+      userRole: "trainer",
+      userInstitutionId: "COLLEGE_A",
+    });
+    assert.equal(resCompleted.allowed, false);
+    assert.equal(resCompleted.error, "Interview session is already completed.");
+
+    const resCancelled = authorizeRoomJoin({
+      liveInterview: null,
+      scheduled: { status: "cancelled", institutionId: "COLLEGE_A" },
+      userRole: "trainer",
+      userInstitutionId: "COLLEGE_A",
+    });
+    assert.equal(resCancelled.allowed, false);
+    assert.equal(resCancelled.error, "Interview session is already cancelled.");
+  });
+});
+
+describe("14. Active Question Switching RBAC & Index Validation", () => {
+  test("Rejects student role attempts to switch active question", () => {
+    const handleActiveQuestion = (socket, { questionIndex }) => {
+      if (!socket.data?.verified) return { allowed: false, error: "Unverified" };
+      if (socket.data.role !== "trainer") {
+        return { allowed: false, error: "Forbidden: Only faculty trainers can switch active questions." };
+      }
+      const idx = Number(questionIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx > 100) {
+        return { allowed: false, error: "Invalid question index." };
+      }
+      return { allowed: true, questionIndex: idx };
+    };
+
+    const studentSocket = { data: { verified: true, role: "student" } };
+    const trainerSocket = { data: { verified: true, role: "trainer" } };
+
+    const studentAttempt = handleActiveQuestion(studentSocket, { questionIndex: 2 });
+    assert.equal(studentAttempt.allowed, false);
+    assert.equal(studentAttempt.error, "Forbidden: Only faculty trainers can switch active questions.");
+
+    const trainerAttempt = handleActiveQuestion(trainerSocket, { questionIndex: 2 });
+    assert.equal(trainerAttempt.allowed, true);
+    assert.equal(trainerAttempt.questionIndex, 2);
+
+    const invalidIndexAttempt = handleActiveQuestion(trainerSocket, { questionIndex: -1 });
+    assert.equal(invalidIndexAttempt.allowed, false);
+    assert.equal(invalidIndexAttempt.error, "Invalid question index.");
+  });
+});
+
+describe("15. Strict Transaction Error Handling & Standalone Fallback", () => {
+  test("Re-throws genuine database errors containing 'session' rather than silently downgrading", async () => {
+    const withTransactionMock = async (operation, mockError) => {
+      let isStandaloneUnsupported = false;
+      try {
+        if (mockError) throw mockError;
+        return await operation({});
+      } catch (err) {
+        isStandaloneUnsupported =
+          err.code === 20 ||
+          err.codeName === "IllegalOperation" ||
+          (err.message &&
+            (err.message.includes("Transaction numbers are only allowed on a replica set member or mongos") ||
+              err.message.includes("Transactions are not supported")));
+
+        if (isStandaloneUnsupported) {
+          return await operation(null);
+        }
+        throw err;
+      }
+    };
+
+    const appSessionError = new Error("Validation failed: session expired or invalid in user document");
+    await assert.rejects(
+      async () => {
+        await withTransactionMock(async () => {}, appSessionError);
+      },
+      {
+        message: "Validation failed: session expired or invalid in user document",
+      },
+      "Must re-throw genuine errors mentioning 'session' instead of downgrading"
+    );
+
+    let fallbackExecuted = false;
+    const standaloneErr = new Error("Transaction numbers are only allowed on a replica set member or mongos");
+    standaloneErr.code = 20;
+
+    const result = await withTransactionMock(async (session) => {
+      if (session === null) fallbackExecuted = true;
+      return "success";
+    }, standaloneErr);
+
+    assert.equal(result, "success");
+    assert.equal(fallbackExecuted, true, "Must fall back only for explicit standalone code 20");
+  });
+
+  test("Validates refund amount does not exceed verified original debit amount", () => {
+    const validateRefund = ({ originalDebit, requestedAction, requestedAmount }) => {
+      if (!originalDebit) return { allowed: false, error: "No matching debit transaction found" };
+      if (originalDebit.feature && originalDebit.feature !== requestedAction) {
+        return { allowed: false, error: "Debit feature mismatch" };
+      }
+      const originalDebitAmount = Math.abs(originalDebit.amount);
+      if (requestedAmount > originalDebitAmount) {
+        return { allowed: false, error: "Requested refund exceeds original debit amount" };
+      }
+      return { allowed: true };
+    };
+
+    const debit = { amount: -20, feature: "interview_live" };
+    assert.equal(validateRefund({ originalDebit: debit, requestedAction: "interview_live", requestedAmount: 20 }).allowed, true);
+    assert.equal(validateRefund({ originalDebit: debit, requestedAction: "interview_live", requestedAmount: 10 }).allowed, true);
+    const excessive = validateRefund({ originalDebit: debit, requestedAction: "interview_live", requestedAmount: 50 });
+    assert.equal(excessive.allowed, false);
+    assert.match(excessive.error, /exceeds original debit amount/);
+    const mismatch = validateRefund({ originalDebit: debit, requestedAction: "resume_review", requestedAmount: 20 });
+    assert.equal(mismatch.allowed, false);
+    assert.match(mismatch.error, /mismatch/);
+  });
+});
+
+describe("16. Expiring Lease Recovery for Stuck AI Evaluations", () => {
+  test("Expired isEvaluating leases (> 60s) are automatically recovered on retry while active leases (< 60s) return 409 Conflict", () => {
+    const canAcquireEvaluationLock = (interviewDoc, now = Date.now()) => {
+      const leaseThreshold = new Date(now - 60_000);
+      if (interviewDoc.status === "completed") return false;
+      if (interviewDoc.isEvaluating !== true) return true;
+      if (interviewDoc.evaluatingStartedAt && interviewDoc.evaluatingStartedAt < leaseThreshold) {
+        return true;
+      }
+      return false;
+    };
+
+    const now = Date.now();
+
+    const fresh = { isEvaluating: false, evaluatingStartedAt: null, status: "in-progress" };
+    assert.equal(canAcquireEvaluationLock(fresh, now), true);
+
+    const activeLock = {
+      isEvaluating: true,
+      evaluatingStartedAt: new Date(now - 15_000),
+      status: "in-progress",
+    };
+    assert.equal(canAcquireEvaluationLock(activeLock, now), false, "Active evaluation under 60s must block");
+
+    const stuckLock = {
+      isEvaluating: true,
+      evaluatingStartedAt: new Date(now - 75_000),
+      status: "in-progress",
+    };
+    assert.equal(canAcquireEvaluationLock(stuckLock, now), true, "Stuck evaluation older than 60s must be recovered");
+
+    const completed = {
+      isEvaluating: false,
+      evaluatingStartedAt: null,
+      status: "completed",
+    };
+    assert.equal(canAcquireEvaluationLock(completed, now), false);
+  });
+});

@@ -110,6 +110,11 @@ const interviewSchema = new mongoose.Schema(
             default: false,
         },
 
+        evaluatingStartedAt: {
+            type: Date,
+            default: null,
+        },
+
         mode: {
             type: String,
             enum: ["ai", "live"],
