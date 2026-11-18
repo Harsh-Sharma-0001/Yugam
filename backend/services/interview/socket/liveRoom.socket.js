@@ -355,21 +355,37 @@ export const initLiveRoomSocket = (httpServer) => {
       }
     });
 
-    // Workspace: Switch active question (P0-02 RBAC strictly trainer)
-    socket.on("workspace:active-question", ({ questionIndex } = {}) => {
-      if (!socket.data?.verified) return;
-      if (socket.data.role !== "trainer") {
-        socket.emit("workspace:error", { message: "Forbidden: Only faculty trainers can switch active questions." });
-        return;
+    // Workspace: Switch active question (strictly trainer and bounded by stored questions)
+    socket.on("workspace:active-question", async ({ questionIndex } = {}) => {
+      try {
+        if (!socket.data?.verified) return;
+        if (socket.data.role !== "trainer") {
+          socket.emit("workspace:error", { message: "Forbidden: Only faculty trainers can switch active questions." });
+          return;
+        }
+        const idx = Number(questionIndex);
+        if (!Number.isInteger(idx) || idx < 0) {
+          socket.emit("workspace:error", { message: "Invalid question index." });
+          return;
+        }
+
+        // Validate index against actual loaded room's stored questions
+        const liveInterview = await LiveInterview.findById(socket.data.liveId).select("questions");
+        const roomQuestionsCount = Array.isArray(liveInterview?.questions) ? liveInterview.questions.length : 0;
+
+        if (roomQuestionsCount === 0 || idx >= roomQuestionsCount) {
+          socket.emit("workspace:error", {
+            message: `Question index out of bounds (requested ${idx}, available ${roomQuestionsCount}).`,
+          });
+          return;
+        }
+
+        io.to(`live:${socket.data.liveId}`).emit("workspace:active-question-switched", {
+          questionIndex: idx,
+        });
+      } catch (err) {
+        console.error("workspace:active-question error:", err);
       }
-      const idx = Number(questionIndex);
-      if (!Number.isInteger(idx) || idx < 0 || idx > 100) {
-        socket.emit("workspace:error", { message: "Invalid question index." });
-        return;
-      }
-      io.to(`live:${socket.data.liveId}`).emit("workspace:active-question-switched", {
-        questionIndex: idx,
-      });
     });
 
     // Workspace: Real-time student answer update (P0-02 RBAC strictly student)

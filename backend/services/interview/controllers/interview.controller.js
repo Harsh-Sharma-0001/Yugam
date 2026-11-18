@@ -200,8 +200,9 @@ export const submitAnswer = async (req, res) => {
         const userInstitutionId = req.headers["x-institution-id"] || req.institutionId || "DEFAULT_COLLEGE";
         const userRole = req.headers["x-user-role"] || req.userRole || "student";
 
-        // Pre-LLM atomic reservation guard with expiring lease recovery (P1-01, P2-08)
-        const leaseThreshold = new Date(Date.now() - 60_000);
+        // Pre-LLM atomic reservation guard with expiring lease recovery and unique token (P1-01, P2-08)
+        const leaseThreshold = new Date(Date.now() - 90_000);
+        const evaluationToken = crypto.randomUUID();
         const reservationQuery = {
             _id: interviewId,
             userId,
@@ -219,6 +220,7 @@ export const submitAnswer = async (req, res) => {
                 $set: {
                     isEvaluating: true,
                     evaluatingStartedAt: new Date(),
+                    evaluationToken,
                 },
             },
             { new: true }
@@ -245,12 +247,14 @@ export const submitAnswer = async (req, res) => {
                 questions: interview.questions,
             });
 
-            // 5. Atomic Update with Concurrency Guard
+            // 5. Atomic Update with Concurrency Guard (requiring exact evaluationToken)
             const updateQuery = {
                 _id: interviewId,
                 userId,
                 currentQuestion: expectedIndex,
                 status: { $ne: "completed" },
+                isEvaluating: true,
+                evaluationToken,
             };
 
             const updateFields = {
@@ -259,6 +263,7 @@ export const submitAnswer = async (req, res) => {
                     [`questions.${expectedIndex}.feedback`]: result.feedback || {},
                     isEvaluating: false,
                     evaluatingStartedAt: null,
+                    evaluationToken: null,
                 },
                 $inc: {
                     currentQuestion: 1,
@@ -310,10 +315,11 @@ export const submitAnswer = async (req, res) => {
                 feedback: result.feedback,
             });
         } finally {
-            // Always ensure lease is cleared in case of unhandled error or exception
+            // Always ensure lease is cleared in case of unhandled error or exception,
+            // strictly scoped to this request's evaluationToken so an expired Request A never unlocks Request B
             await Interview.updateOne(
-                { _id: interviewId, isEvaluating: true },
-                { $set: { isEvaluating: false, evaluatingStartedAt: null } }
+                { _id: interviewId, isEvaluating: true, evaluationToken },
+                { $set: { isEvaluating: false, evaluatingStartedAt: null, evaluationToken: null } }
             ).catch(() => {});
         }
     } catch (error) {

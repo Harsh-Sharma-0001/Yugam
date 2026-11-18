@@ -1,6 +1,7 @@
 import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import redis from "../shared/redis/redis.js";
+import Interview from "../services/interview/models/interview.model.js";
 import { clampScore, getInterviewCacheKey } from "../services/interview/utils/cacheKeys.js";
 
 after(async () => {
@@ -627,7 +628,7 @@ describe("14. Active Question Switching RBAC & Index Validation", () => {
         return { allowed: false, error: "Forbidden: Only faculty trainers can switch active questions." };
       }
       const idx = Number(questionIndex);
-      if (!Number.isInteger(idx) || idx < 0 || idx > 100) {
+      if (!Number.isInteger(idx) || idx < 0) {
         return { allowed: false, error: "Invalid question index." };
       }
       return { allowed: true, questionIndex: idx };
@@ -648,11 +649,49 @@ describe("14. Active Question Switching RBAC & Index Validation", () => {
     assert.equal(invalidIndexAttempt.allowed, false);
     assert.equal(invalidIndexAttempt.error, "Invalid question index.");
   });
+
+  test("Validates questionIndex against exact stored questions length of room", () => {
+    const handleActiveQuestion = ({ socket, roomQuestions, questionIndex }) => {
+      if (!socket.data?.verified) return { allowed: false, error: "Unverified" };
+      if (socket.data.role !== "trainer") {
+        return { allowed: false, error: "Forbidden: Only faculty trainers can switch active questions." };
+      }
+      const idx = Number(questionIndex);
+      if (!Number.isInteger(idx) || idx < 0) {
+        return { allowed: false, error: "Invalid question index." };
+      }
+      const roomQuestionsCount = Array.isArray(roomQuestions) ? roomQuestions.length : 0;
+      if (roomQuestionsCount === 0 || idx >= roomQuestionsCount) {
+        return {
+          allowed: false,
+          error: `Question index out of bounds (requested ${idx}, available ${roomQuestionsCount}).`,
+        };
+      }
+      return { allowed: true, questionIndex: idx };
+    };
+
+    const trainerSocket = { data: { verified: true, role: "trainer" } };
+    const roomWithTwoQuestions = [{ questionText: "Q1" }, { questionText: "Q2" }];
+
+    // Valid indices within bounds
+    assert.equal(handleActiveQuestion({ socket: trainerSocket, roomQuestions: roomWithTwoQuestions, questionIndex: 0 }).allowed, true);
+    assert.equal(handleActiveQuestion({ socket: trainerSocket, roomQuestions: roomWithTwoQuestions, questionIndex: 1 }).allowed, true);
+
+    // Index exactly at length or beyond
+    const outOfBounds = handleActiveQuestion({ socket: trainerSocket, roomQuestions: roomWithTwoQuestions, questionIndex: 2 });
+    assert.equal(outOfBounds.allowed, false);
+    assert.match(outOfBounds.error, /out of bounds/);
+
+    // Empty room questions
+    const emptyRoom = handleActiveQuestion({ socket: trainerSocket, roomQuestions: [], questionIndex: 0 });
+    assert.equal(emptyRoom.allowed, false);
+    assert.match(emptyRoom.error, /out of bounds/);
+  });
 });
 
 describe("15. Strict Transaction Error Handling & Standalone Fallback", () => {
   test("Re-throws genuine database errors containing 'session' rather than silently downgrading", async () => {
-    const withTransactionMock = async (operation, mockError) => {
+    const withTransactionMock = async (operation, mockError, env = { NODE_ENV: "development", ALLOW_STANDALONE_MONGO: "true" }) => {
       let isStandaloneUnsupported = false;
       try {
         if (mockError) throw mockError;
@@ -665,7 +704,11 @@ describe("15. Strict Transaction Error Handling & Standalone Fallback", () => {
             (err.message.includes("Transaction numbers are only allowed on a replica set member or mongos") ||
               err.message.includes("Transactions are not supported")));
 
-        if (isStandaloneUnsupported) {
+        const allowStandaloneFallback =
+          env.NODE_ENV !== "production" &&
+          env.ALLOW_STANDALONE_MONGO === "true";
+
+        if (isStandaloneUnsupported && allowStandaloneFallback) {
           return await operation(null);
         }
         throw err;
@@ -693,7 +736,72 @@ describe("15. Strict Transaction Error Handling & Standalone Fallback", () => {
     }, standaloneErr);
 
     assert.equal(result, "success");
-    assert.equal(fallbackExecuted, true, "Must fall back only for explicit standalone code 20");
+    assert.equal(fallbackExecuted, true, "Must fall back only for explicit standalone code 20 in dev");
+  });
+
+  test("withTransaction refuses non-transactional fallback in NODE_ENV === 'production'", async () => {
+    const withTransactionMock = async (operation, mockError, env = {}) => {
+      let isStandaloneUnsupported = false;
+      try {
+        if (mockError) throw mockError;
+        return await operation({});
+      } catch (err) {
+        isStandaloneUnsupported =
+          err.code === 20 ||
+          err.codeName === "IllegalOperation" ||
+          (err.message &&
+            (err.message.includes("Transaction numbers are only allowed on a replica set member or mongos") ||
+              err.message.includes("Transactions are not supported")));
+
+        const allowStandaloneFallback =
+          env.NODE_ENV !== "production" &&
+          env.ALLOW_STANDALONE_MONGO === "true";
+
+        if (isStandaloneUnsupported && allowStandaloneFallback) {
+          return await operation(null);
+        }
+        throw err;
+      }
+    };
+
+    const standaloneErr = new Error("Transaction numbers are only allowed on a replica set member or mongos");
+    standaloneErr.code = 20;
+
+    // In production, must FAIL FAST even for code 20
+    await assert.rejects(
+      async () => {
+        await withTransactionMock(async () => "ok", standaloneErr, {
+          NODE_ENV: "production",
+          ALLOW_STANDALONE_MONGO: "true",
+        });
+      },
+      (err) => err.code === 20,
+      "Production must reject non-transactional fallback"
+    );
+
+    // In dev without explicit ALLOW_STANDALONE_MONGO, must FAIL FAST
+    await assert.rejects(
+      async () => {
+        await withTransactionMock(async () => "ok", standaloneErr, {
+          NODE_ENV: "development",
+          ALLOW_STANDALONE_MONGO: "false",
+        });
+      },
+      (err) => err.code === 20,
+      "Development without ALLOW_STANDALONE_MONGO must reject fallback"
+    );
+
+    // In dev with ALLOW_STANDALONE_MONGO === 'true', safe fallback occurs
+    let fallbackHit = false;
+    const res = await withTransactionMock(async (session) => {
+      if (session === null) fallbackHit = true;
+      return "dev_fallback_ok";
+    }, standaloneErr, {
+      NODE_ENV: "development",
+      ALLOW_STANDALONE_MONGO: "true",
+    });
+    assert.equal(res, "dev_fallback_ok");
+    assert.equal(fallbackHit, true);
   });
 
   test("Validates refund amount does not exceed verified original debit amount", () => {
@@ -722,9 +830,10 @@ describe("15. Strict Transaction Error Handling & Standalone Fallback", () => {
 });
 
 describe("16. Expiring Lease Recovery for Stuck AI Evaluations", () => {
-  test("Expired isEvaluating leases (> 60s) are automatically recovered on retry while active leases (< 60s) return 409 Conflict", () => {
+  test("Expired isEvaluating leases (> 90s) are automatically recovered on retry while active leases (< 90s) return 409 Conflict", () => {
+    const LEASE_DURATION_MS = 90_000;
     const canAcquireEvaluationLock = (interviewDoc, now = Date.now()) => {
-      const leaseThreshold = new Date(now - 60_000);
+      const leaseThreshold = new Date(now - LEASE_DURATION_MS);
       if (interviewDoc.status === "completed") return false;
       if (interviewDoc.isEvaluating !== true) return true;
       if (interviewDoc.evaluatingStartedAt && interviewDoc.evaluatingStartedAt < leaseThreshold) {
@@ -740,17 +849,17 @@ describe("16. Expiring Lease Recovery for Stuck AI Evaluations", () => {
 
     const activeLock = {
       isEvaluating: true,
-      evaluatingStartedAt: new Date(now - 15_000),
+      evaluatingStartedAt: new Date(now - 30_000),
       status: "in-progress",
     };
-    assert.equal(canAcquireEvaluationLock(activeLock, now), false, "Active evaluation under 60s must block");
+    assert.equal(canAcquireEvaluationLock(activeLock, now), false, "Active evaluation under 90s must block");
 
     const stuckLock = {
       isEvaluating: true,
-      evaluatingStartedAt: new Date(now - 75_000),
+      evaluatingStartedAt: new Date(now - 95_000),
       status: "in-progress",
     };
-    assert.equal(canAcquireEvaluationLock(stuckLock, now), true, "Stuck evaluation older than 60s must be recovered");
+    assert.equal(canAcquireEvaluationLock(stuckLock, now), true, "Stuck evaluation older than 90s must be recovered");
 
     const completed = {
       isEvaluating: false,
@@ -758,5 +867,54 @@ describe("16. Expiring Lease Recovery for Stuck AI Evaluations", () => {
       status: "completed",
     };
     assert.equal(canAcquireEvaluationLock(completed, now), false);
+  });
+
+  test("Interview schema has evaluationToken and 90s lease recovery with ownership protection", () => {
+    // Verify real mongoose schema contains evaluationToken
+    const schemaTokenPath = Interview.schema.path("evaluationToken");
+    assert.ok(schemaTokenPath, "Interview schema must define evaluationToken");
+    assert.equal(schemaTokenPath.instance, "String");
+
+    // Token ownership protection simulation:
+    // If Doc was recovered by Request B (now holds token-b), an expired Request A (token-a) attempting to save or finalize:
+    const simulateAtomicUpdate = (doc, updateQuery, updateFields) => {
+      if (updateQuery.evaluationToken !== doc.evaluationToken) {
+        return null; // Mismatch! Cannot overwrite
+      }
+      return { ...doc, ...updateFields.$set };
+    };
+
+    const docNowOwnedByB = {
+      _id: "interview-123",
+      isEvaluating: true,
+      evaluationToken: "token-b",
+      currentQuestion: 0,
+    };
+
+    const requestAUpdateQuery = {
+      _id: "interview-123",
+      isEvaluating: true,
+      evaluationToken: "token-a",
+    };
+
+    const updatedByA = simulateAtomicUpdate(docNowOwnedByB, requestAUpdateQuery, {
+      $set: { isEvaluating: false, evaluationToken: null },
+    });
+    assert.equal(updatedByA, null, "Expired Request A with token-a cannot overwrite Request B's evaluation");
+
+    // Request A finally cleanup also cannot unlock B
+    const simulateFinallyCleanup = (doc, cleanupQuery) => {
+      if (cleanupQuery.evaluationToken !== doc.evaluationToken) {
+        return false; // Did not match, lock unchanged
+      }
+      doc.isEvaluating = false;
+      doc.evaluationToken = null;
+      return true;
+    };
+
+    const unlockedByA = simulateFinallyCleanup(docNowOwnedByB, requestAUpdateQuery);
+    assert.equal(unlockedByA, false, "Expired Request A's finally block cannot unlock Request B's lock");
+    assert.equal(docNowOwnedByB.isEvaluating, true, "Request B's evaluation remains locked");
+    assert.equal(docNowOwnedByB.evaluationToken, "token-b");
   });
 });

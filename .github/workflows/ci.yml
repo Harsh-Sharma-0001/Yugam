@@ -42,6 +42,9 @@ jobs:
             fi
           done
 
+      - name: Syntax Check All Backend JavaScript Files
+        run: find backend -name "*.js" -not -path "*/node_modules/*" -exec node --check {} +
+
       - name: Run Backend Tests
         run: npm test --prefix backend
         env:

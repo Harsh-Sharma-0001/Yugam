@@ -27,6 +27,7 @@ const withTransaction = async (operation) => {
       } catch (_) {}
     }
     // Fallback ONLY when MongoDB explicitly indicates standalone-server transactions unsupported (code 20 / IllegalOperation)
+    // AND explicitly allowed in non-production environments
     const isStandaloneUnsupported =
       err.code === 20 ||
       err.codeName === "IllegalOperation" ||
@@ -34,7 +35,11 @@ const withTransaction = async (operation) => {
         (err.message.includes("Transaction numbers are only allowed on a replica set member or mongos") ||
           err.message.includes("Transactions are not supported")));
 
-    if (isStandaloneUnsupported) {
+    const allowStandaloneFallback =
+      process.env.NODE_ENV !== "production" &&
+      process.env.ALLOW_STANDALONE_MONGO === "true";
+
+    if (isStandaloneUnsupported && allowStandaloneFallback) {
       return await operation(null);
     }
     throw err;

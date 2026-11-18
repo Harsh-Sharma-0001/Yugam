@@ -54,11 +54,11 @@ services:
       - PORT=8001
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - MONGODB_URL=${MONGODB_URL_AUTH:-${MONGODB_URL_USER:-${MONGODB_URL:-mongodb://mongo:27017/user}}}
+      - MONGODB_URL=${MONGODB_URL_AUTH:?}
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
       - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
-      - ALLOW_SELF_ROLE_SIGNUP=${ALLOW_SELF_ROLE_SIGNUP:-true}
+      - ALLOW_SELF_ROLE_SIGNUP=${ALLOW_SELF_ROLE_SIGNUP:-false}
       - BOOTSTRAP_ADMIN_EMAILS=${BOOTSTRAP_ADMIN_EMAILS:-}
       - BOOTSTRAP_TRAINER_EMAILS=${BOOTSTRAP_TRAINER_EMAILS:-}
     depends_on:
@@ -77,7 +77,7 @@ services:
       - PORT=8002
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - MONGODB_URL=${MONGODB_URL_RESUME:-${MONGODB_URL:-mongodb://mongo:27017/resume}}
+      - MONGODB_URL=${MONGODB_URL_RESUME:?}
       - AUTH_SERVICE_URL=http://auth:8001
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
@@ -100,7 +100,7 @@ services:
       - PORT=8003
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - MONGODB_URL=${MONGODB_URL_INTERVIEW:-${MONGODB_URL:-mongodb://mongo:27017/interview}}
+      - MONGODB_URL=${MONGODB_URL_INTERVIEW:?}
       - AUTH_SERVICE_URL=http://auth:8001
       - GROQ_API_KEY=${GROQ_API_KEY}
       - CODEBOX_URL=${CODEBOX_URL:-http://localhost:3000}
@@ -125,7 +125,7 @@ services:
       - PORT=8004
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - MONGODB_URL=${MONGODB_URL_ROADMAP:-${MONGODB_URL:-mongodb://mongo:27017/Roadmap}}
+      - MONGODB_URL=${MONGODB_URL_ROADMAP:?}
       - AUTH_SERVICE_URL=http://auth:8001
       - GROQ_API_KEY=${GROQ_API_KEY}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
@@ -149,7 +149,7 @@ services:
       - PORT=8005
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      - MONGODB_URL=${MONGODB_URL_BILLING:-${MONGODB_URL:-mongodb://mongo:27017/Billing}}
+      - MONGODB_URL=${MONGODB_URL_BILLING:?}
       - AUTH_SERVICE_URL=http://auth:8001
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}

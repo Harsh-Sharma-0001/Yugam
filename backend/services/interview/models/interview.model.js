@@ -115,6 +115,11 @@ const interviewSchema = new mongoose.Schema(
             default: null,
         },
 
+        evaluationToken: {
+            type: String,
+            default: null,
+        },
+
         mode: {
             type: String,
             enum: ["ai", "live"],
