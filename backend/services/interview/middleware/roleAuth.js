@@ -62,6 +62,14 @@ export const requireRole = (...allowedRoles) => {
         }
       }
 
+      if (!req.userSection && req.headers["x-user-section"]) {
+        try {
+          req.userSection = decodeURIComponent(req.headers["x-user-section"]);
+        } catch (_) {
+          req.userSection = req.headers["x-user-section"];
+        }
+      }
+
       if (allowedRoles.length > 0 && !allowedRoles.includes(req.userRole)) {
         return res.status(403).json({
           success: false,

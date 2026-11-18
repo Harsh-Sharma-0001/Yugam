@@ -10,6 +10,9 @@ import { submitAnswer } from '../../apis/interview.api'
 import { useNavigate } from 'react-router-dom'
 function Step2interview({ interviewData, user }) {
 const navigate = useNavigate()
+  const candidateFirstName = user?.name?.trim() ? user.name.trim().split(" ")[0] : "Candidate";
+  const candidateInitial = candidateFirstName.charAt(0).toUpperCase() || "C";
+
   // ── State ──
   const [question, setQuestion] = useState(interviewData.question);
   const [currentIndex, setCurrentIndex] = useState(interviewData.currentQuestion || 0);
@@ -69,20 +72,24 @@ const navigate = useNavigate()
   const progress = ((currentIndex + 1)/(interviewData.totalQuestions))*100
   const showMicon = micOn && !isAIPlaying
 
-  // Speech recognition
-
-  useEffect(()=>{
-    if(!("webkitSpeechRecognition" in window))return;
-    const rec = new window.webkitSpeechRecognition()
-     rec.lang = "en-US";
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = (e)=>{
-      const t = e.results[e.results.length - 1][0].transcript;
-      setAnswer((prev)=>prev + " "+ t)
+  // Speech recognition with standard + webkit prefix support
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    try {
+      const rec = new SpeechRecognition();
+      rec.lang = "en-US";
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.onresult = (e) => {
+        const t = e.results[e.results.length - 1][0].transcript;
+        setAnswer((prev) => prev + " " + t);
+      };
+      recognitionRef.current = rec;
+    } catch (e) {
+      console.warn("SpeechRecognition init error:", e);
     }
-    recognitionRef.current = rec
-  },[])
+  }, []);
 
 
   const startMic = ()=>{
@@ -189,7 +196,7 @@ const navigate = useNavigate()
     const runIntro=async () => {
       setIntroSpoken(true)
       await new Promise((r) => setTimeout(r, 1200));
-      await speakText(`Welcome ${user?.name.split(" ")[0]}! Let's begin your interview.`);
+      await speakText(`Welcome ${candidateFirstName}! Let's begin your interview.`);
       await new Promise((r) => setTimeout(r, 900));
       await speakText(interviewData.question.question);
     }
@@ -402,10 +409,10 @@ const navigate = useNavigate()
               :
               <div className='flex flex-col items-center gap-2'>
                 <div className='w-14 h-14 rounded-full bg-white/10 border border-white/15 flex items-center justify-center'>
-                <span className='text-2xl font-bold text-white'>{user?.name.charAt(0).toUpperCase()}</span>
+                  <span className='text-2xl font-bold text-white'>{candidateInitial}</span>
                 </div>
-                <span className='text-xs text-white/35'>{user?.name.split(" ")[0]}</span>
-                </div>}     
+                <span className='text-xs text-white/35'>{candidateFirstName}</span>
+              </div>}     
           </div>
 
 

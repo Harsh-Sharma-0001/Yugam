@@ -18,6 +18,14 @@ export const isAuth = async (req,res,next) => {
 
         req.user = JSON.parse(session);
 
+        // Gateway Account Status Enforcement (P1-06)
+        if (req.user && req.user.status === "suspended") {
+            return res.status(403).json({
+                success: false,
+                message: "Account suspended: Access denied.",
+            });
+        }
+
         next();
 
     } catch (error) {

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { getAuth } from "firebase-admin/auth";
 import { app } from "../configs/firebase.js";
 import User from "../model/user.model.js";
@@ -6,6 +7,42 @@ import CoinTransaction from "../models/CoinTransaction.js";
 import AuditLog from "../models/auditLog.model.js";
 import redis from "../../../shared/redis/redis.js";
 import { FEATURE_COIN_COSTS } from "../constants/coinPricing.js";
+
+/**
+ * Executes a MongoDB operation inside a session transaction when supported,
+ * with graceful fallback for standalone local instances.
+ */
+const withTransaction = async (operation) => {
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+    const result = await operation(session);
+    await session.commitTransaction();
+    return result;
+  } catch (err) {
+    if (session) {
+      try {
+        await session.abortTransaction();
+      } catch (_) {}
+    }
+    // Fallback if replica set / transactions are unsupported in standalone dev/test
+    if (
+      err.message &&
+      (err.message.includes("replica set") ||
+        err.message.includes("Transactions are not supported") ||
+        err.message.includes("standalone") ||
+        err.message.includes("session"))
+    ) {
+      return await operation(null);
+    }
+    throw err;
+  } finally {
+    if (session) {
+      session.endSession();
+    }
+  }
+};
 
 export const login = async (req, res) => {
   try {
@@ -77,8 +114,7 @@ export const login = async (req, res) => {
           .filter(Boolean);
         const allowSelfRole =
           process.env.ALLOW_SELF_ROLE_SIGNUP === "true" ||
-          process.env.ALLOW_ROLE_SELECTION === "true" ||
-          process.env.NODE_ENV !== "production";
+          process.env.ALLOW_ROLE_SELECTION === "true";
 
         const isBootstrapAdmin = targetRole === "admin" && bootstrapAdmins.includes(email);
         const isBootstrapTrainer = targetRole === "trainer" && bootstrapTrainers.includes(email);
@@ -266,7 +302,7 @@ export const useInterviewCoins = async (req, res) => {
       });
     }
 
-    const { coins, action } = req.body;
+    const { coins, action, idempotencyKey } = req.body;
     const cost = action && FEATURE_COIN_COSTS[action] !== undefined
       ? FEATURE_COIN_COSTS[action]
       : Number(coins);
@@ -278,38 +314,89 @@ export const useInterviewCoins = async (req, res) => {
       });
     }
 
-    // Atomic conditional balance deduction to prevent race conditions and negative balances
-    const updatedUser = await User.findOneAndUpdate(
-      { _id: userId, interviewCoin: { $gte: cost } },
-      { $inc: { interviewCoin: -cost } },
-      { new: true }
-    );
-
-    if (!updatedUser) {
-      const existingUser = await User.findById(userId);
-      if (!existingUser) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
+    if (idempotencyKey) {
+      const existingTx = await CoinTransaction.findOne({ idempotencyKey });
+      if (existingTx) {
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          message: "Interview coins already deducted",
+          action,
+          interviewCoin: existingTx.balanceAfter,
         });
       }
-      return res.status(402).json({
-        success: false,
-        message: "Insufficient interview coins.",
-        interviewCoin: existingUser.interviewCoin,
+    }
+
+    // Atomic conditional balance deduction to prevent race conditions and negative balances (P0-04)
+    const txResult = await withTransaction(async (dbSession) => {
+      if (idempotencyKey) {
+        const checkTx = await CoinTransaction.findOne(
+          { idempotencyKey },
+          null,
+          dbSession ? { session: dbSession } : undefined
+        );
+        if (checkTx) {
+          return { duplicate: true, balanceAfter: checkTx.balanceAfter };
+        }
+      }
+
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: userId, interviewCoin: { $gte: cost } },
+        { $inc: { interviewCoin: -cost } },
+        { new: true, ...(dbSession ? { session: dbSession } : {}) }
+      );
+
+      if (!updatedUser) {
+        throw new Error("INSUFFICIENT_FUNDS");
+      }
+
+      if (idempotencyKey) {
+        await CoinTransaction.create(
+          [
+            {
+              idempotencyKey,
+              userId: updatedUser._id,
+              amount: -cost,
+              type: "FEATURE_DEBIT",
+              feature: action || "use-coins",
+              balanceAfter: updatedUser.interviewCoin,
+            },
+          ],
+          dbSession ? { session: dbSession } : {}
+        );
+      }
+
+      return { duplicate: false, balanceAfter: updatedUser.interviewCoin, userId: updatedUser._id };
+    });
+
+    if (txResult.duplicate) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        message: "Interview coins already deducted",
+        action,
+        interviewCoin: txResult.balanceAfter,
       });
     }
 
     // Synchronize all active Redis sessions for this user
-    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, sessionId);
+    await syncUserSessionsInRedis(txResult.userId, txResult.balanceAfter, sessionId);
 
     return res.status(200).json({
       success: true,
       message: "Interview coins updated successfully",
       action,
-      interviewCoin: updatedUser.interviewCoin,
+      interviewCoin: txResult.balanceAfter,
     });
   } catch (error) {
+    if (error.message === "INSUFFICIENT_FUNDS") {
+      const existingUser = await User.findById(userId);
+      return res.status(402).json({
+        success: false,
+        message: "Insufficient interview coins.",
+        interviewCoin: existingUser ? existingUser.interviewCoin : 0,
+      });
+    }
     console.error("useInterviewCoins error:", error);
     return res.status(500).json({
       success: false,
@@ -354,51 +441,72 @@ export const addCoins = async (req, res) => {
       });
     }
 
-    // Atomically increment user balance
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { $inc: { interviewCoin: addAmount } },
-      { new: true }
-    );
-
-    if (!updatedUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // Record transaction in ledger
-    try {
-      await CoinTransaction.create({
-        idempotencyKey,
-        userId: updatedUser._id,
-        amount: addAmount,
-        type: "PURCHASE",
-        balanceAfter: updatedUser.interviewCoin,
-      });
-    } catch (err) {
-      if (err.code === 11000) {
-        // Race condition: concurrent execution already recorded ledger
-        const record = await CoinTransaction.findOne({ idempotencyKey });
-        return res.status(200).json({
-          success: true,
-          duplicate: true,
-          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin,
-        });
+    // Atomic transaction execution with standalone fallback (P0-04)
+    const txResult = await withTransaction(async (dbSession) => {
+      const checkTx = await CoinTransaction.findOne(
+        { idempotencyKey },
+        null,
+        dbSession ? { session: dbSession } : undefined
+      );
+      if (checkTx) {
+        return { duplicate: true, balanceAfter: checkTx.balanceAfter };
       }
-      throw err;
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $inc: { interviewCoin: addAmount } },
+        { new: true, ...(dbSession ? { session: dbSession } : {}) }
+      );
+
+      if (!updatedUser) {
+        throw new Error("USER_NOT_FOUND");
+      }
+
+      // Record transaction in ledger with correct enum type (P0-03)
+      await CoinTransaction.create(
+        [
+          {
+            idempotencyKey,
+            userId: updatedUser._id,
+            amount: addAmount,
+            type: "PURCHASE_CREDIT",
+            balanceAfter: updatedUser.interviewCoin,
+          },
+        ],
+        dbSession ? { session: dbSession } : {}
+      );
+
+      return { duplicate: false, balanceAfter: updatedUser.interviewCoin, userId: updatedUser._id };
+    });
+
+    if (txResult.duplicate) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: txResult.balanceAfter,
+      });
     }
 
     // Synchronize all active Redis sessions for this user
-    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, sessionId);
+    await syncUserSessionsInRedis(txResult.userId, txResult.balanceAfter, sessionId);
 
     return res.status(200).json({
       success: true,
       message: "Coins added successfully",
-      interviewCoin: updatedUser.interviewCoin,
+      interviewCoin: txResult.balanceAfter,
     });
   } catch (error) {
+    if (error.message === "USER_NOT_FOUND") {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    if (error.code === 11000) {
+      const record = await CoinTransaction.findOne({ idempotencyKey: req.body?.idempotencyKey });
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: record ? record.balanceAfter : undefined,
+      });
+    }
     console.error("addCoins error:", error);
     return res.status(500).json({
       success: false,
@@ -437,63 +545,89 @@ export const deductFeatureCoins = async (req, res) => {
       });
     }
 
-    // Atomic conditional deduction
-    const updatedUser = await User.findOneAndUpdate(
-      { _id: userId, interviewCoin: { $gte: cost } },
-      { $inc: { interviewCoin: -cost } },
-      { new: true }
-    );
-
-    if (!updatedUser) {
-      const existingUser = await User.findById(userId);
-      if (!existingUser) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
+    // Atomic conditional deduction within transaction (P0-04)
+    const txResult = await withTransaction(async (dbSession) => {
+      const checkTx = await CoinTransaction.findOne(
+        { idempotencyKey: reservationId },
+        null,
+        dbSession ? { session: dbSession } : undefined
+      );
+      if (checkTx) {
+        return { duplicate: true, balanceAfter: checkTx.balanceAfter };
       }
-      return res.status(402).json({
-        success: false,
-        message: `Insufficient coins for ${action}. Required: ${cost}, Available: ${existingUser.interviewCoin}`,
-        interviewCoin: existingUser.interviewCoin,
-        requiredCoins: cost,
-      });
-    }
 
-    // Record immutable ledger entry
-    try {
-      await CoinTransaction.create({
-        idempotencyKey: reservationId,
-        userId: updatedUser._id,
-        amount: -cost,
-        type: "FEATURE_DEDUCTION",
-        balanceAfter: updatedUser.interviewCoin,
-      });
-    } catch (err) {
-      if (err.code === 11000) {
-        // Concurrent race condition: duplicate reservation processed
-        await User.findByIdAndUpdate(userId, { $inc: { interviewCoin: cost } });
-        const record = await CoinTransaction.findOne({ idempotencyKey: reservationId });
-        return res.status(200).json({
-          success: true,
-          duplicate: true,
-          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin + cost,
-          deducted: cost,
-        });
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: userId, interviewCoin: { $gte: cost } },
+        { $inc: { interviewCoin: -cost } },
+        { new: true, ...(dbSession ? { session: dbSession } : {}) }
+      );
+
+      if (!updatedUser) {
+        const existingUser = await User.findById(userId);
+        if (!existingUser) {
+          throw new Error("USER_NOT_FOUND");
+        }
+        throw new Error(`INSUFFICIENT_COINS:${existingUser.interviewCoin}`);
       }
-      throw err;
+
+      await CoinTransaction.create(
+        [
+          {
+            idempotencyKey: reservationId,
+            userId: updatedUser._id,
+            amount: -cost,
+            type: "FEATURE_DEDUCTION",
+            feature: action,
+            balanceAfter: updatedUser.interviewCoin,
+          },
+        ],
+        dbSession ? { session: dbSession } : {}
+      );
+
+      return { duplicate: false, balanceAfter: updatedUser.interviewCoin, userId: updatedUser._id };
+    });
+
+    if (txResult.duplicate) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: txResult.balanceAfter,
+        deducted: cost,
+      });
     }
 
     // Sync Redis sessions for active tabs
     const activeSessionId = sessionId || req.cookies?.session;
-    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, activeSessionId);
+    await syncUserSessionsInRedis(txResult.userId, txResult.balanceAfter, activeSessionId);
 
     return res.status(200).json({
       success: true,
-      interviewCoin: updatedUser.interviewCoin,
+      interviewCoin: txResult.balanceAfter,
       deducted: cost,
     });
   } catch (error) {
+    if (error.message === "USER_NOT_FOUND") {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    if (error.message?.startsWith("INSUFFICIENT_COINS:")) {
+      const available = Number(error.message.split(":")[1]) || 0;
+      const cost = FEATURE_COIN_COSTS[req.body?.action] || 0;
+      return res.status(402).json({
+        success: false,
+        message: `Insufficient coins for ${req.body?.action}. Required: ${cost}, Available: ${available}`,
+        interviewCoin: available,
+        requiredCoins: cost,
+      });
+    }
+    if (error.code === 11000) {
+      const record = await CoinTransaction.findOne({ idempotencyKey: req.body?.reservationId });
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: record ? record.balanceAfter : undefined,
+        deducted: FEATURE_COIN_COSTS[req.body?.action] || 0,
+      });
+    }
     console.error("deductFeatureCoins error:", error);
     return res.status(500).json({
       success: false,
@@ -504,12 +638,13 @@ export const deductFeatureCoins = async (req, res) => {
 
 export const refundFeatureCoins = async (req, res) => {
   try {
-    const { userId, action, reservationId, sessionId } = req.body;
+    const { userId, action, reservationId, originalIdempotencyKey, sessionId } = req.body;
+    const debitKey = originalIdempotencyKey || reservationId;
 
-    if (!userId || !action || !reservationId) {
+    if (!userId || !action || !debitKey) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters (userId, action, reservationId).",
+        message: "Missing required parameters (userId, action, reservationId/originalIdempotencyKey).",
       });
     }
 
@@ -521,7 +656,21 @@ export const refundFeatureCoins = async (req, res) => {
       });
     }
 
-    const refundKey = `refund:${reservationId}`;
+    // Verified Debit Linkage for Refunds (P1-08)
+    const debitTx = await CoinTransaction.findOne({
+      idempotencyKey: debitKey,
+      userId,
+      amount: { $lt: 0 },
+    });
+
+    if (!debitTx) {
+      return res.status(400).json({
+        success: false,
+        message: "Refund rejected: No matching debit transaction found for this user and reservation.",
+      });
+    }
+
+    const refundKey = `refund:${debitKey}`;
 
     // Idempotency check: if this refund has already executed, return current state
     const existingRefund = await CoinTransaction.findOne({ idempotencyKey: refundKey });
@@ -534,55 +683,121 @@ export const refundFeatureCoins = async (req, res) => {
       });
     }
 
-    // Atomically refund coins back to the user
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { $inc: { interviewCoin: cost } },
-      { new: true }
-    );
-
-    if (!updatedUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // Record refund in the ledger
-    try {
-      await CoinTransaction.create({
-        idempotencyKey: refundKey,
-        userId: updatedUser._id,
-        amount: cost,
-        type: "FEATURE_REFUND",
-        balanceAfter: updatedUser.interviewCoin,
-      });
-    } catch (err) {
-      if (err.code === 11000) {
-        // Duplicate refund caught by unique idempotencyKey index
-        await User.findByIdAndUpdate(userId, { $inc: { interviewCoin: -cost } });
-        const record = await CoinTransaction.findOne({ idempotencyKey: refundKey });
-        return res.status(200).json({
-          success: true,
-          duplicate: true,
-          interviewCoin: record ? record.balanceAfter : updatedUser.interviewCoin - cost,
-          refunded: cost,
-        });
+    // Atomic refund operation within transaction (P0-04, P1-08)
+    const txResult = await withTransaction(async (dbSession) => {
+      const checkRefund = await CoinTransaction.findOne(
+        { idempotencyKey: refundKey },
+        null,
+        dbSession ? { session: dbSession } : undefined
+      );
+      if (checkRefund) {
+        return { duplicate: true, balanceAfter: checkRefund.balanceAfter };
       }
-      throw err;
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $inc: { interviewCoin: cost } },
+        { new: true, ...(dbSession ? { session: dbSession } : {}) }
+      );
+
+      if (!updatedUser) {
+        throw new Error("USER_NOT_FOUND");
+      }
+
+      await CoinTransaction.create(
+        [
+          {
+            idempotencyKey: refundKey,
+            originalIdempotencyKey: debitKey,
+            userId: updatedUser._id,
+            amount: cost,
+            type: "FEATURE_REFUND",
+            feature: action,
+            balanceAfter: updatedUser.interviewCoin,
+          },
+        ],
+        dbSession ? { session: dbSession } : {}
+      );
+
+      return { duplicate: false, balanceAfter: updatedUser.interviewCoin, userId: updatedUser._id };
+    });
+
+    if (txResult.duplicate) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: txResult.balanceAfter,
+        refunded: cost,
+      });
     }
 
     // Sync Redis sessions for active tabs
     const activeSessionId = sessionId || req.cookies?.session;
-    await syncUserSessionsInRedis(updatedUser._id, updatedUser.interviewCoin, activeSessionId);
+    await syncUserSessionsInRedis(txResult.userId, txResult.balanceAfter, activeSessionId);
 
     return res.status(200).json({
       success: true,
-      interviewCoin: updatedUser.interviewCoin,
+      interviewCoin: txResult.balanceAfter,
       refunded: cost,
     });
   } catch (error) {
+    if (error.message === "USER_NOT_FOUND") {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    if (error.code === 11000) {
+      const debitKey = req.body?.originalIdempotencyKey || req.body?.reservationId;
+      const record = await CoinTransaction.findOne({ idempotencyKey: `refund:${debitKey}` });
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        interviewCoin: record ? record.balanceAfter : undefined,
+        refunded: FEATURE_COIN_COSTS[req.body?.action] || 0,
+      });
+    }
     console.error("refundFeatureCoins error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * Session-authenticated refund for client features (e.g., failed PDF generation)
+ */
+export const refundUserCoins = async (req, res) => {
+  try {
+    const sessionId = req.cookies?.session || req.headers["x-session-id"];
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: No active session.",
+      });
+    }
+
+    const rawSession = await redis.get(`session:${sessionId}`);
+    if (!rawSession) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Invalid or expired session.",
+      });
+    }
+
+    const sessionData = JSON.parse(rawSession);
+    const userId = sessionData?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: Invalid session payload.",
+      });
+    }
+
+    req.body = req.body || {};
+    req.body.userId = userId;
+    req.body.sessionId = sessionId;
+    return refundFeatureCoins(req, res);
+  } catch (error) {
+    console.error("refundUserCoins error:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -918,6 +1133,7 @@ export const provisionUsers = async (req, res) => {
 
     const institutionId = req.institutionId || "DEFAULT_COLLEGE";
     const provisioned = [];
+    const rejected = [];
 
     for (const record of users) {
       if (!record.email) continue;
@@ -925,6 +1141,15 @@ export const provisionUsers = async (req, res) => {
       let user = await User.findOne({ email });
 
       if (user) {
+        // Cross-institution conflict protection (P0-05)
+        if (user.institutionId && user.institutionId !== institutionId) {
+          rejected.push({
+            email,
+            reason: `Cross-institution conflict: User already belongs to institution ${user.institutionId}`,
+          });
+          continue;
+        }
+
         user.name = record.name || user.name;
         user.role = record.role || user.role || "student";
         user.institutionId = institutionId;
@@ -987,9 +1212,11 @@ export const provisionUsers = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Successfully provisioned ${provisioned.length} users.`,
+      message: `Successfully provisioned ${provisioned.length} users.${rejected.length > 0 ? ` ${rejected.length} records rejected due to cross-institution conflicts.` : ""}`,
       count: provisioned.length,
       users: provisioned,
+      rejected,
+      rejectedCount: rejected.length,
     });
   } catch (error) {
     console.error("provisionUsers error:", error);

@@ -10,6 +10,7 @@ export const proxyWithHeaders = (serviceUrl) => {
                 delete proxyReqOpts.headers["x-user-role"];
                 delete proxyReqOpts.headers["x-institution-id"];
                 delete proxyReqOpts.headers["x-user-name"];
+                delete proxyReqOpts.headers["x-user-section"];
 
                 if (srcReq.user) {
                     proxyReqOpts.headers["x-user-id"] = String(srcReq.user._id || srcReq.user.userId);
@@ -17,6 +18,10 @@ export const proxyWithHeaders = (serviceUrl) => {
                     proxyReqOpts.headers["x-institution-id"] = srcReq.user.institutionId || "DEFAULT_COLLEGE";
                     if (srcReq.user.name) {
                         proxyReqOpts.headers["x-user-name"] = encodeURIComponent(srcReq.user.name);
+                    }
+                    const section = srcReq.user.profile?.section || srcReq.user.section;
+                    if (section) {
+                        proxyReqOpts.headers["x-user-section"] = encodeURIComponent(section);
                     }
                 }
 

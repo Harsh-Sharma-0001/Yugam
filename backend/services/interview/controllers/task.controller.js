@@ -57,7 +57,8 @@ export const getTasks = async (req, res) => {
     const userId = req.userId;
 
     if (userRole === "student") {
-      const studentSection = req.userSection || req.query.section || "";
+      // Trust only the verified session/gateway section, ignoring client query parameter (P1-04)
+      const studentSection = req.userSection || "";
 
       const query = {
         institutionId,
@@ -154,6 +155,25 @@ export const submitTask = async (req, res) => {
       return res.status(403).json({ success: false, message: "Forbidden: Task belongs to a different institution." });
     }
 
+    // Verify task assignment targeting for student (P1-04)
+    if (task.targetType === "INDIVIDUAL") {
+      const isAssigned = Array.isArray(task.assignedTo) && task.assignedTo.map(String).includes(String(req.userId));
+      if (!isAssigned) {
+        return res.status(403).json({
+          success: false,
+          message: "Forbidden: You are not assigned to this individual task.",
+        });
+      }
+    } else if (task.targetType === "SECTION") {
+      const studentSection = req.userSection || "";
+      if (task.targetSection && task.targetSection !== studentSection) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Task is restricted to section ${task.targetSection}.`,
+        });
+      }
+    }
+
     const submission = await TaskSubmission.findOneAndUpdate(
       { taskId, studentId: req.userId },
       {
@@ -215,12 +235,21 @@ export const getTaskSubmissions = async (req, res) => {
  */
 export const reviewSubmission = async (req, res) => {
   try {
-    const { submissionId } = req.params;
+    const { taskId, submissionId } = req.params;
     const { trainerRemarks, score } = req.body;
 
-    const submission = await TaskSubmission.findById(submissionId);
+    // Scope by institutionId and taskId (P1-04)
+    const task = await Task.findOne({
+      _id: taskId,
+      ...(req.institutionId ? { institutionId: req.institutionId } : {}),
+    });
+    if (!task) {
+      return res.status(404).json({ success: false, message: "Task not found in this institution." });
+    }
+
+    const submission = await TaskSubmission.findOne({ _id: submissionId, taskId });
     if (!submission) {
-      return res.status(404).json({ success: false, message: "Submission not found." });
+      return res.status(404).json({ success: false, message: "Submission not found for this task." });
     }
 
     if (trainerRemarks !== undefined) submission.trainerRemarks = trainerRemarks;

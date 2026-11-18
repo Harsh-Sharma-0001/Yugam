@@ -36,12 +36,27 @@ export async function feedbackNode(state) {
 
 
 export async function summaryNode(state) {
+    let questions = Array.isArray(state.questions) ? [...state.questions] : [];
+    if (questions.length > 0 && state.feedback) {
+        questions = questions.map((q, idx) => {
+            const qObj = q && typeof q.toObject === "function" ? q.toObject() : { ...q };
+            if (idx === questions.length - 1 || (state.question && qObj.question === state.question)) {
+                return {
+                    ...qObj,
+                    userAnswer: state.answer || qObj.userAnswer || "",
+                    feedback: state.feedback || qObj.feedback || {},
+                };
+            }
+            return qObj;
+        });
+    }
+
     const report = await summaryAgent({
          role: state.role,
 
         type: state.type,
 
-        questions: state.questions,
+        questions,
     })
 
     return {

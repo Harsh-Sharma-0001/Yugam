@@ -50,6 +50,14 @@ export const joinLiveRoom = async (req, res) => {
       });
     }
 
+    // Session Status Verification (P1-02)
+    if (scheduled.status === "completed" || scheduled.status === "cancelled") {
+      return res.status(409).json({
+        success: false,
+        message: `This interview session has already ended and cannot be rejoined (Status: ${scheduled.status}).`,
+      });
+    }
+
     const participantRole = isAssignedTrainer || isInstitutionTrainer ? "trainer" : "student";
 
     const conductingTrainerId =
@@ -63,6 +71,13 @@ export const joinLiveRoom = async (req, res) => {
 
     // Find or initialize LiveInterview room
     let liveInterview = await LiveInterview.findOne({ scheduledInterviewId: scheduleId });
+
+    if (liveInterview && liveInterview.status === "completed") {
+      return res.status(409).json({
+        success: false,
+        message: "This live interview session is already completed.",
+      });
+    }
 
     if (!liveInterview) {
       liveInterview = await LiveInterview.create({

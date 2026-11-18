@@ -12,6 +12,7 @@ import {
   logout,
   provisionUsers,
   refundFeatureCoins,
+  refundUserCoins,
   updateProfile,
   updateUserRole,
   useInterviewCoins,
@@ -72,6 +73,7 @@ authRouter.get(
 // Coin Economy & Internal Endpoints
 authRouter.post("/add-coins", isInternalService, addCoins);
 authRouter.post("/use-coins", useInterviewCoins);
+authRouter.post("/refund-coins", refundUserCoins);
 authRouter.get("/internal/user/:id", isInternalService, getUserById);
 authRouter.get("/internal/institution/students", isInternalService, getInternalStudents);
 authRouter.post("/internal/audit-logs", isInternalService, createInternalAuditLog);

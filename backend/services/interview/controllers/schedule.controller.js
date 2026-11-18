@@ -322,6 +322,26 @@ export const getScheduleById = async (req, res) => {
       return res.status(403).json({ success: false, message: "Forbidden: Cross-institution access denied." });
     }
 
+    const userRole = req.headers["x-user-role"] || req.userRole || "student";
+    const userId = req.headers["x-user-id"] || req.userId;
+    const userSection = req.userSection || "";
+
+    // Restrict student access to direct studentId or section match (P1-05)
+    if (userRole === "student") {
+      const isDirectMatch = String(scheduled.studentId) === String(userId);
+      const isSectionMatch = Boolean(
+        scheduled.section &&
+        userSection &&
+        scheduled.section.toLowerCase().trim() === userSection.toLowerCase().trim()
+      );
+      if (!isDirectMatch && !isSectionMatch) {
+        return res.status(403).json({
+          success: false,
+          message: "Forbidden: You are not authorized to access this scheduled session.",
+        });
+      }
+    }
+
     return res.status(200).json({
       success: true,
       scheduledInterview: scheduled,

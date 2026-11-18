@@ -19,6 +19,16 @@ export const useCoins = async (data) => {
   }
 };
 
+export const refundCoins = async (data) => {
+  try {
+    const response = await api.post("/api/auth/refund-coins", data);
+    return response.data;
+  } catch (error) {
+    console.error("Refund coins error:", error);
+    throw error;
+  }
+};
+
 export const updateProfile = async (profileData) => {
   try {
     const response = await api.put("/api/auth/profile", profileData);

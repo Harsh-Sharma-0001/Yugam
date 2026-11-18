@@ -99,6 +99,17 @@ const interviewSchema = new mongoose.Schema(
             index: true,
         },
 
+        institutionId: {
+            type: String,
+            default: "DEFAULT_COLLEGE",
+            index: true,
+        },
+
+        isEvaluating: {
+            type: Boolean,
+            default: false,
+        },
+
         mode: {
             type: String,
             enum: ["ai", "live"],

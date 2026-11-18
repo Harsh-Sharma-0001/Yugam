@@ -7,6 +7,7 @@ import Interview from "../models/interview.model.js";
 import LiveInterview from "../models/liveInterview.model.js";
 import ScheduledInterview from "../models/scheduledInterview.model.js";
 import { deductCoins, refundCoins } from "../utils/coinClient.js";
+import { getInterviewCacheKey, invalidateInterviewCache, clampScore } from "../utils/cacheKeys.js";
 
 export const startInterview = async (req, res) => {
     let reservationId;
@@ -77,8 +78,12 @@ export const startInterview = async (req, res) => {
             throw new Error("Failed to generate interview questions");
         }
 
+        const userInstitutionId = req.headers["x-institution-id"] || req.institutionId || "DEFAULT_COLLEGE";
+        const userRole = req.headers["x-user-role"] || req.userRole || "student";
+
         const interview = await Interview.create({
             userId,
+            institutionId: userInstitutionId,
             type,
             role,
             useResume,
@@ -87,10 +92,11 @@ export const startInterview = async (req, res) => {
             status: "in-progress",
         });
 
-        await Promise.allSettled([
-            redis.del(`interviews:${userId}`),
-            redis.del(`interviews:student:${userId}`),
-        ]);
+        await invalidateInterviewCache(redis, {
+            userId,
+            institutionId: userInstitutionId,
+            userRole,
+        });
 
         return res.status(200).json({
             success: true,
@@ -191,18 +197,49 @@ export const submitAnswer = async (req, res) => {
 
         const trimmedAnswer = answer.trim();
         const completed = expectedIndex + 1 >= interview.questions.length;
+        const userInstitutionId = req.headers["x-institution-id"] || req.institutionId || "DEFAULT_COLLEGE";
+        const userRole = req.headers["x-user-role"] || req.userRole || "student";
+
+        // Pre-LLM atomic reservation guard against concurrent requests (P1-01)
+        const reservedInterview = await Interview.findOneAndUpdate(
+            {
+                _id: interviewId,
+                userId,
+                currentQuestion: expectedIndex,
+                status: { $ne: "completed" },
+                isEvaluating: { $ne: true },
+            },
+            { $set: { isEvaluating: true } },
+            { new: true }
+        );
+
+        if (!reservedInterview) {
+            return res.status(409).json({
+                success: false,
+                message: "Evaluation already in progress or question already answered.",
+            });
+        }
 
         // 4. LLM Feedback & Scoring
-        const result = await graph.invoke({
-            action: "feedback",
-            question: currentQuestion.question,
-            answer: trimmedAnswer,
-            difficulty: currentQuestion.difficulty,
-            completed,
-            role: interview.role,
-            type: interview.type,
-            questions: interview.questions,
-        });
+        let result;
+        try {
+            result = await graph.invoke({
+                action: "feedback",
+                question: currentQuestion.question,
+                answer: trimmedAnswer,
+                difficulty: currentQuestion.difficulty,
+                completed,
+                role: interview.role,
+                type: interview.type,
+                questions: interview.questions,
+            });
+        } catch (llmErr) {
+            await Interview.updateOne(
+                { _id: interviewId },
+                { $set: { isEvaluating: false } }
+            );
+            throw llmErr;
+        }
 
         // 5. Atomic Update with Concurrency Guard
         const updateQuery = {
@@ -216,6 +253,7 @@ export const submitAnswer = async (req, res) => {
             $set: {
                 [`questions.${expectedIndex}.userAnswer`]: trimmedAnswer,
                 [`questions.${expectedIndex}.feedback`]: result.feedback || {},
+                isEvaluating: false,
             },
             $inc: {
                 currentQuestion: 1,
@@ -244,10 +282,11 @@ export const submitAnswer = async (req, res) => {
             });
         }
 
-        await Promise.allSettled([
-            redis.del(`interviews:${userId}`),
-            redis.del(`interviews:student:${userId}`),
-        ]);
+        await invalidateInterviewCache(redis, {
+            userId,
+            institutionId: userInstitutionId,
+            userRole,
+        });
 
         if (completed) {
             return res.status(200).json({
@@ -302,6 +341,16 @@ export const getInterview = async (req, res) => {
                     success: false,
                     message: "Forbidden: You are not authorized to view this interview report.",
                 });
+            }
+
+            if ((userRole === "trainer" || userRole === "admin") && !isOwner) {
+                const interviewInst = aiInterview.institutionId || "DEFAULT_COLLEGE";
+                if (userInstitutionId && interviewInst !== userInstitutionId) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Forbidden: Cross-institution interview report access denied.",
+                    });
+                }
             }
 
             return res.status(200).json({
@@ -426,7 +475,7 @@ export const getAllInterviews = async (req, res) => {
             });
         }
 
-        const cacheKey = `interviews:${userRole}:${userId}`;
+        const cacheKey = getInterviewCacheKey(userInstitutionId, userRole, userId);
         const cache = await redis.get(cacheKey);
 
         if (cache) {
@@ -504,10 +553,12 @@ export const getAllInterviews = async (req, res) => {
         // TRAINER INTERVIEW HISTORY & KPIS
         if (userRole === "trainer") {
             const liveInterviews = await LiveInterview.find({
+                institutionId: userInstitutionId,
                 $or: [
                     { trainerId: userId },
                     { "evaluation.evaluatedBy": req.userName },
-                    { institutionId: userInstitutionId },
+                    { trainerName: req.userName },
+                    { status: "completed" },
                 ],
             }).sort({ createdAt: -1 });
 
