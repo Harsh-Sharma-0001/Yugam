@@ -19,10 +19,28 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: |
+            backend/package-lock.json
+            backend/gateway/package-lock.json
+            backend/services/*/package-lock.json
 
-      - name: Install Backend Dependencies
-        run: npm ci --prefix backend
+      - name: Install Backend & Microservice Dependencies
+        run: |
+          npm ci --prefix backend
+          if [ -f "backend/gateway/package-lock.json" ]; then
+            npm ci --prefix backend/gateway
+          else
+            npm install --no-audit --no-fund --prefix backend/gateway
+          fi
+          for dir in backend/services/*; do
+            if [ -f "$dir/package.json" ]; then
+              if [ -f "$dir/package-lock.json" ]; then
+                npm ci --prefix "$dir"
+              else
+                npm install --no-audit --no-fund --prefix "$dir"
+              fi
+            fi
+          done
 
       - name: Run Backend Tests
         run: npm test --prefix backend
