@@ -1,5 +1,159 @@
+version: "3.8"
+
 services:
   redis:
-    image: redis
+    image: redis:7-alpine
+    container_name: yugam-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
     ports:
-      - 6379:6379
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: yugam-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth:8001
+      - RESUME_SERVICE_URL=http://resume:8002
+      - INTERVIEW_SERVICE_URL=http://interview:8003
+      - ROADMAP_SERVICE_URL=http://roadmap:8004
+      - BILLING_SERVICE_URL=http://billing:8005
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth:
+        condition: service_started
+      interview:
+        condition: service_started
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    container_name: yugam-auth
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGO_URI=${MONGO_URI}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  resume:
+    build:
+      context: .
+      dockerfile: services/resume/Dockerfile
+    container_name: yugam-resume
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGO_URI=${MONGO_URI}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth:
+        condition: service_started
+
+  interview:
+    build:
+      context: .
+      dockerfile: services/interview/Dockerfile
+    container_name: yugam-interview
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGO_URI=${MONGO_URI}
+      - AUTH_SERVICE_URL=http://auth:8001
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth:
+        condition: service_started
+
+  roadmap:
+    build:
+      context: .
+      dockerfile: services/roadmap/Dockerfile
+    container_name: yugam-roadmap
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGO_URI=${MONGO_URI}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  billing:
+    build:
+      context: .
+      dockerfile: services/billing/Dockerfile
+    container_name: yugam-billing
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      - PORT=8005
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGO_URI=${MONGO_URI}
+      - AUTH_SERVICE_URL=http://auth:8001
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-yugam_internal_secret_2026}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-yugam_internal_secret_2026}
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth:
+        condition: service_started
+
+volumes:
+  redis_data:
+    driver: local

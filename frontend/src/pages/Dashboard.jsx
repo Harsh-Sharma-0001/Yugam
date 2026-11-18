@@ -15,6 +15,8 @@ import {
 } from "../apis/interview.api";
 import {
   getCurrentUser,
+  checkAuthStatus,
+  AUTH_STATUS,
   getTasks,
   createTask,
   submitTask,
@@ -173,19 +175,20 @@ function Dashboard({ user: propUser, setUser: setAppUser }) {
     user?.profile?.collegeName?.trim() ||
     (user?.institutionId && user.institutionId !== "DEFAULT_COLLEGE" ? user.institutionId : "DEFAULT_COLLEGE");
 
-  // Load User Data
+  // Load User Data with Robust Auth Status Checking (P2-10, P2-11)
   const fetchUser = async () => {
     try {
-      const data = await getCurrentUser();
-      if (data?.user) {
-        setUser(data.user);
-        if (setAppUser) setAppUser(data.user);
-      } else {
+      const authRes = await checkAuthStatus();
+      if (authRes.status === AUTH_STATUS.AUTHENTICATED && authRes.user) {
+        setUser(authRes.user);
+        if (setAppUser) setAppUser(authRes.user);
+      } else if (authRes.status === AUTH_STATUS.UNAUTHENTICATED) {
         window.location.href = "/";
+      } else if (authRes.status === AUTH_STATUS.NETWORK_ERROR) {
+        console.warn("Transient network error during user refresh; retaining active session:", authRes.error);
       }
     } catch (e) {
       console.error("Dashboard fetchUser error:", e);
-      window.location.href = "/";
     }
   };
 

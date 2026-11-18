@@ -12,7 +12,7 @@ import InterviewReport from './pages/InterviewReport'
 import Roadmap from './pages/Roadmap'
 import Billing from './pages/Billing'
 import LiveInterviewRoom from './pages/LiveInterviewRoom'
-import { getCurrentUser } from './apis/user.api'
+import { getCurrentUser, checkAuthStatus, AUTH_STATUS } from './apis/user.api'
 import { getResume } from './apis/resume.api'
 import { useDispatch } from 'react-redux'
 import { setResume } from './redux/resumeSlice'
@@ -43,8 +43,15 @@ function App() {
       if (userFetchedRef.current) return;
       userFetchedRef.current = true;
       try {
-        const data = await getCurrentUser()
-        setUser(data?.user || null)
+        const authRes = await checkAuthStatus()
+        if (authRes.status === AUTH_STATUS.AUTHENTICATED && authRes.user) {
+          setUser(authRes.user)
+        } else if (authRes.status === AUTH_STATUS.UNAUTHENTICATED) {
+          setUser(null)
+        } else if (authRes.status === AUTH_STATUS.NETWORK_ERROR) {
+          console.warn("Transient error checking initial auth status:", authRes.error)
+          setUser(null)
+        }
       } catch (error) {
         console.error("Error fetching current user:", error)
         setUser(null)

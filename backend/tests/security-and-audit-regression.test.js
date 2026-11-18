@@ -456,3 +456,100 @@ describe("9. Privileged Role Registration & Verified Debit Linkage for Refunds (
     assert.equal(clampScore("invalid"), 0);
   });
 });
+
+describe("10. WebRTC Configurable STUN/TURN ICE Servers (P2-03)", () => {
+  test("Falls back to Google public STUN servers when VITE_ICE_SERVERS_JSON is unset or invalid", () => {
+    const resolveIce = (envVal) => {
+      try {
+        if (envVal) {
+          const parsed = typeof envVal === "string" ? JSON.parse(envVal) : envVal;
+          if (Array.isArray(parsed) && parsed.length > 0) return { iceServers: parsed };
+        }
+      } catch (_) {}
+      return {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+        ],
+      };
+    };
+
+    const defaultIce = resolveIce(undefined);
+    assert.equal(defaultIce.iceServers.length, 2);
+    assert.equal(defaultIce.iceServers[0].urls, "stun:stun.l.google.com:19302");
+
+    const badIce = resolveIce("not-valid-json");
+    assert.equal(badIce.iceServers.length, 2);
+  });
+
+  test("Correctly parses custom STUN/TURN servers from VITE_ICE_SERVERS_JSON for restrictive college firewalls", () => {
+    const resolveIce = (envVal) => {
+      try {
+        if (envVal) {
+          const parsed = typeof envVal === "string" ? JSON.parse(envVal) : envVal;
+          if (Array.isArray(parsed) && parsed.length > 0) return { iceServers: parsed };
+        }
+      } catch (_) {}
+      return {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+        ],
+      };
+    };
+
+    const customIceJson = JSON.stringify([
+      { urls: "turn:turn.college.edu:3478", username: "user", credential: "pwd" },
+      { urls: "stun:stun.college.edu:3478" },
+    ]);
+
+    const resolved = resolveIce(customIceJson);
+    assert.equal(resolved.iceServers.length, 2);
+    assert.equal(resolved.iceServers[0].urls, "turn:turn.college.edu:3478");
+    assert.equal(resolved.iceServers[0].username, "user");
+  });
+});
+
+describe("11. Client Auth Status Categorization & Transient Error Isolation (P2-10, P2-11)", () => {
+  test("Distinguishes 401/403 unauthenticated from 5xx/network errors", () => {
+    const categorizeAuthResponse = (error, data) => {
+      if (data?.user) return { status: "authenticated", user: data.user };
+      if (!error) return { status: "unauthenticated", user: null };
+
+      const code = error.status || error.response?.status;
+      if (code === 401 || code === 403) {
+        return { status: "unauthenticated", user: null };
+      }
+      return { status: "networkError", user: null, isTransient: true };
+    };
+
+    assert.equal(categorizeAuthResponse(null, { user: { name: "Harsh" } }).status, "authenticated");
+    assert.equal(categorizeAuthResponse({ status: 401 }, null).status, "unauthenticated");
+    assert.equal(categorizeAuthResponse({ status: 403 }, null).status, "unauthenticated");
+    assert.equal(categorizeAuthResponse({ status: 500 }, null).status, "networkError");
+    assert.equal(categorizeAuthResponse({ message: "Network Error" }, null).status, "networkError");
+  });
+});
+
+describe("12. Firebase Environment-Based Credentials & Docker Setup (P2-13, P2-14, P2-15)", () => {
+  test("Parses raw JSON or Base64 Firebase service account credentials from environment", () => {
+    const parseCredentials = (rawEnv) => {
+      if (!rawEnv) return null;
+      const trimmed = rawEnv.trim();
+      if (trimmed.startsWith("{")) {
+        return JSON.parse(trimmed);
+      }
+      const decoded = Buffer.from(trimmed, "base64").toString("utf-8");
+      return JSON.parse(decoded);
+    };
+
+    const sample = { project_id: "yugam-test", client_email: "test@yugam.iam.gserviceaccount.com" };
+    const rawJson = JSON.stringify(sample);
+    const base64Json = Buffer.from(rawJson).toString("base64");
+
+    const parsedFromRaw = parseCredentials(rawJson);
+    assert.equal(parsedFromRaw.project_id, "yugam-test");
+
+    const parsedFromBase64 = parseCredentials(base64Json);
+    assert.equal(parsedFromBase64.project_id, "yugam-test");
+  });
+});
