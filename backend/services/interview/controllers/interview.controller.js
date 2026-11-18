@@ -316,13 +316,6 @@ export const submitAnswer = async (req, res) => {
                 { $set: { isEvaluating: false, evaluatingStartedAt: null } }
             ).catch(() => {});
         }
-            success: true,
-            completed: false,
-            currentQuestion: updatedInterview.currentQuestion,
-            question: updatedInterview.questions[updatedInterview.currentQuestion],
-            feedback: result.feedback,
-        });
-
     } catch (error) {
         console.error("submitAnswer error:", error);
         return res.status(500).json({
