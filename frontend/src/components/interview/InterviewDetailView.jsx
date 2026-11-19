@@ -117,6 +117,12 @@ function InterviewDetailView({ interviewId, onBack }) {
     }
 
     const isCompleted = interview.status === 'completed';
+    const isLive = Boolean(
+        interview?.isLive === true ||
+        interview?.isLiveInterview === true ||
+        String(interview?.mode).toUpperCase() === 'LIVE' ||
+        String(interview?.type).toUpperCase() === 'LIVE'
+    );
     const totalQuestions = interview.questions?.length || 0;
     const answeredCount = (interview.questions || []).filter(
         (q) => q.userAnswer && typeof q.userAnswer === 'string' && q.userAnswer.trim().length > 0
@@ -143,13 +149,13 @@ function InterviewDetailView({ interviewId, onBack }) {
                     <span>Back to Interview History</span>
                 </button>
 
-                {!isCompleted && (
+                {!isCompleted && !isLive && (
                     <button
                         onClick={() => navigate(`/interview/${interview._id}`)}
-                        className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition shadow-sm inline-flex items-center gap-1.5"
+                        className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
                     >
                         <FiPlay size={12} />
-                        <span>Resume Live Interview</span>
+                        <span>Resume Session Now</span>
                     </button>
                 )}
             </div>
@@ -160,7 +166,7 @@ function InterviewDetailView({ interviewId, onBack }) {
                     {/* Left: Role, Type, Status, Date */}
                     <div className="flex-1 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                            {interview.isLiveInterview ? (
+                            {isLive ? (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40">
                                     <FiVideo size={13} /> Live Faculty Interview
                                 </span>
@@ -179,6 +185,10 @@ function InterviewDetailView({ interviewId, onBack }) {
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                                     <FiCheckCircle size={13} /> Completed Session
                                 </span>
+                            ) : isLive ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                    <span className="w-2 h-2 rounded-full bg-rose-400" /> Not Completed
+                                </span>
                             ) : (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
                                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" /> In Progress ({answeredCount}/{totalQuestions} Solved)
@@ -186,7 +196,7 @@ function InterviewDetailView({ interviewId, onBack }) {
                             )}
 
                             <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-zinc-300">
-                                {interview.isLiveInterview
+                                {isLive
                                     ? `Evaluated by ${interview.trainerName || 'Faculty Instructor'}`
                                     : (interview.useResume ? 'Tailored to Resume' : 'Standard Taxonomy')}
                             </span>
@@ -196,7 +206,7 @@ function InterviewDetailView({ interviewId, onBack }) {
                             {interview.role || 'Software Engineering Track'}
                         </h1>
 
-                        {interview.isLiveInterview && interview.studentName && (
+                        {isLive && interview.studentName && (
                             <div className="bg-[#17181E] border border-white/5 rounded-xl p-3 inline-flex flex-wrap items-center gap-4 text-xs">
                                 <div>
                                     <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Candidate</span>
@@ -253,6 +263,15 @@ function InterviewDetailView({ interviewId, onBack }) {
                                         : 'Needs Preparation'}
                                 </span>
                             </div>
+                        ) : isLive ? (
+                            <div className="bg-[#17181E] border border-white/10 rounded-2xl p-4 min-w-[200px]">
+                                <span className="text-xs text-rose-400 font-semibold block mb-1">
+                                    Session Not Completed
+                                </span>
+                                <p className="text-xs text-zinc-300">
+                                    Live session was concluded without final evaluation scoring.
+                                </p>
+                            </div>
                         ) : (
                             <div className="bg-[#17181E] border border-amber-500/20 rounded-2xl p-4 min-w-[200px]">
                                 <span className="text-xs text-amber-400 font-semibold block mb-1">
@@ -263,7 +282,7 @@ function InterviewDetailView({ interviewId, onBack }) {
                                 </p>
                                 <button
                                     onClick={() => navigate(`/interview/${interview._id}`)}
-                                    className="w-full px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition shadow-sm flex items-center justify-center gap-1.5"
+                                    className="w-full px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                     <FiPlay size={12} />
                                     <span>Resume Session Now</span>

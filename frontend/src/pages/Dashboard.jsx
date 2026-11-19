@@ -881,11 +881,15 @@ function Dashboard({ user: propUser, setUser: setAppUser }) {
                                 className={`text-[10px] font-semibold ${
                                   item.status === "completed"
                                     ? "text-emerald-400"
+                                    : (item.isLive === true || item.isLiveInterview === true || String(item.mode).toUpperCase() === "LIVE" || String(item.type).toUpperCase() === "LIVE")
+                                    ? "text-rose-400"
                                     : "text-amber-400"
                                 }`}
                               >
                                 {item.status === "completed"
                                   ? "Score: " + (item.overallScore || 0)
+                                  : (item.isLive === true || item.isLiveInterview === true || String(item.mode).toUpperCase() === "LIVE" || String(item.type).toUpperCase() === "LIVE")
+                                  ? "Not Completed"
                                   : "In Progress"}
                               </span>
                             </div>

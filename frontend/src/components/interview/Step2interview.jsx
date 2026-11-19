@@ -8,19 +8,35 @@ import CodeEditor from './CodeEditor'
 import Timer from './Timer'
 import { submitAnswer } from '../../apis/interview.api'
 import { useNavigate } from 'react-router-dom'
-function Step2interview({ interviewData, user }) {
-const navigate = useNavigate()
+function Step2interview({ interviewData = {}, user }) {
+  const navigate = useNavigate();
   const candidateFirstName = user?.name?.trim() ? user.name.trim().split(" ")[0] : "Candidate";
   const candidateInitial = candidateFirstName.charAt(0).toUpperCase() || "C";
 
+  // Safely guard questions and current question
+  const questionsList = Array.isArray(interviewData?.questions) && interviewData.questions.length > 0
+    ? interviewData.questions
+    : interviewData?.question
+    ? [interviewData.question]
+    : [];
+
+  const initialIndex = Math.min(
+    Math.max(0, Number(interviewData?.currentQuestion) || 0),
+    Math.max(0, questionsList.length - 1)
+  );
+
+  const currentQ = questionsList[initialIndex] || interviewData?.question || {};
+  const initialTimer = Number(currentQ?.timer) || 60;
+  const totalQuestions = Number(interviewData?.totalQuestions) || questionsList.length || 1;
+
   // ── State ──
-  const [question, setQuestion] = useState(interviewData.question);
-  const [currentIndex, setCurrentIndex] = useState(interviewData.currentQuestion || 0);
-  const [answer, setAnswer] = useState("");
-  const [feedback, setFeedback] = useState(null);
+  const [question, setQuestion] = useState(currentQ);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [answer, setAnswer] = useState(currentQ?.userAnswer || "");
+  const [feedback, setFeedback] = useState(currentQ?.feedback?.feedback ? currentQ.feedback : null);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(interviewData.question.timer || 60);
+  const [timeLeft, setTimeLeft] = useState(initialTimer);
   const [timerActive, setTimerActive] = useState(true); // paused once the answer is submitted
 
   // UI toggles
@@ -68,9 +84,9 @@ const navigate = useNavigate()
   }, []);
 
 
-  const videoSource = voiceGender === "female" ? femaleVideo : maleVideo
-  const progress = ((currentIndex + 1)/(interviewData.totalQuestions))*100
-  const showMicon = micOn && !isAIPlaying
+  const videoSource = voiceGender === "female" ? femaleVideo : maleVideo;
+  const progress = Math.min(100, Math.round(((currentIndex + 1) / totalQuestions) * 100));
+  const showMicon = micOn && !isAIPlaying;
 
   // Speech recognition with standard + webkit prefix support
   useEffect(() => {
@@ -191,46 +207,64 @@ const navigate = useNavigate()
     })
   
 
-  useEffect(()=>{
-    if(!selectedVoice || introSpoken)return;
-    const runIntro=async () => {
-      setIntroSpoken(true)
+  useEffect(() => {
+    if (!selectedVoice || introSpoken) return;
+    const runIntro = async () => {
+      setIntroSpoken(true);
       await new Promise((r) => setTimeout(r, 1200));
-      await speakText(`Welcome ${candidateFirstName}! Let's begin your interview.`);
+      if (currentIndex > 0) {
+        await speakText(`Welcome back ${candidateFirstName}! Let's continue your interview.`);
+      } else {
+        await speakText(`Welcome ${candidateFirstName}! Let's begin your interview.`);
+      }
       await new Promise((r) => setTimeout(r, 900));
-      await speakText(interviewData.question.question);
+      if (question?.question) {
+        await speakText(question.question);
+      }
+    };
+    runIntro();
+  }, [selectedVoice]);
+
+  useEffect(() => {
+    if (!interviewData) return;
+    const qList = Array.isArray(interviewData.questions) && interviewData.questions.length > 0
+      ? interviewData.questions
+      : interviewData.question
+      ? [interviewData.question]
+      : [];
+
+    const idx = Math.min(
+      Math.max(0, Number(interviewData.currentQuestion) || 0),
+      Math.max(0, qList.length - 1)
+    );
+
+    const activeQ = qList[idx] || interviewData.question || {};
+    setQuestion(activeQ);
+    setCurrentIndex(idx);
+    setTimeLeft(Number(activeQ?.timer) || 60);
+    if (activeQ?.userAnswer) {
+      setAnswer(activeQ.userAnswer);
     }
-    runIntro()
+    if (activeQ?.feedback?.feedback) {
+      setFeedback(activeQ.feedback);
+    }
+  }, [interviewData]);
 
-  },[selectedVoice])
-
-
-
-  useEffect(()=>{
-    setQuestion(interviewData.question);
-    setCurrentIndex(interviewData.currentQuestion);
-    setTimeLeft(interviewData.question.timer || 60);
-
-  },[interviewData])
-
-  
-  useEffect(()=>{
-    if(!selectedVoice || !introSpoken)return;
+  useEffect(() => {
+    if (!selectedVoice || !introSpoken || !question?.question) return;
     const speakQuestion = async () => {
       await new Promise((r) => setTimeout(r, 900));
-      await speakText(question.question);
-    }
-    speakQuestion()
+      if (question?.question) {
+        await speakText(question.question);
+      }
+    };
+    speakQuestion();
+  }, [question]);
 
-  },[question])
-
-  useEffect(()=>{
-     setTimeLeft(question.timer || 60);
+  useEffect(() => {
+    setTimeLeft(Number(question?.timer) || 60);
     setTimerActive(true);
-
-  },[question])
-
-
+  }, [question]);
 
   useEffect(() => {
     if (timeLeft !== 0) return;
@@ -242,7 +276,7 @@ const navigate = useNavigate()
       setSubmitError(null);
 
       const res = await submitAnswer({
-        interviewId: interviewData.interviewId,
+        interviewId: interviewData?.interviewId,
         answer: finalAnswer,
         questionIndex: currentIndex,
       });
@@ -261,7 +295,7 @@ const navigate = useNavigate()
           "Great job! Your interview is complete. Preparing your report now."
         );
         setLoading(false);
-        navigate(`/interview/${interviewData.interviewId}/report`);
+        navigate(`/interview/${interviewData?.interviewId}/report`);
         return;
       }
 
@@ -272,15 +306,15 @@ const navigate = useNavigate()
         "Noted your answer. Let's move to the next question."
       );
       setLoading(false);
-      setQuestion(res.question);
-      setCurrentIndex(res.currentQuestion);
+      const nextQ = res.question || {};
+      setQuestion(nextQ);
+      setCurrentIndex(typeof res.currentQuestion === "number" ? res.currentQuestion : currentIndex + 1);
       setAnswer("");
       setFeedback(null);
     };
 
     autoSubmit();
   }, [timeLeft]);
-
 
   const submit = async () => {
     if (!answer.trim() || loading) return;
@@ -290,7 +324,7 @@ const navigate = useNavigate()
     setSubmitError(null);
 
     const res = await submitAnswer({
-      interviewId: interviewData.interviewId,
+      interviewId: interviewData?.interviewId,
       answer: answer.trim(),
       questionIndex: currentIndex,
     });
@@ -310,7 +344,7 @@ const navigate = useNavigate()
         "Great job! Your interview is complete. Preparing your report now."
       );
       setLoading(false);
-      navigate(`/interview/${interviewData.interviewId}/report`);
+      navigate(`/interview/${interviewData?.interviewId}/report`);
       return;
     }
 
@@ -321,8 +355,9 @@ const navigate = useNavigate()
       "Noted your answer. Let's move to the next question."
     );
     setLoading(false);
-    setQuestion(res.question);
-    setCurrentIndex(res.currentQuestion);
+    const nextQ = res.question || {};
+    setQuestion(nextQ);
+    setCurrentIndex(typeof res.currentQuestion === "number" ? res.currentQuestion : currentIndex + 1);
     setAnswer("");
     setFeedback(null);
   };
@@ -472,48 +507,51 @@ const navigate = useNavigate()
 
 
           <div className='flex items-start justify-between mb-4'>
-
             <div> 
               <h2 className='text-base sm:text-lg font-semibold text-white'>
                 AI Interview
               </h2>
               <div className='flex items-center gap-2 text-zinc-500 text-xs mt-0.5'>
                 <FiClock size={11}/>
-                <span>{question.difficulty}</span>
-
+                <span className="capitalize">{question?.difficulty || "medium"}</span>
               </div>
             </div>
 
             <div className='flex flex-col items-end gap-1.5 min-w-[110px]'>
-              <Timer timeLeft={timeLeft} totalTime={question.timer || 60}/>
-
+              <Timer timeLeft={timeLeft} totalTime={Number(question?.timer) || 60}/>
             </div>
           </div>
 
-
           <motion.div 
-          initial={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-          className='relative overflow-hidden rounded-xl bg-[#17181E] border border-white/8 p-4 sm:p-5 mb-4'>
+            className='relative overflow-hidden rounded-xl bg-[#17181E] border border-white/8 p-4 sm:p-5 mb-4'
+          >
             <div className='absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transparent to-transparent pointer-events-none'/>
             <div className='relative flex items-center gap-2.5 mb-3'>
               <div className='w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center shrink-0'>
                 <FiMessageSquare size={14}/>
               </div>
-              <p className='text-xs text-zinc-500'>Question {currentIndex + 1}</p>
+              <p className='text-xs text-zinc-400'>Question {currentIndex + 1} of {totalQuestions}</p>
+              {currentIndex > 0 && (
+                <span className='text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-medium ml-auto'>
+                  ✓ {currentIndex} previous {currentIndex === 1 ? 'answer' : 'answers'} saved
+                </span>
+              )}
             </div>
             <p className='relative text-white text-sm sm:text-base leading-7'>
-              {question.question}</p>
-
+              {question?.question || "No question text available."}
+            </p>
           </motion.div>
 
           <div className='mb-3'>
             <div className='flex justify-between text-[10px] text-white/35 mb-1'>
-            <span>Progress</span>
-            <span>{currentIndex+1}/{interviewData.totalQuestions}</span>
+              <span>Progress</span>
+              <span>{currentIndex + 1}/{totalQuestions}</span>
             </div>
             <div className='w-full h-1 rounded-full bg-white/10 overflow-hidden'>
-            <div className='h-full bg-white rounded-full transition-all duration-500' style={{width: `${progress}%`}} /></div>
+              <div className='h-full bg-white rounded-full transition-all duration-500' style={{ width: `${progress}%` }} />
+            </div>
           </div>
 
           <div className='flex-1 flex flex-col min-h-0'>

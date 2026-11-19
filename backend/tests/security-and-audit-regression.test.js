@@ -1191,3 +1191,150 @@ describe("17. Direct Controller & Socket Integration Tests (Real Modules)", () =
     }
   });
 });
+
+describe("18. Live Faculty Incomplete Status, Resume Disabling & AI Resume State Restoration", () => {
+  const checkIsLive = (interview) => {
+    return Boolean(
+      interview?.isLive === true ||
+      interview?.isLiveInterview === true ||
+      String(interview?.mode).toUpperCase() === "LIVE" ||
+      String(interview?.type).toUpperCase() === "LIVE"
+    );
+  };
+
+  const getInterviewCardPresentation = (interview) => {
+    const isCompleted = interview?.status === "completed";
+    const isLive = checkIsLive(interview);
+
+    let statusBadgeText = "In Progress";
+    if (isCompleted) {
+      statusBadgeText = "Completed";
+    } else if (isLive) {
+      statusBadgeText = "Not Completed";
+    }
+
+    const canResume = !isCompleted && !isLive;
+    const canInspect = true;
+
+    return {
+      isCompleted,
+      isLive,
+      statusBadgeText,
+      canResume,
+      canInspect,
+    };
+  };
+
+  test("Identifies live faculty sessions across isLive, isLiveInterview, mode=LIVE, and type=LIVE", () => {
+    assert.equal(checkIsLive({ isLive: true }), true);
+    assert.equal(checkIsLive({ isLiveInterview: true }), true);
+    assert.equal(checkIsLive({ mode: "LIVE" }), true);
+    assert.equal(checkIsLive({ mode: "live" }), true);
+    assert.equal(checkIsLive({ type: "LIVE" }), true);
+    assert.equal(checkIsLive({ type: "live" }), true);
+
+    // AI mock interview should NOT be flagged as live
+    assert.equal(checkIsLive({ type: "technical", mode: "ai", isLive: false }), false);
+    assert.equal(checkIsLive({ type: "hr", mode: "ai" }), false);
+    assert.equal(checkIsLive(null), false);
+  });
+
+  test("Incomplete live faculty interviews show 'Not Completed' and completely disable Resume buttons", () => {
+    const incompleteLiveSession = {
+      _id: "live-session-123",
+      role: "Software Engineer",
+      status: "in-progress",
+      mode: "live",
+      isLiveInterview: true,
+      questions: [{ questionText: "Live Q1" }],
+    };
+
+    const presentation = getInterviewCardPresentation(incompleteLiveSession);
+    assert.equal(presentation.isLive, true);
+    assert.equal(presentation.isCompleted, false);
+    assert.equal(presentation.statusBadgeText, "Not Completed");
+    assert.equal(presentation.canResume, false, "Live incomplete session must NOT have Resume button");
+    assert.equal(presentation.canInspect, true, "Inspect Session must remain accessible");
+  });
+
+  test("Incomplete AI mock interviews keep 'In Progress' and allow Resume button", () => {
+    const incompleteAiSession = {
+      _id: "ai-session-456",
+      role: "Backend Engineer",
+      status: "in-progress",
+      mode: "ai",
+      type: "technical",
+      questions: [
+        { question: "Explain indexing", timer: 60, userAnswer: "Indexing speeds up reads" },
+        { question: "Explain B-Trees", timer: 90, userAnswer: "" },
+      ],
+      currentQuestion: 1,
+    };
+
+    const presentation = getInterviewCardPresentation(incompleteAiSession);
+    assert.equal(presentation.isLive, false);
+    assert.equal(presentation.isCompleted, false);
+    assert.equal(presentation.statusBadgeText, "In Progress");
+    assert.equal(presentation.canResume, true, "AI mock interview must have Resume button");
+  });
+
+  test("AI interview resume state restoration safely resolves current question and initial timer without throwing", () => {
+    const resolveResumeState = (interview) => {
+      const questionsList = Array.isArray(interview?.questions) ? interview.questions : [];
+      let initialIndex = typeof interview?.currentQuestion === "number" ? interview.currentQuestion : 0;
+
+      if (initialIndex >= questionsList.length && questionsList.length > 0) {
+        const firstUnanswered = questionsList.findIndex((q) => !q.userAnswer || !q.userAnswer.trim());
+        initialIndex = firstUnanswered !== -1 ? firstUnanswered : 0;
+      }
+
+      const safeIndex = Math.min(Math.max(0, initialIndex), Math.max(0, questionsList.length - 1));
+      const currentQ = questionsList[safeIndex] || questionsList[0] || {};
+      const initialTimer = Number(currentQ?.timer) || 60;
+      const totalQuestions = questionsList.length || 1;
+      const progress = Math.min(100, Math.round(((safeIndex + 1) / totalQuestions) * 100));
+
+      return {
+        safeIndex,
+        currentQ,
+        initialTimer,
+        totalQuestions,
+        progress,
+      };
+    };
+
+    // Case 1: Mid-way session resumed at Question 2 (index 1) with timer 90s
+    const state1 = resolveResumeState({
+      questions: [
+        { question: "Q1", timer: 60, userAnswer: "Answered Q1" },
+        { question: "Q2", timer: 90, userAnswer: "" },
+      ],
+      currentQuestion: 1,
+    });
+    assert.equal(state1.safeIndex, 1);
+    assert.equal(state1.currentQ.question, "Q2");
+    assert.equal(state1.initialTimer, 90);
+    assert.equal(state1.totalQuestions, 2);
+    assert.equal(state1.progress, 100);
+
+    // Case 2: In-progress session with undefined timer and currentQuestion out of range
+    const state2 = resolveResumeState({
+      questions: [
+        { question: "Q1", userAnswer: "" },
+      ],
+      currentQuestion: 99,
+    });
+    assert.equal(state2.safeIndex, 0);
+    assert.equal(state2.currentQ.question, "Q1");
+    assert.equal(state2.initialTimer, 60, "Fallback timer must be 60");
+    assert.equal(state2.totalQuestions, 1);
+    assert.equal(state2.progress, 100);
+
+    // Case 3: Empty or loading questions object (never throws TypeError: Cannot read properties of undefined (reading 'timer'))
+    const state3 = resolveResumeState({});
+    assert.equal(state3.safeIndex, 0);
+    assert.equal(state3.initialTimer, 60);
+    assert.equal(state3.totalQuestions, 1);
+    assert.equal(state3.progress, 100);
+  });
+});

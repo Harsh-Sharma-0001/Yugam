@@ -28,7 +28,18 @@ function InterviewReport({ user, setUser }) {
             }
 
             const data = response.interview
+            const isLive = Boolean(
+                data.isLive === true ||
+                data.isLiveInterview === true ||
+                String(data.mode).toUpperCase() === "LIVE" ||
+                String(data.type).toUpperCase() === "LIVE"
+            );
+
             if (data.status !== "completed") {
+                if (isLive) {
+                    navigate(`/dashboard?tab=interviews`, { replace: true })
+                    return
+                }
                 navigate(`/interview/${id}`, { replace: true })
                 return
             }

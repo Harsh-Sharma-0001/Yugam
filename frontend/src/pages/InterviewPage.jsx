@@ -28,10 +28,34 @@ function InterviewPage({ user, setUser }) {
             }
 
             const data = response.interview
+            const isLive = Boolean(
+                data.isLive === true ||
+                data.isLiveInterview === true ||
+                String(data.mode).toUpperCase() === "LIVE" ||
+                String(data.type).toUpperCase() === "LIVE"
+            );
+
+            // Live faculty sessions cannot be resumed in the AI mock interview player
+            if (isLive) {
+                navigate(`/dashboard?tab=interviews`, { replace: true })
+                return
+            }
+
             if (data.status === "completed") {
                 navigate(`/interview/${id}/report`, { replace: true })
                 return
             }
+
+            const questions = Array.isArray(data.questions) ? data.questions : []
+            if (questions.length > 0 && typeof data.currentQuestion === "number" && data.currentQuestion >= questions.length) {
+                // If all questions are answered, route directly to report
+                const hasUnanswered = questions.some(q => !q.userAnswer || !q.userAnswer.trim())
+                if (!hasUnanswered) {
+                    navigate(`/interview/${id}/report`, { replace: true })
+                    return
+                }
+            }
+
             setInterview(data)
             setLoading(false)
         }
@@ -73,13 +97,27 @@ function InterviewPage({ user, setUser }) {
         )
     }
 
+    const questionsList = Array.isArray(interview.questions) ? interview.questions : [];
+    let initialIndex = typeof interview.currentQuestion === 'number' ? interview.currentQuestion : 0;
+    if (initialIndex >= questionsList.length && questionsList.length > 0) {
+        const firstUnanswered = questionsList.findIndex(q => !q.userAnswer || !q.userAnswer.trim());
+        initialIndex = firstUnanswered !== -1 ? firstUnanswered : 0;
+    }
+    const safeIndex = Math.min(Math.max(0, initialIndex), Math.max(0, questionsList.length - 1));
+    const activeQuestion = questionsList[safeIndex] || questionsList[0] || {};
+
     return (
         <Step2interview
             interviewData={{
                 interviewId: interview._id,
-                currentQuestion: interview.currentQuestion,
-                totalQuestions: interview.questions?.length || 0,
-                question: interview.questions?.[interview.currentQuestion],
+                role: interview.role || "Software Engineer",
+                type: interview.type || "technical",
+                currentQuestion: safeIndex,
+                totalQuestions: questionsList.length || 1,
+                questions: questionsList,
+                question: activeQuestion,
+                useResume: Boolean(interview.useResume),
+                status: interview.status || "in-progress",
             }}
             user={user}
         />

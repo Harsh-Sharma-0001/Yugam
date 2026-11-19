@@ -179,6 +179,12 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {filteredInterviews.map((interview, index) => {
                         const isCompleted = interview.status === 'completed';
+                        const isLive = Boolean(
+                            interview?.isLive === true ||
+                            interview?.isLiveInterview === true ||
+                            String(interview?.mode).toUpperCase() === 'LIVE' ||
+                            String(interview?.type).toUpperCase() === 'LIVE'
+                        );
                         const totalQuestions = interview.questions?.length || 0;
                         const answeredQuestions = (interview.questions || []).filter(
                             (q) => q.userAnswer && typeof q.userAnswer === 'string' && q.userAnswer.trim().length > 0
@@ -206,7 +212,7 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                                 <div>
                                     {/* Header Row: Type pill + Status pill */}
                                     <div className="flex items-center justify-between gap-2 mb-3.5">
-                                        {interview.isLiveInterview || interview.mode === 'live' ? (
+                                        {isLive ? (
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-purple-500/15 text-purple-300 border border-purple-500/30">
                                                 <FiVideo size={11} /> Live Faculty
                                             </span>
@@ -224,6 +230,10 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                                         {isCompleted ? (
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                                 <FiCheckCircle size={11} /> Completed
+                                            </span>
+                                        ) : isLive ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Not Completed
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -250,7 +260,7 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                                         <span>{formattedDate}</span>
                                         <span>•</span>
                                         <span>
-                                            {interview.isLiveInterview
+                                            {isLive
                                                 ? `Conducted by ${interview.trainerName || 'Faculty'}`
                                                 : (interview.useResume ? 'Resume Context' : 'Standard Track')}
                                         </span>
@@ -285,6 +295,24 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                                                     </p>
                                                 )}
                                             </div>
+                                        ) : isLive ? (
+                                            <div>
+                                                <div className="flex items-baseline justify-between mb-1.5">
+                                                    <span className="text-xs text-rose-400 font-medium">Session Status</span>
+                                                    <span className="text-xs font-semibold text-rose-300">
+                                                        Not Completed
+                                                    </span>
+                                                </div>
+                                                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-rose-400/60 rounded-full"
+                                                        style={{ width: '100%' }}
+                                                    />
+                                                </div>
+                                                <p className="text-[11px] text-zinc-400 mt-2">
+                                                    Live interview was concluded without evaluation.
+                                                </p>
+                                            </div>
                                         ) : (
                                             <div>
                                                 <div className="flex items-baseline justify-between mb-1.5">
@@ -317,7 +345,7 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                                         <FiArrowRight size={13} />
                                     </button>
 
-                                    {!isCompleted && (
+                                    {!isCompleted && !isLive && (
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
