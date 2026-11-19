@@ -137,19 +137,45 @@ function InterviewDetailView({ interviewId, onBack }) {
           })
         : 'Recent Session';
 
-    const strengthsList = Array.isArray(interview.strengths) && interview.strengths.length > 0
-        ? interview.strengths
-        : (Array.isArray(interview.evaluation?.strengths) && interview.evaluation.strengths.length > 0
-            ? interview.evaluation.strengths
-            : []);
+    const normalizeStringList = (input) => {
+        if (!input) return [];
+        if (Array.isArray(input)) return input.map((s) => String(s).trim()).filter(Boolean);
+        if (typeof input === 'string' && input.trim()) {
+            return input.split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean);
+        }
+        return [];
+    };
 
-    const improvementsList = Array.isArray(interview.improvements) && interview.improvements.length > 0
-        ? interview.improvements
-        : (Array.isArray(interview.weaknesses) && interview.weaknesses.length > 0
-            ? interview.weaknesses
-            : (Array.isArray(interview.evaluation?.weaknesses) && interview.evaluation.weaknesses.length > 0
-                ? interview.evaluation.weaknesses
-                : []));
+    const resolvedStrengths =
+        normalizeStringList(interview.strengths).length > 0
+            ? normalizeStringList(interview.strengths)
+            : normalizeStringList(interview.evaluation?.strengths).length > 0
+            ? normalizeStringList(interview.evaluation?.strengths)
+            : normalizeStringList(interview.candidateStrengths).length > 0
+            ? normalizeStringList(interview.candidateStrengths)
+            : normalizeStringList(interview.summary?.strengths);
+
+    const resolvedImprovements =
+        normalizeStringList(interview.improvements).length > 0
+            ? normalizeStringList(interview.improvements)
+            : normalizeStringList(interview.areasForImprovement).length > 0
+            ? normalizeStringList(interview.areasForImprovement)
+            : normalizeStringList(interview.weaknesses).length > 0
+            ? normalizeStringList(interview.weaknesses)
+            : normalizeStringList(interview.evaluation?.improvements).length > 0
+            ? normalizeStringList(interview.evaluation?.improvements)
+            : normalizeStringList(interview.evaluation?.areasForImprovement).length > 0
+            ? normalizeStringList(interview.evaluation?.areasForImprovement)
+            : normalizeStringList(interview.evaluation?.weaknesses).length > 0
+            ? normalizeStringList(interview.evaluation?.weaknesses)
+            : normalizeStringList(interview.summary?.improvements).length > 0
+            ? normalizeStringList(interview.summary?.improvements)
+            : normalizeStringList(interview.summary?.areasForImprovement).length > 0
+            ? normalizeStringList(interview.summary?.areasForImprovement)
+            : normalizeStringList(interview.summary?.weaknesses);
+
+    const strengthsList = resolvedStrengths;
+    const improvementsList = resolvedImprovements;
 
     const rubricCriteria = interview.criteria || interview.evaluation?.criteria || null;
     const hasRubric = Boolean(

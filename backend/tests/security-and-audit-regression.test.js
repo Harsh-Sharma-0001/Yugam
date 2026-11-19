@@ -1520,3 +1520,173 @@ describe("19. Roll Number Display, Trainer Strengths/Improvements, Session Rubri
   });
 });
 
+describe("20. Strengths & Areas for Improvement Auto-Flush & Alias Unification", () => {
+  test("Trainer pending input fields auto-flush into strengths and improvements on submit", () => {
+    const preparePayload = ({
+      strengths,
+      newStrengthInput,
+      weaknesses,
+      newWeaknessInput,
+      overallScore = 90,
+    }) => {
+      let currentStrengths = [...strengths];
+      const pendingStrength = (newStrengthInput || "").trim();
+      if (pendingStrength) {
+        const items = pendingStrength.includes("\n")
+          ? pendingStrength.split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean)
+          : [pendingStrength];
+        items.forEach((it) => {
+          if (!currentStrengths.includes(it)) currentStrengths.push(it);
+        });
+      }
+
+      let currentWeaknesses = [...weaknesses];
+      const pendingWeakness = (newWeaknessInput || "").trim();
+      if (pendingWeakness) {
+        const items = pendingWeakness.includes("\n")
+          ? pendingWeakness.split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean)
+          : [pendingWeakness];
+        items.forEach((it) => {
+          if (!currentWeaknesses.includes(it)) currentWeaknesses.push(it);
+        });
+      }
+
+      return {
+        overallScore,
+        strengths: currentStrengths,
+        weaknesses: currentWeaknesses,
+        improvements: currentWeaknesses,
+        areasForImprovement: currentWeaknesses,
+        candidateStrengths: currentStrengths,
+      };
+    };
+
+    // Case 1: Trainer typed "He is a sharp student." into pending input without clicking Add
+    const payload = preparePayload({
+      strengths: [],
+      newStrengthInput: "He is a sharp student.",
+      weaknesses: ["Needs improvement in communicating his ideas."],
+      newWeaknessInput: "Work on system design fundamentals",
+    });
+
+    assert.deepEqual(payload.strengths, ["He is a sharp student."]);
+    assert.deepEqual(payload.candidateStrengths, ["He is a sharp student."]);
+    assert.deepEqual(payload.weaknesses, [
+      "Needs improvement in communicating his ideas.",
+      "Work on system design fundamentals",
+    ]);
+    assert.deepEqual(payload.improvements, payload.weaknesses);
+    assert.deepEqual(payload.areasForImprovement, payload.weaknesses);
+  });
+
+  test("Normalizes strengths and improvements across array, newline, and comma-delimited strings", () => {
+    const normalizeStringList = (input) => {
+      if (!input) return [];
+      if (Array.isArray(input)) {
+        return input.map((item) => String(item).trim()).filter(Boolean);
+      }
+      if (typeof input === "string" && input.trim()) {
+        return input
+          .split(/[\r\n,]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+      return [];
+    };
+
+    // Array of strings
+    assert.deepEqual(normalizeStringList(["Good coder", " Fast learner "]), ["Good coder", "Fast learner"]);
+
+    // Newline-separated string
+    assert.deepEqual(
+      normalizeStringList("Sharp analytical skills\nStrong React knowledge\n\n"),
+      ["Sharp analytical skills", "Strong React knowledge"]
+    );
+
+    // Comma-separated string
+    assert.deepEqual(
+      normalizeStringList("Clean syntax, Good git habits, "),
+      ["Clean syntax", "Good git habits"]
+    );
+
+    // Empty / null
+    assert.deepEqual(normalizeStringList(null), []);
+    assert.deepEqual(normalizeStringList("   "), []);
+  });
+
+  test("Report viewers resolve strengths and areasForImprovement across any payload alias", () => {
+    const normalizeStringList = (input) => {
+      if (!input) return [];
+      if (Array.isArray(input)) return input.map((s) => String(s).trim()).filter(Boolean);
+      if (typeof input === "string" && input.trim()) {
+        return input.split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean);
+      }
+      return [];
+    };
+
+    const resolveStrengthsAndImprovements = (interview) => {
+      const strengthsList =
+        normalizeStringList(interview.strengths).length > 0
+          ? normalizeStringList(interview.strengths)
+          : normalizeStringList(interview.evaluation?.strengths).length > 0
+          ? normalizeStringList(interview.evaluation?.strengths)
+          : normalizeStringList(interview.candidateStrengths).length > 0
+          ? normalizeStringList(interview.candidateStrengths)
+          : normalizeStringList(interview.summary?.strengths);
+
+      const improvementsList =
+        normalizeStringList(interview.improvements).length > 0
+          ? normalizeStringList(interview.improvements)
+          : normalizeStringList(interview.areasForImprovement).length > 0
+          ? normalizeStringList(interview.areasForImprovement)
+          : normalizeStringList(interview.weaknesses).length > 0
+          ? normalizeStringList(interview.weaknesses)
+          : normalizeStringList(interview.evaluation?.improvements).length > 0
+          ? normalizeStringList(interview.evaluation?.improvements)
+          : normalizeStringList(interview.evaluation?.areasForImprovement).length > 0
+          ? normalizeStringList(interview.evaluation?.areasForImprovement)
+          : normalizeStringList(interview.evaluation?.weaknesses).length > 0
+          ? normalizeStringList(interview.evaluation?.weaknesses)
+          : normalizeStringList(interview.summary?.improvements).length > 0
+          ? normalizeStringList(interview.summary?.improvements)
+          : normalizeStringList(interview.summary?.areasForImprovement).length > 0
+          ? normalizeStringList(interview.summary?.areasForImprovement)
+          : normalizeStringList(interview.summary?.weaknesses);
+
+      return { strengthsList, improvementsList };
+    };
+
+    // Case A: Payload uses areasForImprovement and candidateStrengths
+    const docA = {
+      candidateStrengths: ["Fast learner", "Proactive"],
+      areasForImprovement: ["Practice dynamic programming"],
+    };
+    const resA = resolveStrengthsAndImprovements(docA);
+    assert.deepEqual(resA.strengthsList, ["Fast learner", "Proactive"]);
+    assert.deepEqual(resA.improvementsList, ["Practice dynamic programming"]);
+
+    // Case B: Payload nested inside summary from legacy sessions
+    const docB = {
+      summary: {
+        strengths: ["Sharp student"],
+        weaknesses: ["Needs improvement in communicating his ideas."],
+      },
+    };
+    const resB = resolveStrengthsAndImprovements(docB);
+    assert.deepEqual(resB.strengthsList, ["Sharp student"]);
+    assert.deepEqual(resB.improvementsList, ["Needs improvement in communicating his ideas."]);
+
+    // Case C: Payload with raw newline string in evaluation.improvements
+    const docC = {
+      evaluation: {
+        strengths: ["Clean code"],
+        improvements: "Time complexity\nEdge cases",
+      },
+    };
+    const resC = resolveStrengthsAndImprovements(docC);
+    assert.deepEqual(resC.strengthsList, ["Clean code"]);
+    assert.deepEqual(resC.improvementsList, ["Time complexity", "Edge cases"]);
+  });
+});
+
+

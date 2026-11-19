@@ -62,6 +62,14 @@ const liveEvaluationSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    improvements: {
+      type: [String],
+      default: [],
+    },
+    areasForImprovement: {
+      type: [String],
+      default: [],
+    },
     summaryFeedback: {
       type: String,
       default: "",

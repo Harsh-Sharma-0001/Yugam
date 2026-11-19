@@ -282,6 +282,37 @@ export const completeLiveRoom = async (req, res) => {
     liveInterview.endedAt = endedAt;
     liveInterview.durationSeconds = durationSeconds;
 
+    const normalizeStringList = (input) => {
+      if (!input) return [];
+      if (Array.isArray(input)) {
+        return input.map((item) => String(item).trim()).filter(Boolean);
+      }
+      if (typeof input === "string" && input.trim()) {
+        return input
+          .split(/[\r\n,]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+      return [];
+    };
+
+    const rawStrengths =
+      req.body.strengths ||
+      req.body.candidateStrengths ||
+      req.body.evaluation?.strengths ||
+      req.body.evaluation?.candidateStrengths;
+
+    const rawImprovements =
+      req.body.improvements ||
+      req.body.areasForImprovement ||
+      req.body.weaknesses ||
+      req.body.evaluation?.improvements ||
+      req.body.evaluation?.areasForImprovement ||
+      req.body.evaluation?.weaknesses;
+
+    const normalizedStrengths = normalizeStringList(rawStrengths);
+    const normalizedImprovements = normalizeStringList(rawImprovements);
+
     liveInterview.evaluation = {
       overallScore: Number(overallScore) || 0,
       criteria: {
@@ -292,8 +323,10 @@ export const completeLiveRoom = async (req, res) => {
         communication: Number(criteria.communication) || 0,
         problemSolving: Number(criteria.problemSolving) || 0,
       },
-      strengths: Array.isArray(strengths) ? strengths : [],
-      weaknesses: Array.isArray(weaknesses) ? weaknesses : [],
+      strengths: normalizedStrengths,
+      weaknesses: normalizedImprovements,
+      improvements: normalizedImprovements,
+      areasForImprovement: normalizedImprovements,
       summaryFeedback: (summaryFeedback || "").trim(),
       evaluatedBy: req.userName || req.body.trainerName || "Faculty Instructor",
       evaluatedAt: new Date(),
@@ -445,9 +478,34 @@ export const getLiveRoomReport = async (req, res) => {
     roomObject.overallScore = roomObject.evaluation?.overallScore ?? 0;
     roomObject.summary = roomObject.evaluation?.summaryFeedback || "";
     roomObject.feedback = roomObject.evaluation?.summaryFeedback || "";
-    roomObject.strengths = roomObject.evaluation?.strengths || [];
-    roomObject.weaknesses = roomObject.evaluation?.weaknesses || [];
-    roomObject.improvements = roomObject.evaluation?.weaknesses || [];
+
+    const resolvedStrengths =
+      (Array.isArray(roomObject.evaluation?.strengths) && roomObject.evaluation.strengths.length > 0 ? roomObject.evaluation.strengths : null) ||
+      (Array.isArray(roomObject.strengths) && roomObject.strengths.length > 0 ? roomObject.strengths : null) ||
+      (Array.isArray(roomObject.evaluation?.candidateStrengths) && roomObject.evaluation.candidateStrengths.length > 0 ? roomObject.evaluation.candidateStrengths : null) ||
+      (Array.isArray(roomObject.summary?.strengths) && roomObject.summary.strengths.length > 0 ? roomObject.summary.strengths : null) ||
+      (typeof roomObject.evaluation?.strengths === "string" && roomObject.evaluation.strengths.trim() ? [roomObject.evaluation.strengths.trim()] : null) ||
+      [];
+
+    const resolvedImprovements =
+      (Array.isArray(roomObject.evaluation?.improvements) && roomObject.evaluation.improvements.length > 0 ? roomObject.evaluation.improvements : null) ||
+      (Array.isArray(roomObject.evaluation?.areasForImprovement) && roomObject.evaluation.areasForImprovement.length > 0 ? roomObject.evaluation.areasForImprovement : null) ||
+      (Array.isArray(roomObject.evaluation?.weaknesses) && roomObject.evaluation.weaknesses.length > 0 ? roomObject.evaluation.weaknesses : null) ||
+      (Array.isArray(roomObject.improvements) && roomObject.improvements.length > 0 ? roomObject.improvements : null) ||
+      (Array.isArray(roomObject.areasForImprovement) && roomObject.areasForImprovement.length > 0 ? roomObject.areasForImprovement : null) ||
+      (Array.isArray(roomObject.weaknesses) && roomObject.weaknesses.length > 0 ? roomObject.weaknesses : null) ||
+      (Array.isArray(roomObject.summary?.improvements) && roomObject.summary.improvements.length > 0 ? roomObject.summary.improvements : null) ||
+      (Array.isArray(roomObject.summary?.areasForImprovement) && roomObject.summary.areasForImprovement.length > 0 ? roomObject.summary.areasForImprovement : null) ||
+      (Array.isArray(roomObject.summary?.weaknesses) && roomObject.summary.weaknesses.length > 0 ? roomObject.summary.weaknesses : null) ||
+      (typeof roomObject.evaluation?.improvements === "string" && roomObject.evaluation.improvements.trim() ? [roomObject.evaluation.improvements.trim()] : null) ||
+      (typeof roomObject.evaluation?.areasForImprovement === "string" && roomObject.evaluation.areasForImprovement.trim() ? [roomObject.evaluation.areasForImprovement.trim()] : null) ||
+      (typeof roomObject.evaluation?.weaknesses === "string" && roomObject.evaluation.weaknesses.trim() ? [roomObject.evaluation.weaknesses.trim()] : null) ||
+      [];
+
+    roomObject.strengths = resolvedStrengths;
+    roomObject.weaknesses = resolvedImprovements;
+    roomObject.improvements = resolvedImprovements;
+    roomObject.areasForImprovement = resolvedImprovements;
     roomObject.criteria = roomObject.evaluation?.criteria || {};
     if (Array.isArray(roomObject.questions)) {
       roomObject.questions = roomObject.questions.map((q) => {
@@ -531,9 +589,34 @@ export const getLiveRoomBySchedule = async (req, res) => {
     roomObject.overallScore = roomObject.evaluation?.overallScore ?? 0;
     roomObject.summary = roomObject.evaluation?.summaryFeedback || "";
     roomObject.feedback = roomObject.evaluation?.summaryFeedback || "";
-    roomObject.strengths = roomObject.evaluation?.strengths || [];
-    roomObject.weaknesses = roomObject.evaluation?.weaknesses || [];
-    roomObject.improvements = roomObject.evaluation?.weaknesses || [];
+
+    const resolvedStrengths =
+      (Array.isArray(roomObject.evaluation?.strengths) && roomObject.evaluation.strengths.length > 0 ? roomObject.evaluation.strengths : null) ||
+      (Array.isArray(roomObject.strengths) && roomObject.strengths.length > 0 ? roomObject.strengths : null) ||
+      (Array.isArray(roomObject.evaluation?.candidateStrengths) && roomObject.evaluation.candidateStrengths.length > 0 ? roomObject.evaluation.candidateStrengths : null) ||
+      (Array.isArray(roomObject.summary?.strengths) && roomObject.summary.strengths.length > 0 ? roomObject.summary.strengths : null) ||
+      (typeof roomObject.evaluation?.strengths === "string" && roomObject.evaluation.strengths.trim() ? [roomObject.evaluation.strengths.trim()] : null) ||
+      [];
+
+    const resolvedImprovements =
+      (Array.isArray(roomObject.evaluation?.improvements) && roomObject.evaluation.improvements.length > 0 ? roomObject.evaluation.improvements : null) ||
+      (Array.isArray(roomObject.evaluation?.areasForImprovement) && roomObject.evaluation.areasForImprovement.length > 0 ? roomObject.evaluation.areasForImprovement : null) ||
+      (Array.isArray(roomObject.evaluation?.weaknesses) && roomObject.evaluation.weaknesses.length > 0 ? roomObject.evaluation.weaknesses : null) ||
+      (Array.isArray(roomObject.improvements) && roomObject.improvements.length > 0 ? roomObject.improvements : null) ||
+      (Array.isArray(roomObject.areasForImprovement) && roomObject.areasForImprovement.length > 0 ? roomObject.areasForImprovement : null) ||
+      (Array.isArray(roomObject.weaknesses) && roomObject.weaknesses.length > 0 ? roomObject.weaknesses : null) ||
+      (Array.isArray(roomObject.summary?.improvements) && roomObject.summary.improvements.length > 0 ? roomObject.summary.improvements : null) ||
+      (Array.isArray(roomObject.summary?.areasForImprovement) && roomObject.summary.areasForImprovement.length > 0 ? roomObject.summary.areasForImprovement : null) ||
+      (Array.isArray(roomObject.summary?.weaknesses) && roomObject.summary.weaknesses.length > 0 ? roomObject.summary.weaknesses : null) ||
+      (typeof roomObject.evaluation?.improvements === "string" && roomObject.evaluation.improvements.trim() ? [roomObject.evaluation.improvements.trim()] : null) ||
+      (typeof roomObject.evaluation?.areasForImprovement === "string" && roomObject.evaluation.areasForImprovement.trim() ? [roomObject.evaluation.areasForImprovement.trim()] : null) ||
+      (typeof roomObject.evaluation?.weaknesses === "string" && roomObject.evaluation.weaknesses.trim() ? [roomObject.evaluation.weaknesses.trim()] : null) ||
+      [];
+
+    roomObject.strengths = resolvedStrengths;
+    roomObject.weaknesses = resolvedImprovements;
+    roomObject.improvements = resolvedImprovements;
+    roomObject.areasForImprovement = resolvedImprovements;
     roomObject.criteria = roomObject.evaluation?.criteria || {};
     if (Array.isArray(roomObject.questions)) {
       roomObject.questions = roomObject.questions.map((q) => {

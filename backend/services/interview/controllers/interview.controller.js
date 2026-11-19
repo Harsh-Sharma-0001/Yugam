@@ -370,9 +370,33 @@ export const getInterview = async (req, res) => {
                 }
             }
 
+            const aiObj = aiInterview.toObject ? aiInterview.toObject() : aiInterview;
+            const resolvedStrengths =
+                (Array.isArray(aiObj.strengths) && aiObj.strengths.length > 0 ? aiObj.strengths : null) ||
+                (Array.isArray(aiObj.summary?.strengths) && aiObj.summary.strengths.length > 0 ? aiObj.summary.strengths : null) ||
+                (typeof aiObj.strengths === "string" && aiObj.strengths.trim() ? [aiObj.strengths.trim()] : null) ||
+                [];
+
+            const resolvedImprovements =
+                (Array.isArray(aiObj.improvements) && aiObj.improvements.length > 0 ? aiObj.improvements : null) ||
+                (Array.isArray(aiObj.areasForImprovement) && aiObj.areasForImprovement.length > 0 ? aiObj.areasForImprovement : null) ||
+                (Array.isArray(aiObj.weaknesses) && aiObj.weaknesses.length > 0 ? aiObj.weaknesses : null) ||
+                (Array.isArray(aiObj.summary?.improvements) && aiObj.summary.improvements.length > 0 ? aiObj.summary.improvements : null) ||
+                (Array.isArray(aiObj.summary?.areasForImprovement) && aiObj.summary.areasForImprovement.length > 0 ? aiObj.summary.areasForImprovement : null) ||
+                (Array.isArray(aiObj.summary?.weaknesses) && aiObj.summary.weaknesses.length > 0 ? aiObj.summary.weaknesses : null) ||
+                (typeof aiObj.improvements === "string" && aiObj.improvements.trim() ? [aiObj.improvements.trim()] : null) ||
+                (typeof aiObj.areasForImprovement === "string" && aiObj.areasForImprovement.trim() ? [aiObj.areasForImprovement.trim()] : null) ||
+                (typeof aiObj.weaknesses === "string" && aiObj.weaknesses.trim() ? [aiObj.weaknesses.trim()] : null) ||
+                [];
+
+            aiObj.strengths = resolvedStrengths;
+            aiObj.improvements = resolvedImprovements;
+            aiObj.weaknesses = resolvedImprovements;
+            aiObj.areasForImprovement = resolvedImprovements;
+
             return res.status(200).json({
                 success: true,
-                interview: aiInterview,
+                interview: aiObj,
             });
         }
 
@@ -425,6 +449,33 @@ export const getInterview = async (req, res) => {
             }
         }
 
+        const resolvedLiveStrengths =
+            (Array.isArray(liveDoc.evaluation?.strengths) && liveDoc.evaluation.strengths.length > 0 ? liveDoc.evaluation.strengths : null) ||
+            (Array.isArray(liveDoc.strengths) && liveDoc.strengths.length > 0 ? liveDoc.strengths : null) ||
+            (Array.isArray(liveDoc.evaluation?.candidateStrengths) && liveDoc.evaluation.candidateStrengths.length > 0 ? liveDoc.evaluation.candidateStrengths : null) ||
+            (Array.isArray(liveDoc.summary?.strengths) && liveDoc.summary.strengths.length > 0 ? liveDoc.summary.strengths : null) ||
+            (typeof liveDoc.evaluation?.strengths === "string" && liveDoc.evaluation.strengths.trim() ? [liveDoc.evaluation.strengths.trim()] : null) ||
+            (typeof liveDoc.strengths === "string" && liveDoc.strengths.trim() ? [liveDoc.strengths.trim()] : null) ||
+            [];
+
+        const resolvedLiveImprovements =
+            (Array.isArray(liveDoc.evaluation?.improvements) && liveDoc.evaluation.improvements.length > 0 ? liveDoc.evaluation.improvements : null) ||
+            (Array.isArray(liveDoc.evaluation?.areasForImprovement) && liveDoc.evaluation.areasForImprovement.length > 0 ? liveDoc.evaluation.areasForImprovement : null) ||
+            (Array.isArray(liveDoc.evaluation?.weaknesses) && liveDoc.evaluation.weaknesses.length > 0 ? liveDoc.evaluation.weaknesses : null) ||
+            (Array.isArray(liveDoc.improvements) && liveDoc.improvements.length > 0 ? liveDoc.improvements : null) ||
+            (Array.isArray(liveDoc.areasForImprovement) && liveDoc.areasForImprovement.length > 0 ? liveDoc.areasForImprovement : null) ||
+            (Array.isArray(liveDoc.weaknesses) && liveDoc.weaknesses.length > 0 ? liveDoc.weaknesses : null) ||
+            (Array.isArray(liveDoc.summary?.improvements) && liveDoc.summary.improvements.length > 0 ? liveDoc.summary.improvements : null) ||
+            (Array.isArray(liveDoc.summary?.areasForImprovement) && liveDoc.summary.areasForImprovement.length > 0 ? liveDoc.summary.areasForImprovement : null) ||
+            (Array.isArray(liveDoc.summary?.weaknesses) && liveDoc.summary.weaknesses.length > 0 ? liveDoc.summary.weaknesses : null) ||
+            (typeof liveDoc.evaluation?.improvements === "string" && liveDoc.evaluation.improvements.trim() ? [liveDoc.evaluation.improvements.trim()] : null) ||
+            (typeof liveDoc.evaluation?.areasForImprovement === "string" && liveDoc.evaluation.areasForImprovement.trim() ? [liveDoc.evaluation.areasForImprovement.trim()] : null) ||
+            (typeof liveDoc.evaluation?.weaknesses === "string" && liveDoc.evaluation.weaknesses.trim() ? [liveDoc.evaluation.weaknesses.trim()] : null) ||
+            (typeof liveDoc.improvements === "string" && liveDoc.improvements.trim() ? [liveDoc.improvements.trim()] : null) ||
+            (typeof liveDoc.areasForImprovement === "string" && liveDoc.areasForImprovement.trim() ? [liveDoc.areasForImprovement.trim()] : null) ||
+            (typeof liveDoc.weaknesses === "string" && liveDoc.weaknesses.trim() ? [liveDoc.weaknesses.trim()] : null) ||
+            [];
+
         // Normalize payload so InterviewDetailView.jsx renders cleanly without changing AI interview compatibility
         const normalizedInterview = {
             _id: liveDoc._id,
@@ -448,9 +499,10 @@ export const getInterview = async (req, res) => {
             overallScore: liveDoc.evaluation?.overallScore ?? 0,
             feedback: liveDoc.evaluation?.summaryFeedback || "",
             summary: liveDoc.evaluation?.summaryFeedback || "",
-            strengths: liveDoc.evaluation?.strengths || [],
-            weaknesses: liveDoc.evaluation?.weaknesses || [],
-            improvements: liveDoc.evaluation?.weaknesses || [],
+            strengths: resolvedLiveStrengths,
+            weaknesses: resolvedLiveImprovements,
+            improvements: resolvedLiveImprovements,
+            areasForImprovement: resolvedLiveImprovements,
             criteria: liveDoc.evaluation?.criteria || {},
             evaluation: liveDoc.evaluation || {},
             sharedCode: liveDoc.sharedCode,

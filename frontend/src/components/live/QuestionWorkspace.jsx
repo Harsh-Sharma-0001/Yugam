@@ -497,6 +497,7 @@ export default function QuestionWorkspace({
                     <input
                       value={newStrengthInput}
                       onChange={(e) => setNewStrengthInput(e.target.value)}
+                      onBlur={handleAddStrength}
                       placeholder="Add strength tag..."
                       className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-900 outline-none focus:border-emerald-600 shadow-2xs"
                     />
@@ -532,6 +533,7 @@ export default function QuestionWorkspace({
                     <input
                       value={newWeaknessInput}
                       onChange={(e) => setNewWeaknessInput(e.target.value)}
+                      onBlur={handleAddWeakness}
                       placeholder="Add improvement tag..."
                       className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-900 outline-none focus:border-amber-600 shadow-2xs"
                     />

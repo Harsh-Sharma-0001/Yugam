@@ -361,19 +361,31 @@ function LiveInterviewRoom({ user }) {
   // Add Strength tag
   const handleAddStrength = (e) => {
     e?.preventDefault();
-    if (newStrengthInput.trim() && !strengths.includes(newStrengthInput.trim())) {
-      setStrengths([...strengths, newStrengthInput.trim()]);
-      setNewStrengthInput("");
+    const val = (newStrengthInput || "").trim();
+    if (!val) return;
+    const items = val.includes("\n")
+      ? val.split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean)
+      : [val];
+    const newItems = items.filter((it) => !strengths.includes(it));
+    if (newItems.length > 0) {
+      setStrengths((prev) => [...prev, ...newItems]);
     }
+    setNewStrengthInput("");
   };
 
   // Add Weakness tag
   const handleAddWeakness = (e) => {
     e?.preventDefault();
-    if (newWeaknessInput.trim() && !weaknesses.includes(newWeaknessInput.trim())) {
-      setWeaknesses([...weaknesses, newWeaknessInput.trim()]);
-      setNewWeaknessInput("");
+    const val = (newWeaknessInput || "").trim();
+    if (!val) return;
+    const items = val.includes("\n")
+      ? val.split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean)
+      : [val];
+    const newItems = items.filter((it) => !weaknesses.includes(it));
+    if (newItems.length > 0) {
+      setWeaknesses((prev) => [...prev, ...newItems]);
     }
+    setNewWeaknessInput("");
   };
 
   // Auto-calculate weighted score
@@ -394,11 +406,41 @@ function LiveInterviewRoom({ user }) {
     if (!room?._id) return;
     setIsSubmittingEvaluation(true);
     try {
+      // Auto-flush any pending text sitting in the inputs
+      const pendingStrength = (newStrengthInput || "").trim();
+      let currentStrengths = [...strengths];
+      if (pendingStrength) {
+        const items = pendingStrength.includes("\n")
+          ? pendingStrength.split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean)
+          : [pendingStrength];
+        items.forEach((it) => {
+          if (!currentStrengths.includes(it)) currentStrengths.push(it);
+        });
+        setStrengths(currentStrengths);
+        setNewStrengthInput("");
+      }
+
+      const pendingWeakness = (newWeaknessInput || "").trim();
+      let currentWeaknesses = [...weaknesses];
+      if (pendingWeakness) {
+        const items = pendingWeakness.includes("\n")
+          ? pendingWeakness.split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean)
+          : [pendingWeakness];
+        items.forEach((it) => {
+          if (!currentWeaknesses.includes(it)) currentWeaknesses.push(it);
+        });
+        setWeaknesses(currentWeaknesses);
+        setNewWeaknessInput("");
+      }
+
       const payload = {
         overallScore,
         criteria,
-        strengths,
-        weaknesses,
+        strengths: currentStrengths,
+        weaknesses: currentWeaknesses,
+        improvements: currentWeaknesses,
+        areasForImprovement: currentWeaknesses,
+        candidateStrengths: currentStrengths,
         summaryFeedback,
         trainerPrivateNotes,
         questions,
