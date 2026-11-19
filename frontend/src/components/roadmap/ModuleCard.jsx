@@ -1,89 +1,189 @@
-import React from 'react'
-import { useState } from 'react';
-import { AnimatePresence, motion } from "motion/react";
-import { FiBookOpen, FiChevronDown, FiChevronUp, FiClock, FiYoutube } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import {
+  FiBookOpen,
+  FiCheck,
+  FiChevronDown,
+  FiChevronUp,
+  FiClock,
+  FiExternalLink,
+  FiPlayCircle,
+  FiYoutube,
+} from 'react-icons/fi';
 
-const difficultyColor = { Easy: "#34d399", Medium: "#a78bfa", Hard: "#f87171" };
-function ModuleCard({ mod, index }) {
-    const [open, setOpen] = useState(false);
+const DIFFICULTY_CONFIG = {
+  Easy: {
+    color: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+    dot: 'bg-emerald-500',
+    badge: 'Easy',
+  },
+  Medium: {
+    color: 'text-indigo-700 bg-indigo-50 border-indigo-200',
+    dot: 'bg-indigo-500',
+    badge: 'Medium',
+  },
+  Hard: {
+    color: 'text-rose-700 bg-rose-50 border-rose-200',
+    dot: 'bg-rose-500',
+    badge: 'Hard',
+  },
+};
+
+function ModuleCard({ mod, index, isCompleted = false, onToggleComplete }) {
+  const [open, setOpen] = useState(false);
+
+  const diff = DIFFICULTY_CONFIG[mod.difficulty] || DIFFICULTY_CONFIG.Medium;
+  const stepNum = String(index + 1).padStart(2, '0');
+
   return (
-    <motion.div 
-     initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.35 }}
-      whileHover={{ y: -2 }}
-      onClick={()=>setOpen(!open)}
-    className='relative overflow-hidden bg-[#000000]/90 backdrop-blur-2xl border border-white/10 rounded-xl cursor-pointer select-none shadow-[0_4px_18px_rgba(0,0,0,0.2)] hover:border-white/20 transition-all'>
-        <div className='absolute inset-0 bg-gradient-to-br from-white/[0.07] via-transparent to-transparent pointer-events-none'/>
+    <div className="relative pl-8 sm:pl-10">
+      {/* Timeline Node Icon / Checkbox */}
+      <div className="absolute left-0 top-5 -ml-[13px] sm:-ml-[15px] z-10">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onToggleComplete) onToggleComplete(index);
+          }}
+          title={isCompleted ? 'Mark as incomplete' : 'Mark module as completed'}
+          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer shadow-xs ${
+            isCompleted
+              ? 'bg-emerald-600 border-emerald-600 text-white shadow-emerald-500/20'
+              : 'bg-white border-gray-300 text-gray-400 hover:border-gray-500 hover:text-gray-600'
+          }`}
+        >
+          {isCompleted ? (
+            <FiCheck className="w-4 h-4 font-bold" />
+          ) : (
+            <span className="text-[10px] font-bold font-mono text-gray-500">{stepNum}</span>
+          )}
+        </button>
+      </div>
 
-        <div className='relative flex items-center gap-3 p-4'>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold bg-white/5 border border-white/10"
-          style={{ color: difficultyColor[mod.difficulty] }}>{index + 1}</div>
+      {/* Elevated White Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.05, duration: 0.3 }}
+        className={`rounded-2xl border transition-all cursor-pointer select-none bg-white shadow-sm hover:shadow-md ${
+          isCompleted
+            ? 'border-emerald-200 bg-emerald-50/20'
+            : 'border-gray-200 hover:border-gray-300'
+        }`}
+        onClick={() => setOpen(!open)}
+      >
+        {/* Module Header Bar */}
+        <div className="flex items-center justify-between gap-3 p-4 sm:p-5">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${diff.color}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${diff.dot}`} />
+                {diff.badge}
+              </span>
 
-            <div className='flex-1 min-w-0'>
-                <p className='text-sm font-medium text-white truncate'>{mod.title}</p>
-                <div className='flex items-center gap-1.5 mt-0.5'>
-                    <FiClock size={10} className="text-white/30"/>
-                    <span className='text-xs text-white/35'>{mod.duration}</span>
-                </div>
+              <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 font-medium">
+                <FiClock className="w-3 h-3 text-gray-400" />
+                {mod.duration}
+              </span>
+
+              {isCompleted && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <FiCheck className="w-3 h-3" /> Completed
+                </span>
+              )}
             </div>
 
-            <div className='flex items-center gap-2'>
-                <span className="text-xs font-medium hidden sm:block" style={{ color: difficultyColor[mod.difficulty] }}>
-            {mod.difficulty}
-          </span>
-          {open
-            ? <FiChevronUp size={14} className="text-white/30" />
-            : <FiChevronDown size={14} className="text-white/30" />
-          }
-            </div>
+            <h3
+              className={`text-sm sm:text-base font-bold text-gray-900 truncate ${
+                isCompleted ? 'text-gray-700 line-through decoration-emerald-500/40' : ''
+              }`}
+            >
+              {mod.title}
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+              aria-label={open ? 'Collapse module' : 'Expand module'}
+            >
+              {open ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
+            </button>
+          </div>
         </div>
 
-
+        {/* Expandable Accordion Body */}
         <AnimatePresence>
-            {open && (
-                <motion.div
-                initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22 }}
-                 className='overflow-hidden'>
-                    <div className='relative px-4 pb-4 pt-0 border-t border-white/8'>
-                    
-                    <p className='text-xs text-white/45 mt-3 mb-3 leading-relaxed'>{mod.description}</p>
-                    <div className='flex gap-2 flex-wrap'>
+          {open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-gray-100"
+            >
+              <div className="p-4 sm:p-5 pt-3 bg-gray-50/50">
+                <p className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-4">
+                  {mod.description}
+                </p>
 
-                        <a href={mod.youtube} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <motion.button 
-                            whileHover={{ scale: 1.03 }} 
-                            whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-red-500/25 text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors">
-                        <FiYoutube size={12}/> Watch Tutorial
+                {/* Resource Links Suite */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-gray-200/60">
+                  {mod.youtube && (
+                    <a
+                      href={mod.youtube}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition shadow-2xs"
+                    >
+                      <FiYoutube className="w-3.5 h-3.5 text-rose-600" />
+                      <span>YouTube Masterclass</span>
+                      <FiExternalLink className="w-3 h-3 opacity-60 ml-0.5" />
+                    </a>
+                  )}
 
-                            </motion.button>
+                  {mod.article && (
+                    <a
+                      href={mod.article}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition shadow-2xs"
+                    >
+                      <FiBookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Official Documentation</span>
+                      <FiExternalLink className="w-3 h-3 opacity-60 ml-0.5" />
+                    </a>
+                  )}
 
-                        </a>
-
-                        <a href={mod.article} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <motion.button 
-                            whileHover={{ scale: 1.03 }} 
-                            whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border  border-white/10 text-white/45 bg-white/5 hover:bg-white/10 transition-colors">
-                        <FiBookOpen size={12}/> Read Article
-
-                            </motion.button>
-
-                        </a>
-                    </div>
-                    
-                    </div>
-
-                </motion.div>
-            )}
+                  {/* Toggle Complete button inside body */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onToggleComplete) onToggleComplete(index);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition ml-auto cursor-pointer ${
+                      isCompleted
+                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <FiCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{isCompleted ? 'Completed' : 'Mark Complete'}</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
-      
-    </motion.div>
-  )
+      </motion.div>
+    </div>
+  );
 }
 
-export default ModuleCard
+export default ModuleCard;

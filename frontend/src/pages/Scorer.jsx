@@ -1,287 +1,189 @@
-
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "motion/react";
-
+import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   FiAlertCircle,
   FiArrowLeft,
+  FiArrowRight,
+  FiBookOpen,
+  FiCheck,
+  FiCheckCircle,
+  FiCopy,
+  FiCpu,
+  FiExternalLink,
+  FiFileText,
+  FiLayers,
+  FiRefreshCw,
+  FiShield,
+  FiTarget,
+  FiTrash2,
   FiTrendingUp,
   FiUploadCloud,
   FiUser,
   FiZap,
-  FiCheckCircle,
-  FiTarget,
-  FiBookOpen,
-  FiRefreshCw,
-  FiFileText,
-} from "react-icons/fi";
-
-import api from "../utils/axios";
-import { useDispatch, useSelector } from "react-redux";
-import { setResume } from "../redux/resumeSlice";
-
-import {
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
-} from "recharts";
-
-import { getResumeRoles } from "../apis/resume.api";
+} from 'react-icons/fi';
+import { useDispatch, useSelector } from 'react-redux';
+import { PolarAngleAxis, RadialBar, RadialBarChart } from 'recharts';
+import api from '../utils/axios';
+import { setResume } from '../redux/resumeSlice';
+import { getResumeRoles } from '../apis/resume.api';
 
 // --------------------------------------------------
-// CONSTANTS
+// CONSTANTS & BENCHMARKS
 // --------------------------------------------------
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 const SCORE_LABELS = {
-  strong: "Strong",
-  average: "Average",
-  weak: "Needs Improvement",
+  strong: 'Strong Match',
+  average: 'Average Match',
+  weak: 'Needs Improvement',
+};
+
+// Curated ATS Benchmarks for popular roles
+const POPULAR_ROLE_BENCHMARKS = {
+  'mern-stack-developer': {
+    label: 'MERN Stack Developer',
+    required: ['JavaScript', 'React', 'Node.js', 'Express.js', 'MongoDB', 'HTML', 'CSS', 'REST APIs', 'Git'],
+    preferred: ['TypeScript', 'Redux', 'Tailwind CSS', 'JWT', 'Socket.IO', 'Docker', 'AWS', 'Testing'],
+    focus: 'Full-stack JavaScript architectures, state management, RESTful microservices, and NoSQL databases.',
+  },
+  'full-stack-software-engineer': {
+    label: 'Full-Stack Software Engineer',
+    required: ['JavaScript', 'React', 'Node.js', 'REST APIs', 'SQL', 'NoSQL', 'Git', 'Data Structures & Algorithms'],
+    preferred: ['TypeScript', 'Docker', 'Redis', 'CI/CD', 'Cloud Computing', 'System Design'],
+    focus: 'End-to-end software delivery, database normalization, caching strategies, and distributed systems.',
+  },
+  'java-backend-developer': {
+    label: 'Java Backend Developer',
+    required: ['Java', 'Spring Boot', 'SQL', 'REST APIs', 'Git', 'OOP', 'Data Structures & Algorithms'],
+    preferred: ['Hibernate', 'PostgreSQL', 'Docker', 'Microservices', 'Redis', 'JUnit'],
+    focus: 'Enterprise Java applications, Spring microservices, transactional consistency, and ORM patterns.',
+  },
+  'frontend-developer': {
+    label: 'Frontend Developer',
+    required: ['HTML', 'CSS', 'JavaScript', 'React', 'Responsive Design', 'Git'],
+    preferred: ['TypeScript', 'Next.js', 'Redux', 'Tailwind CSS', 'Automated Testing', 'Webpack'],
+    focus: 'Client-side rendering, component lifecycle, web accessibility (a11y), and frontend performance.',
+  },
+  'backend-developer': {
+    label: 'Backend Developer',
+    required: ['Node.js', 'Express.js', 'SQL', 'REST APIs', 'Git', 'Data Structures & Algorithms'],
+    preferred: ['PostgreSQL', 'MongoDB', 'Redis', 'Docker', 'System Design', 'Microservices'],
+    focus: 'Scalable API architectures, high-concurrency request handling, authentication, and database indexing.',
+  },
+  'python-developer': {
+    label: 'Python Developer',
+    required: ['Python', 'REST APIs', 'SQL', 'Git', 'OOP', 'Data Structures & Algorithms'],
+    preferred: ['Django', 'Flask', 'PostgreSQL', 'Docker', 'Redis', 'Automated Testing'],
+    focus: 'Pythonic backends, asynchronous execution, database pipelines, and API integrations.',
+  },
+  'devops-engineer': {
+    label: 'DevOps Engineer',
+    required: ['Linux', 'Git', 'Docker', 'CI/CD', 'Cloud Computing', 'Bash'],
+    preferred: ['Kubernetes', 'Terraform', 'AWS', 'Monitoring', 'Ansible', 'Python'],
+    focus: 'Infrastructure as Code (IaC), automated release pipelines, container orchestration, and reliability.',
+  },
+  'data-analyst': {
+    label: 'Data Analyst',
+    required: ['SQL', 'Python', 'Excel', 'Data Analysis', 'Statistics'],
+    preferred: ['Power BI', 'Tableau', 'Pandas', 'NumPy', 'Data Visualization'],
+    focus: 'Relational data querying, descriptive statistics, dashboard development, and business insights.',
+  },
+};
+
+// Fallback benchmark for unspecified roles
+const DEFAULT_BENCHMARK = {
+  label: 'Software Engineer',
+  required: ['JavaScript or Python', 'Data Structures & Algorithms', 'Git & Version Control', 'REST APIs', 'SQL/NoSQL'],
+  preferred: ['Docker', 'Cloud Services (AWS/GCP)', 'CI/CD Automation', 'System Design', 'Unit Testing'],
+  focus: 'Core computer science fundamentals, scalable API architecture, and clean code principles.',
 };
 
 // --------------------------------------------------
 // HELPERS
 // --------------------------------------------------
 
-const getScoreLabel = (score) => {
-  if (score >= 75) return SCORE_LABELS.strong;
-  if (score >= 50) return SCORE_LABELS.average;
-  return SCORE_LABELS.weak;
-};
-
-const getScoreColor = (score) => {
-  if (score >= 75) return "#7c3aed";
-  if (score >= 50) return "#f59e0b";
-  return "#ef4444";
-};
-
 const getSafeScore = (score) => {
   const value = Number(score);
-
   if (!Number.isFinite(value)) return 0;
-
   return Math.min(100, Math.max(0, value));
 };
 
-// --------------------------------------------------
-// SCORE RING
-// --------------------------------------------------
-
-const ScoreRing = ({ score }) => {
-  const safeScore = getSafeScore(score);
-  const color = getScoreColor(safeScore);
-
-  return (
-    <div className="relative flex items-center justify-center">
-      <RadialBarChart
-        width={120}
-        height={120}
-        cx={60}
-        cy={60}
-        innerRadius={43}
-        outerRadius={56}
-        startAngle={90}
-        endAngle={-270}
-        data={[
-          {
-            value: safeScore,
-            fill: color,
-          },
-        ]}
-        barSize={9}
-      >
-        <PolarAngleAxis
-          type="number"
-          domain={[0, 100]}
-          tick={false}
-        />
-
-        <RadialBar
-          background={{ fill: "#e5e7eb" }}
-          dataKey="value"
-          cornerRadius={8}
-        />
-      </RadialBarChart>
-
-      <div className="absolute flex items-center">
-        <span className="text-xl font-bold text-white leading-none">
-          {safeScore}
-        </span>
-
-        <span className="text-[9px] text-gray-200 mt-0.5">
-          /100
-        </span>
-      </div>
-    </div>
-  );
-};
-
-// --------------------------------------------------
-// TAG
-// --------------------------------------------------
-
-const Tag = ({ text, color = "purple" }) => {
-  const styles = {
-    purple: "bg-purple-50 text-purple-700 border-purple-200",
-    red: "bg-red-50 text-red-700 border-red-200",
-    green: "bg-green-50 text-green-700 border-green-200",
-    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
+const getScoreTier = (score) => {
+  if (score >= 75) {
+    return {
+      label: SCORE_LABELS.strong,
+      color: '#10b981',
+      bgClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+      pillClass: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+      barColor: 'from-emerald-500 to-teal-400',
+    };
+  }
+  if (score >= 50) {
+    return {
+      label: SCORE_LABELS.average,
+      color: '#f59e0b',
+      bgClass: 'bg-amber-50 text-amber-800 border-amber-200',
+      pillClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+      barColor: 'from-amber-500 to-yellow-400',
+    };
+  }
+  return {
+    label: SCORE_LABELS.weak,
+    color: '#ef4444',
+    bgClass: 'bg-rose-50 text-rose-800 border-rose-200',
+    pillClass: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+    barColor: 'from-rose-500 to-pink-500',
   };
-
-  return (
-    <span
-      className={`inline-flex items-center text-[10px] px-2 py-1.5 rounded-md border font-medium ${styles[color] || styles.purple}`}
-    >
-      {text}
-    </span>
-  );
 };
 
 // --------------------------------------------------
-// EMPTY STATE
-// --------------------------------------------------
-
-const EmptyState = ({ message }) => (
-  <p className="text-xs text-white/50">
-    {message}
-  </p>
-);
-
-// --------------------------------------------------
-// SECTION CARD
-// --------------------------------------------------
-
-const SectionCard = ({
-  children,
-  delay = 0,
-  className = "",
-}) => (
-  <motion.div
-    initial={{ y: 20, opacity: 0 }}
-    animate={{ y: 0, opacity: 1 }}
-    transition={{
-      duration: 0.45,
-      delay,
-    }}
-    className={`relative overflow-hidden bg-[#000000]/90 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.2)] ${className}`}
-  >
-    <div className="absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-transparent pointer-events-none" />
-
-    <div className="relative">
-      {children}
-    </div>
-  </motion.div>
-);
-
-// --------------------------------------------------
-// SECTION HEADING
-// --------------------------------------------------
-
-const SectionHeading = ({
-  icon: Icon,
-  title,
-  color,
-}) => (
-  <div className="flex items-center gap-2 mb-3">
-    <Icon className={color} size={15} />
-
-    <span className="text-xs font-semibold text-white">
-      {title}
-    </span>
-  </div>
-);
-
-// --------------------------------------------------
-// NAVBAR
-// --------------------------------------------------
-
-const Navbar = ({ label }) => {
-  const navigate = useNavigate();
-
-  return (
-    <motion.nav
-      initial={{ y: -60, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{
-        duration: 0.5,
-        ease: "easeOut",
-      }}
-      className="fixed inset-x-0 top-0 z-20 border-b border-black/8 bg-white/80 backdrop-blur-xl"
-    >
-      <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-3 sm:px-5">
-        <div
-          onClick={() => navigate("/dashboard")}
-          className="flex cursor-pointer items-center gap-1.5"
-        >
-          <span className="text-sm font-extrabold sm:text-base text-[#0A0A0A]">
-            Yugam
-          </span>
-
-          <span className="hidden rounded bg-black/5 px-1.5 py-0.5 text-[10px] text-black/50 sm:block">
-            {label}
-          </span>
-        </div>
-
-        <button 
-          onClick={() => navigate("/dashboard")}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-4 py-1.5 text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition cursor-pointer"
-        >
-          <FiArrowLeft className="w-4 h-4" />
-          <span>Back to Overview</span>
-        </button>
-      </div>
-    </motion.nav>
-  );
-};
-
-// --------------------------------------------------
-// SCORER COMPONENT
+// COMPONENT
 // --------------------------------------------------
 
 function Scorer({ user, setUser }) {
+  const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { resume } = useSelector(
-    (state) => state.resume
-  );
+  const { resume } = useSelector((state) => state.resume);
 
   // Upload states
   const [file, setFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   // Role states
-  const [targetRole, setTargetRole] = useState("");
+  const [targetRole, setTargetRole] = useState('');
   const [roles, setRoles] = useState([]);
   const [rolesLoading, setRolesLoading] = useState(true);
-  const [roleError, setRoleError] = useState("");
+  const [roleError, setRoleError] = useState('');
+
+  // Report filter states
+  const [activeSkillFilter, setActiveSkillFilter] = useState('all'); // 'all' | 'required' | 'preferred' | 'matched'
+  const [copiedSkill, setCopiedSkill] = useState(null);
 
   // --------------------------------------------------
-  // LOAD AVAILABLE ROLES
+  // LOAD ROLES
   // --------------------------------------------------
-
   useEffect(() => {
     let isMounted = true;
-
     const loadRoles = async () => {
       try {
         setRolesLoading(true);
-        setRoleError("");
-
+        setRoleError('');
         const data = await getResumeRoles();
-
         if (isMounted) {
           setRoles(Array.isArray(data) ? data : []);
+          if (Array.isArray(data) && data.length > 0 && !targetRole) {
+            setTargetRole(data[0].id);
+          }
         }
       } catch (err) {
-        console.error("Load Resume Roles Error:", err);
-
+        console.error('Load Resume Roles Error:', err);
         if (isMounted) {
-          setRoleError(
-            "Unable to load available roles. Please refresh the page."
-          );
+          setRoleError('Unable to load available roles. Please refresh the page.');
         }
       } finally {
         if (isMounted) {
@@ -291,72 +193,66 @@ function Scorer({ user, setUser }) {
     };
 
     loadRoles();
-
     return () => {
       isMounted = false;
     };
   }, []);
 
   // --------------------------------------------------
-  // FILE VALIDATION
+  // FILE HANDLING
   // --------------------------------------------------
-
   const validateFile = (selectedFile) => {
-    if (!selectedFile) {
-      return "Please select a PDF resume.";
-    }
-
+    if (!selectedFile) return 'Please select a PDF resume.';
     const isPDF =
-      selectedFile.type === "application/pdf" ||
-      selectedFile.name.toLowerCase().endsWith(".pdf");
-
-    if (!isPDF) {
-      return "Only PDF files are allowed.";
-    }
-
-    if (selectedFile.size > MAX_FILE_SIZE) {
-      return "File size must not exceed 20 MB.";
-    }
-
-    if (selectedFile.size === 0) {
-      return "The selected file is empty.";
-    }
-
-    return "";
+      selectedFile.type === 'application/pdf' ||
+      selectedFile.name.toLowerCase().endsWith('.pdf');
+    if (!isPDF) return 'Only PDF files are allowed.';
+    if (selectedFile.size > MAX_FILE_SIZE) return 'File size must not exceed 20 MB.';
+    if (selectedFile.size === 0) return 'The selected file is empty.';
+    return '';
   };
 
-  const handleFileChange = (event) => {
-    const selectedFile = event.target.files?.[0];
-
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
-
     const validationError = validateFile(selectedFile);
-
     if (validationError) {
       setFile(null);
       setError(validationError);
-      event.target.value = "";
+      e.target.value = '';
       return;
     }
-
     setFile(selectedFile);
-    setError("");
+    setError('');
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (!droppedFile) return;
+    const validationError = validateFile(droppedFile);
+    if (validationError) {
+      setFile(null);
+      setError(validationError);
+      return;
+    }
+    setFile(droppedFile);
+    setError('');
   };
 
   // --------------------------------------------------
-  // UPLOAD AND ANALYZE RESUME
+  // UPLOAD & ANALYZE
   // --------------------------------------------------
-
   const uploadResume = async () => {
     if (loading) return;
 
     if (!targetRole) {
-      setError("Please select your target job role.");
+      setError('Please select your target job role.');
       return;
     }
 
     const validationError = validateFile(file);
-
     if (validationError) {
       setError(validationError);
       return;
@@ -364,63 +260,49 @@ function Scorer({ user, setUser }) {
 
     try {
       setLoading(true);
-      setError("");
+      setError('');
 
       const formData = new FormData();
+      formData.append('resume', file);
+      formData.append('targetRole', targetRole);
 
-      formData.append("resume", file);
-      formData.append("targetRole", targetRole);
+      const response = await api.post('/api/resume/upload', formData);
 
-      // 1. Upload and analyze resume
-      const response = await api.post(
-        "/api/resume/upload",
-        formData
-      );
-
-      if (
-        !response.data?.success ||
-        !response.data?.data
-      ) {
-        throw new Error(
-          response.data?.message ||
-          "Resume analysis failed."
-        );
+      if (!response.data?.success || !response.data?.data) {
+        throw new Error(response.data?.message || 'Resume analysis failed.');
       }
 
       const analyzedResume = response.data.data;
 
-      // 2. Verify role analysis was returned
       if (!analyzedResume.roleSkillAnalysis) {
         throw new Error(
-          "Resume was analyzed, but role-based skill analysis was not returned. Please check your backend."
+          'Resume was analyzed, but role-based skill analysis was not returned. Please check backend.'
         );
       }
 
-      // 3. Update Redux
       dispatch(setResume(analyzedResume));
 
-      // 4. Update user coin balance returned from backend server-side deduction
-      if (typeof response.data?.interviewCoin === "number") {
-        setUser((previousUser) => ({
-          ...previousUser,
+      if (typeof response.data?.interviewCoin === 'number') {
+        setUser((prev) => ({
+          ...prev,
           interviewCoin: response.data.interviewCoin,
         }));
       }
 
       setFile(null);
-
     } catch (err) {
-      console.error("Resume Upload Error:", err);
-
+      console.error('Resume Upload Error:', err);
       if (err.response?.status === 402) {
         setError(
-          `Insufficient interview coins! You need ${err.response.data?.required || 10} coins to analyze a resume. Please recharge your balance.`
+          `Insufficient interview coins! You need ${
+            err.response.data?.required || 10
+          } coins to analyze a resume. Please recharge your balance.`
         );
       } else {
         setError(
           err.response?.data?.message ||
-          err.message ||
-          "Resume analysis failed. Please try again."
+            err.message ||
+            'Resume analysis failed. Please try again.'
         );
       }
     } finally {
@@ -428,634 +310,873 @@ function Scorer({ user, setUser }) {
     }
   };
 
-  // --------------------------------------------------
-  // RE-UPLOAD
-  // --------------------------------------------------
-
   const handleReupload = () => {
     dispatch(setResume(null));
-
     setFile(null);
-    setError("");
-    setTargetRole("");
+    setError('');
   };
 
-  // --------------------------------------------------
-  // SAFE RESUME DATA
-  // --------------------------------------------------
+  const handleCopySkill = (skill) => {
+    navigator.clipboard.writeText(skill);
+    setCopiedSkill(skill);
+    setTimeout(() => setCopiedSkill(null), 2000);
+  };
 
+  // Resolve current active benchmark for Step 1 preview
+  const currentBenchmark = useMemo(() => {
+    if (targetRole && POPULAR_ROLE_BENCHMARKS[targetRole]) {
+      return POPULAR_ROLE_BENCHMARKS[targetRole];
+    }
+    const foundRole = roles.find((r) => r.id === targetRole);
+    if (foundRole) {
+      return {
+        label: foundRole.label,
+        ...DEFAULT_BENCHMARK,
+      };
+    }
+    return DEFAULT_BENCHMARK;
+  }, [targetRole, roles]);
+
+  // --------------------------------------------------
+  // RENDER STEP 2: DIAGNOSTIC REPORT
+  // --------------------------------------------------
   if (resume) {
     const score = getSafeScore(resume.score);
+    const scoreTier = getScoreTier(score);
 
-    const strengths = Array.isArray(resume.strengths)
-      ? resume.strengths
-      : [];
-
-    const weaknesses = Array.isArray(resume.weaknesses)
-      ? resume.weaknesses
-      : [];
-
-    const recommendations = Array.isArray(
-      resume.recommendations
-    )
+    const strengths = Array.isArray(resume.strengths) ? resume.strengths : [];
+    const weaknesses = Array.isArray(resume.weaknesses) ? resume.weaknesses : [];
+    const recommendations = Array.isArray(resume.recommendations)
       ? resume.recommendations
       : [];
 
     const roleAnalysis = resume.roleSkillAnalysis;
+    const targetRoleLabel = roleAnalysis?.targetRoleLabel || resume?.suggestedRole || 'Software Engineer';
 
-    const missingRequiredSkills = Array.isArray(
-      roleAnalysis?.missingRequiredSkills
-    )
+    const missingRequiredSkills = Array.isArray(roleAnalysis?.missingRequiredSkills)
       ? roleAnalysis.missingRequiredSkills
       : [];
 
-    const missingPreferredSkills = Array.isArray(
-      roleAnalysis?.missingPreferredSkills
-    )
+    const missingPreferredSkills = Array.isArray(roleAnalysis?.missingPreferredSkills)
       ? roleAnalysis.missingPreferredSkills
       : [];
 
-    const missingSkills = Array.isArray(
-      roleAnalysis?.missingSkills
-    )
+    const missingSkills = Array.isArray(roleAnalysis?.missingSkills)
       ? roleAnalysis.missingSkills
       : Array.isArray(resume.missingSkills)
-        ? resume.missingSkills
-        : [];
+      ? resume.missingSkills
+      : [];
 
-    const matchedSkills = Array.isArray(
-      roleAnalysis?.matchedSkills
-    )
+    const matchedSkills = Array.isArray(roleAnalysis?.matchedSkills)
       ? roleAnalysis.matchedSkills
       : [];
 
-    const overallCoverage = getSafeScore(
-      roleAnalysis?.overallCoverage
-    );
-
-    const requiredCoverage = getSafeScore(
-      roleAnalysis?.requiredCoverage
-    );
-
-    const preferredCoverage = getSafeScore(
-      roleAnalysis?.preferredCoverage
-    );
+    const overallCoverage = getSafeScore(roleAnalysis?.overallCoverage);
+    const requiredCoverage = getSafeScore(roleAnalysis?.requiredCoverage);
+    const preferredCoverage = getSafeScore(roleAnalysis?.preferredCoverage);
 
     return (
-      <div className="min-h-screen bg-white text-[#0A0A0A]">
-        <Navbar label="Resume Scorer" />
+      <div className="min-h-screen bg-[#F8F9FA] text-gray-900 flex flex-col font-sans">
+        {/* Sticky Studio Top Header */}
+        <motion.nav
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm"
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+            {/* Left: Brand Mark + Scorer Badge */}
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center gap-2 group cursor-pointer text-left"
+              >
+                <div className="w-8 h-8 rounded-lg bg-[#111318] flex items-center justify-center text-white font-black text-sm shadow-sm group-hover:scale-105 transition-transform">
+                  Y
+                </div>
+                <span className="font-extrabold text-base tracking-tight text-gray-900 hidden sm:inline">
+                  Yugam
+                </span>
+              </button>
+              <span className="bg-[#111318] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+                ATS Resume Scorer
+              </span>
+            </div>
 
-        <section className="max-w-6xl mx-auto px-3 pt-20 sm:pt-24 pb-8 space-y-3.5">
+            {/* Center: Step Indicator Pills + Re-upload Action */}
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                onClick={handleReupload}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+              >
+                <FiCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>1. Upload & Role</span>
+              </button>
+              <span className="text-gray-400 text-xs font-bold">→</span>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#111318] text-white shadow-xs">
+                <span>2. AI ATS Diagnostic Report</span>
+              </div>
+            </div>
 
-          {/* HEADER */}
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                onClick={handleReupload}
+                className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-full px-3.5 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              >
+                <FiRefreshCw className="w-3.5 h-3.5 text-gray-500" />
+                <span>New Scan</span>
+              </button>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-3.5 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <FiArrowLeft className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Back to Overview</span>
+              </button>
+            </div>
+          </div>
+        </motion.nav>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[10px] text-black/40 tracking-widest uppercase mb-0.5">
-                Resume Analysis
-              </p>
+        {/* Diagnostic Report Content */}
+        <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-8 flex-1 space-y-6">
+          {/* 1. TOP EXECUTIVE SCORE BANNER */}
+          <div className="bg-[#111318] text-white rounded-3xl p-6 sm:p-8 shadow-md border border-gray-800 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mr-12 -mt-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-              <h2 className="text-lg font-bold">
-                {resume?.name || "Candidate"}
-              </h2>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+              {/* Left Candidate & Role Metadata */}
+              <div className="flex-1 text-center md:text-left">
+                <div className="inline-flex items-center gap-2 bg-white/10 border border-white/10 px-3 py-1 rounded-full text-xs text-gray-300 mb-3">
+                  <FiTarget className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Target Role Benchmark:</span>
+                  <strong className="text-white font-semibold">{targetRoleLabel}</strong>
+                </div>
 
-              {roleAnalysis?.targetRoleLabel && (
-                <p className="text-xs text-black/45 mt-1">
-                  Evaluated for {roleAnalysis.targetRoleLabel}
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                  {resume.name || 'Candidate Evaluation'}
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-400 mt-1 max-w-xl">
+                  Evaluated against enterprise ATS algorithms for keyword density, section readability, and verified technical proficiencies.
                 </p>
+
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-4">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${scoreTier.pillClass}`}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: scoreTier.color }} />
+                    {scoreTier.label}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-gray-300 border border-white/10">
+                    <FiUser className="w-3.5 h-3.5 text-emerald-400" />
+                    {resume.suggestedRole || targetRoleLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Radial Score Gauge */}
+              <div className="flex flex-col items-center shrink-0">
+                <div className="relative flex items-center justify-center">
+                  <RadialBarChart
+                    width={140}
+                    height={140}
+                    cx={70}
+                    cy={70}
+                    innerRadius={48}
+                    outerRadius={64}
+                    startAngle={90}
+                    endAngle={-270}
+                    data={[{ value: score, fill: scoreTier.color }]}
+                    barSize={10}
+                  >
+                    <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                    <RadialBar background={{ fill: 'rgba(255,255,255,0.1)' }} dataKey="value" cornerRadius={8} />
+                  </RadialBarChart>
+                  <div className="absolute flex flex-col items-center justify-center">
+                    <span className="text-3xl font-black text-white font-mono leading-none">
+                      {score}
+                    </span>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mt-1">
+                      / 100
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-gray-300 mt-1">ATS Score</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. ROLE SKILL MATCH & MATRIX CARD */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-7 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <FiTarget className="w-5 h-5 text-indigo-600" />
+                  Role Skill Coverage & Benchmark
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Extracted keyword coverage mapped against the required competency matrix for{' '}
+                  <span className="text-gray-900 font-semibold">{targetRoleLabel}</span>.
+                </p>
+              </div>
+
+              {/* Direct Roadmap Bridge Button */}
+              <button
+                onClick={() => navigate('/roadmap')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#111318] text-white hover:bg-black transition shadow-sm cursor-pointer self-start sm:self-center"
+              >
+                <span>Build Learning Roadmap</span>
+                <FiArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 3 Metric Coverage Bars */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6">
+              {/* Overall Coverage */}
+              <div className="bg-gray-50 border border-gray-200/80 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-medium text-gray-600">Overall Coverage</span>
+                  <span className="text-base font-bold text-gray-900 font-mono">{overallCoverage}%</span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-500"
+                    style={{ width: `${overallCoverage}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-gray-400 mt-2 block">Aggregate role match</span>
+              </div>
+
+              {/* Required Skills Coverage */}
+              <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-emerald-900">Required Skills</span>
+                  <span className="text-base font-bold text-emerald-800 font-mono">{requiredCoverage}%</span>
+                </div>
+                <div className="h-2 bg-emerald-200/60 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                    style={{ width: `${requiredCoverage}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-emerald-700 mt-2 block">Core gatekeeper proficiencies</span>
+              </div>
+
+              {/* Preferred Skills Coverage */}
+              <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-amber-900">Preferred Skills</span>
+                  <span className="text-base font-bold text-amber-800 font-mono">{preferredCoverage}%</span>
+                </div>
+                <div className="h-2 bg-amber-200/60 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 to-yellow-500 rounded-full transition-all duration-500"
+                    style={{ width: `${preferredCoverage}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-amber-700 mt-2 block">Bonus standout technologies</span>
+              </div>
+            </div>
+
+            {/* Interactive Skill Gap Filter Pills */}
+            <div className="pt-2">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                  <button
+                    onClick={() => setActiveSkillFilter('all')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                      activeSkillFilter === 'all'
+                        ? 'bg-[#111318] text-white shadow-xs'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    All Skills ({missingSkills.length + matchedSkills.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveSkillFilter('required')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                      activeSkillFilter === 'required'
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                    }`}
+                  >
+                    Missing Required ({missingRequiredSkills.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveSkillFilter('preferred')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                      activeSkillFilter === 'preferred'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+                    }`}
+                  >
+                    Missing Preferred ({missingPreferredSkills.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveSkillFilter('matched')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                      activeSkillFilter === 'matched'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                    }`}
+                  >
+                    Matched ({matchedSkills.length})
+                  </button>
+                </div>
+
+                <span className="text-[11px] text-gray-400">
+                  {copiedSkill ? (
+                    <span className="text-emerald-600 font-semibold">✓ Copied &quot;{copiedSkill}&quot;</span>
+                  ) : (
+                    'Click any skill tag to copy'
+                  )}
+                </span>
+              </div>
+
+              {/* Filtered Skill Tags Grid */}
+              <div className="flex flex-wrap gap-2 min-h-[50px] p-4 bg-gray-50/70 border border-gray-200/60 rounded-xl">
+                {activeSkillFilter === 'all' && (
+                  <>
+                    {missingRequiredSkills.map((s, idx) => (
+                      <button
+                        key={`req-${idx}`}
+                        onClick={() => handleCopySkill(s)}
+                        title="Click to copy missing required skill"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition cursor-pointer"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span>{s}</span>
+                        <FiCopy className="w-3 h-3 text-rose-400 ml-0.5" />
+                      </button>
+                    ))}
+                    {missingPreferredSkills.map((s, idx) => (
+                      <button
+                        key={`pref-${idx}`}
+                        onClick={() => handleCopySkill(s)}
+                        title="Click to copy missing preferred skill"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition cursor-pointer"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        <span>{s}</span>
+                        <FiCopy className="w-3 h-3 text-amber-400 ml-0.5" />
+                      </button>
+                    ))}
+                    {matchedSkills.map((s, idx) => (
+                      <button
+                        key={`mat-${idx}`}
+                        onClick={() => handleCopySkill(s)}
+                        title="Click to copy matched skill"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+                      >
+                        <FiCheck className="w-3 h-3 text-emerald-600 font-bold" />
+                        <span>{s}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {activeSkillFilter === 'required' &&
+                  (missingRequiredSkills.length > 0 ? (
+                    missingRequiredSkills.map((s, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleCopySkill(s)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition cursor-pointer"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span>{s}</span>
+                        <FiCopy className="w-3 h-3 text-rose-400 ml-0.5" />
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-xs text-emerald-700 font-medium py-1">
+                      🎉 Outstanding! All configured required skills were verified in your resume.
+                    </p>
+                  ))}
+
+                {activeSkillFilter === 'preferred' &&
+                  (missingPreferredSkills.length > 0 ? (
+                    missingPreferredSkills.map((s, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleCopySkill(s)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition cursor-pointer"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        <span>{s}</span>
+                        <FiCopy className="w-3 h-3 text-amber-400 ml-0.5" />
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-xs text-emerald-700 font-medium py-1">
+                      ✨ Great work! All preferred skills are present in your resume.
+                    </p>
+                  ))}
+
+                {activeSkillFilter === 'matched' &&
+                  (matchedSkills.length > 0 ? (
+                    matchedSkills.map((s, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleCopySkill(s)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+                      >
+                        <FiCheck className="w-3 h-3 text-emerald-600 font-bold" />
+                        <span>{s}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-500 py-1">
+                      No matching role skills were extracted from the document.
+                    </p>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. TWO-COLUMN STRENGTHS & WEAKNESSES */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Candidate Strengths */}
+            <div className="bg-white border border-emerald-200/90 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-emerald-100">
+                <FiCheckCircle className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+                  Candidate Strengths ({strengths.length})
+                </h3>
+              </div>
+
+              {strengths.length > 0 ? (
+                <div className="space-y-2.5">
+                  {strengths.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50/50 border border-emerald-100 text-xs text-gray-800"
+                    >
+                      <FiCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 py-4">No strengths identified in this scan.</p>
               )}
             </div>
 
-            <button
-              onClick={handleReupload}
-              className="text-[10px] sm:text-xs text-black/50 hover:text-[#0A0A0A] border border-black/15 hover:border-black/35 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Re-upload
-            </button>
+            {/* Areas to Strengthen */}
+            <div className="bg-white border border-amber-200/90 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-amber-100">
+                <FiAlertCircle className="w-5 h-5 text-amber-600" />
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+                  Areas to Strengthen ({weaknesses.length})
+                </h3>
+              </div>
+
+              {weaknesses.length > 0 ? (
+                <div className="space-y-2.5">
+                  {weaknesses.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/50 border border-amber-100 text-xs text-gray-800"
+                    >
+                      <FiAlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 py-4">No critical weaknesses detected.</p>
+              )}
+            </div>
           </div>
 
-          {/* RESUME SCORE */}
-
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{
-              duration: 0.5,
-              delay: 0.05,
-            }}
-            className="relative overflow-hidden bg-[#000000]/90 backdrop-blur-2xl border border-white/10 rounded-2xl p-5 flex flex-col items-center gap-4 sm:flex-row shadow-[0_8px_32px_rgba(0,0,0,0.2)]"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-transparent pointer-events-none" />
-
-            <div className="relative">
-              <ScoreRing score={score} />
+          {/* 4. ACTIONABLE RECOMMENDATIONS */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-7 shadow-sm">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+              <FiTrendingUp className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+                Actionable ATS Recommendations
+              </h3>
             </div>
 
-            <div className="relative">
-              <p className="text-white/50 text-xs mb-0.5">
-                Resume Score
-              </p>
-
-              <p className="text-xl font-bold mb-1.5 text-white">
-                {getScoreLabel(score)}
-              </p>
-
-              <div className="flex items-center gap-1.5">
-                <FiUser className="text-purple-400 text-xs" />
-
-                <span className="text-xs text-purple-300">
-                  {resume?.suggestedRole || "Resume Candidate"}
-                </span>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* ROLE SKILL COVERAGE */}
-
-          {roleAnalysis && (
-            <SectionCard delay={0.06}>
-              <SectionHeading
-                icon={FiTarget}
-                title="Role Skill Match"
-                color="text-purple-400"
-              />
-
-              <p className="text-white/50 text-[11px] mb-4">
-                Skill coverage against the configured requirements for{" "}
-                <span className="text-purple-300 font-medium">
-                  {roleAnalysis.targetRoleLabel || "your selected role"}
-                </span>
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-
-                {/* OVERALL */}
-
-                <div className="rounded-xl bg-white/[0.05] border border-white/10 p-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-white/60 text-[10px]">
-                      Overall Coverage
+            {recommendations.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {recommendations.map((rec, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl bg-gray-50/80 border border-gray-200/80 flex items-start gap-3 hover:border-gray-300 transition"
+                  >
+                    <span className="w-6 h-6 rounded-lg bg-[#111318] text-white text-xs font-bold flex items-center justify-center shrink-0">
+                      {idx + 1}
                     </span>
-
-                    <span className="text-white text-sm font-bold">
-                      {overallCoverage}%
-                    </span>
+                    <p className="text-xs leading-relaxed text-gray-800">{rec}</p>
                   </div>
-
-                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-500 rounded-full transition-all"
-                      style={{ width: `${overallCoverage}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* REQUIRED */}
-
-                <div className="rounded-xl bg-white/[0.05] border border-white/10 p-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-white/60 text-[10px]">
-                      Required Skills
-                    </span>
-
-                    <span className="text-white text-sm font-bold">
-                      {requiredCoverage}%
-                    </span>
-                  </div>
-
-                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 rounded-full transition-all"
-                      style={{ width: `${requiredCoverage}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* PREFERRED */}
-
-                <div className="rounded-xl bg-white/[0.05] border border-white/10 p-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-white/60 text-[10px]">
-                      Preferred Skills
-                    </span>
-
-                    <span className="text-white text-sm font-bold">
-                      {preferredCoverage}%
-                    </span>
-                  </div>
-
-                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-yellow-500 rounded-full transition-all"
-                      style={{ width: `${preferredCoverage}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-white/35 text-[9px] mt-3">
-                These percentages represent keyword coverage in the configured role catalog, not verified professional proficiency or an employer's actual ATS score.
-              </p>
-            </SectionCard>
-          )}
-
-          {/* STRENGTHS AND WEAKNESSES */}
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-
-            {/* STRENGTHS */}
-
-            <SectionCard delay={0.08}>
-              <SectionHeading
-                icon={FiAlertCircle}
-                title="Strengths"
-                color="text-green-400"
-              />
-
-              <div className="flex flex-wrap gap-1.5">
-                {strengths.length > 0 ? (
-                  strengths.map((item, index) => (
-                    <Tag
-                      key={`${item}-${index}`}
-                      text={item}
-                      color="green"
-                    />
-                  ))
-                ) : (
-                  <EmptyState message="No strengths identified in this analysis." />
-                )}
-              </div>
-            </SectionCard>
-
-            {/* WEAKNESSES */}
-
-            <SectionCard delay={0.09}>
-              <SectionHeading
-                icon={FiAlertCircle}
-                title="Weaknesses"
-                color="text-yellow-400"
-              />
-
-              <div className="flex flex-wrap gap-1.5">
-                {weaknesses.length > 0 ? (
-                  weaknesses.map((item, index) => (
-                    <Tag
-                      key={`${item}-${index}`}
-                      text={item}
-                      color="yellow"
-                    />
-                  ))
-                ) : (
-                  <EmptyState message="No weaknesses identified in this analysis." />
-                )}
-              </div>
-            </SectionCard>
-          </div>
-
-          {/* MISSING SKILLS */}
-
-          <SectionCard delay={0.1}>
-            <SectionHeading
-              icon={FiZap}
-              title="Missing Skills"
-              color="text-red-400"
-            />
-
-            {roleAnalysis ? (
-              <div className="space-y-4">
-
-                {/* REQUIRED SKILLS */}
-
-                <div>
-                  <p className="text-[11px] text-white/65 font-medium mb-2">
-                    Missing Required Skills
-                  </p>
-
-                  {missingRequiredSkills.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {missingRequiredSkills.map(
-                        (skill, index) => (
-                          <Tag
-                            key={`${skill}-${index}`}
-                            text={skill}
-                            color="red"
-                          />
-                        )
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-green-400">
-                      All configured required skills were found in the resume text.
-                    </p>
-                  )}
-                </div>
-
-                {/* PREFERRED SKILLS */}
-
-                <div>
-                  <p className="text-[11px] text-white/65 font-medium mb-2">
-                    Missing Preferred Skills
-                  </p>
-
-                  {missingPreferredSkills.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {missingPreferredSkills.map(
-                        (skill, index) => (
-                          <Tag
-                            key={`${skill}-${index}`}
-                            text={skill}
-                            color="yellow"
-                          />
-                        )
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-green-400">
-                      All configured preferred skills were found in the resume text.
-                    </p>
-                  )}
-                </div>
-
-                {/* MATCHED SKILLS */}
-
-                <div className="border-t border-white/10 pt-3">
-                  <p className="text-[11px] text-white/65 font-medium mb-2">
-                    Matched Skills ({matchedSkills.length})
-                  </p>
-
-                  {matchedSkills.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {matchedSkills.map((skill, index) => (
-                        <Tag
-                          key={`${skill}-${index}`}
-                          text={skill}
-                          color="green"
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState message="No configured role skills were found in the extracted resume content." />
-                  )}
-                </div>
-
-                <p className="text-[9px] text-white/35">
-                  A matched skill means it was found in the extracted resume content. It does not independently verify the candidate's proficiency.
-                </p>
+                ))}
               </div>
             ) : (
-              <EmptyState
-                message={
-                  missingSkills.length > 0
-                    ? "Legacy resume data is available, but role-specific skill analysis is not."
-                    : "Role-specific skill analysis is unavailable. Please re-upload your resume and select a target role."
-                }
-              />
+              <p className="text-xs text-gray-400">No specific recommendations generated.</p>
             )}
-          </SectionCard>
-
-          {/* RECOMMENDATIONS */}
-
-          <SectionCard delay={0.12}>
-            <SectionHeading
-              icon={FiTrendingUp}
-              title="Recommendations"
-              color="text-purple-400"
-            />
-
-            <div className="flex flex-wrap gap-1.5">
-              {recommendations.length > 0 ? (
-                recommendations.map((item, index) => (
-                  <Tag
-                    key={`${item}-${index}`}
-                    text={item}
-                    color="purple"
-                  />
-                ))
-              ) : (
-                <EmptyState message="No recommendations available." />
-              )}
-            </div>
-          </SectionCard>
-
-          {/* FOOTER INFORMATION */}
-
-          {roleAnalysis?.analyzedAt && (
-            <p className="text-center text-[9px] text-black/35">
-              Role analysis generated on{" "}
-              {new Date(roleAnalysis.analyzedAt).toLocaleString()}
-            </p>
-          )}
-
-        </section>
+          </div>
+        </main>
       </div>
     );
   }
 
   // --------------------------------------------------
-  // UPLOAD SCREEN
+  // RENDER STEP 1: UPLOAD & ROLE SELECTION (SPLIT-SCREEN)
   // --------------------------------------------------
-
   return (
-    <div className="min-h-screen bg-white text-[#0A0A0A]">
-      <Navbar label="Resume Scorer" />
-
-      <section className="flex min-h-screen items-center justify-center px-3 pt-16 pb-6">
-
-        <motion.div
-          initial={{ y: 60, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{
-            duration: 0.5,
-            delay: 0.05,
-          }}
-          className="relative w-full max-w-md rounded-3xl overflow-hidden bg-[#000000]/90 backdrop-blur-2xl border border-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.25)] sm:p-6"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-transparent pointer-events-none" />
-
-          {/* PROGRESS */}
-
-          <div className="relative flex justify-between items-center mb-2">
-            <p className="text-[10px] text-white/40 tracking-widest uppercase">
-              Step 1 of 2
-            </p>
-
-            <FiFileText className="text-white/40" size={15} />
+    <div className="min-h-screen bg-[#F8F9FA] text-gray-900 flex flex-col font-sans">
+      {/* Sticky Studio Top Header */}
+      <motion.nav
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          {/* Brand Mark + Studio Badge */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 group cursor-pointer text-left"
+            >
+              <div className="w-8 h-8 rounded-lg bg-[#111318] flex items-center justify-center text-white font-black text-sm shadow-sm group-hover:scale-105 transition-transform">
+                Y
+              </div>
+              <span className="font-extrabold text-base tracking-tight text-gray-900 hidden sm:inline">
+                Yugam
+              </span>
+            </button>
+            <span className="bg-[#111318] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+              ATS Resume Scorer
+            </span>
           </div>
 
-          <div className="relative w-full h-1 bg-white/10 rounded-full mb-5">
-            <div className="h-1 bg-white rounded-full w-1/2" />
+          {/* Center 2-Step Stepper */}
+          <div className="hidden sm:flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#111318] text-white shadow-xs">
+              <span>1. Upload & Target Role</span>
+            </div>
+            <span className="text-gray-300 text-xs font-bold">→</span>
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-400">
+              <span>2. AI ATS Diagnostic Report</span>
+            </div>
           </div>
 
-          {/* HEADING */}
-
-          <h2 className="relative text-lg font-bold mb-1 text-white">
-            Analyze Your Resume
-          </h2>
-
-          <p className="relative text-white/45 text-xs mb-5">
-            Select your target role and upload your resume to get personalized feedback.
-          </p>
-
-          {/* ROLE SELECTOR */}
-
-          <div className="relative mb-4">
-            <label
-              htmlFor="targetRole"
-              className="block text-xs font-medium text-white/80 mb-2"
+          {/* Right Action: Back to Overview */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-3.5 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition cursor-pointer"
             >
-              Select Target Job Role
-            </label>
-
-            <select
-              id="targetRole"
-              value={targetRole}
-              onChange={(event) => {
-                setTargetRole(event.target.value);
-                setError("");
-              }}
-              disabled={rolesLoading || loading || roles.length === 0}
-              className="w-full h-11 rounded-xl bg-white/10 border border-white/15 px-3 text-xs text-white outline-none focus:border-purple-400 disabled:opacity-50"
-            >
-              <option value="" className="text-black">
-                {rolesLoading
-                  ? "Loading roles..."
-                  : "Choose your target role"}
-              </option>
-
-              {roles.map((role) => (
-                <option
-                  key={role.id}
-                  value={role.id}
-                  className="text-black"
-                >
-                  {role.label}
-                </option>
-              ))}
-            </select>
-
-            {rolesLoading && (
-              <p className="text-white/40 text-[10px] mt-2">
-                Loading available job roles...
-              </p>
-            )}
-
-            {roleError && (
-              <p className="text-red-400 text-[10px] mt-2">
-                {roleError}
-              </p>
-            )}
-
-            <p className="text-white/40 text-[10px] mt-2">
-              Your resume will be evaluated against the selected role's configured skill requirements.
-            </p>
-
-            {!rolesLoading && roles.length === 0 && !roleError && (
-              <p className="text-yellow-400 text-[10px] mt-2">
-                No roles are currently available.
-              </p>
-            )}
+              <FiArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Back to Overview</span>
+            </button>
           </div>
+        </div>
+      </motion.nav>
 
-          {/* PDF UPLOAD */}
+      {/* Main Split-Screen Workspace */}
+      <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-8 flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* ========================================================== */}
+          {/* LEFT COLUMN: UPLOAD & ROLE CARD (7 cols on lg)             */}
+          {/* ========================================================== */}
+          <div className="lg:col-span-7 flex flex-col gap-6">
+            {/* Obsidian Hero Header */}
+            <div className="bg-[#111318] text-white rounded-3xl p-6 sm:p-7 shadow-md border border-gray-800 relative overflow-hidden">
+              <div className="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="relative mb-4">
-            <label
-              htmlFor="resumeFile"
-              className={`flex flex-col items-center justify-center w-full h-40 sm:h-44 rounded-2xl border-2 border-dashed cursor-pointer transition-colors ${
-                file
-                  ? "border-white/40 bg-white/[0.06]"
-                  : "border-white/15 bg-white/[0.03] hover:border-white/30"
-              }`}
-            >
-              <FiUploadCloud
-                className={`text-4xl sm:text-5xl mb-2.5 ${
-                  file ? "text-white" : "text-white/30"
-                }`}
-              />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-0.5 rounded-full">
+                    Step 1 of 2 • ATS Diagnostic
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        targetRole ? 'bg-emerald-900/60 text-emerald-300' : 'bg-gray-800 text-gray-400'
+                      }`}
+                    >
+                      {targetRole ? '✓ Role Set' : 'Role Pending'}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        file ? 'bg-emerald-900/60 text-emerald-300' : 'bg-gray-800 text-gray-400'
+                      }`}
+                    >
+                      {file ? '✓ PDF Ready' : 'PDF Pending'}
+                    </span>
+                  </div>
+                </div>
 
-              <p className="text-xs font-medium text-white/80 text-center px-3">
-                {file
-                  ? file.name
-                  : "Click to upload your resume"}
-              </p>
-
-              <p className="text-[10px] text-white/35 mt-1">
-                PDF only · Maximum 20 MB
-              </p>
-
-              {file && (
-                <p className="text-[10px] text-green-400 mt-2">
-                  {(file.size / (1024 * 1024)).toFixed(2)} MB selected
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-2">
+                  ATS Resume Diagnostic & Role Match
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-300 mt-1 max-w-lg leading-relaxed">
+                  Select your target job role and upload your resume in PDF format to receive instant ATS keyword match percentages, skill gap analysis, and tailored recommendations.
                 </p>
+              </div>
+            </div>
+
+            {/* Elevated Form Card */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-7 shadow-sm space-y-6">
+              {/* 1. Target Role Selector */}
+              <div>
+                <label htmlFor="targetRole" className="block text-xs font-bold text-gray-900 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <FiTarget className="text-indigo-600" />
+                  Select Target Job Role
+                </label>
+
+                <select
+                  id="targetRole"
+                  value={targetRole}
+                  onChange={(e) => {
+                    setTargetRole(e.target.value);
+                    setError('');
+                  }}
+                  disabled={rolesLoading || loading || roles.length === 0}
+                  className="w-full h-11 rounded-xl bg-gray-50 border border-gray-300 px-3.5 text-xs sm:text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#111318] focus:border-transparent transition disabled:opacity-50"
+                >
+                  <option value="">{rolesLoading ? 'Loading role catalog...' : 'Choose your target role'}</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Popular Quick-Select Role Chips */}
+                <div className="mt-3">
+                  <span className="text-[11px] text-gray-500 font-medium block mb-2">
+                    Or select a popular track:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: 'mern-stack-developer', label: 'MERN Stack' },
+                      { id: 'full-stack-software-engineer', label: 'Full-Stack Eng' },
+                      { id: 'java-backend-developer', label: 'Java Backend' },
+                      { id: 'frontend-developer', label: 'Frontend' },
+                      { id: 'python-developer', label: 'Python Dev' },
+                      { id: 'devops-engineer', label: 'DevOps' },
+                      { id: 'data-analyst', label: 'Data Analyst' },
+                    ].map((chip) => {
+                      const isSelected = targetRole === chip.id;
+                      return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => {
+                            setTargetRole(chip.id);
+                            setError('');
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#111318] text-white shadow-xs'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                          }`}
+                        >
+                          {chip.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Drag-and-Drop PDF Dropzone */}
+              <div>
+                <label className="block text-xs font-bold text-gray-900 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <FiFileText className="text-indigo-600" />
+                  Resume Document (PDF)
+                </label>
+
+                {!file ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    className={`relative flex flex-col items-center justify-center w-full min-h-[160px] rounded-2xl border-2 border-dashed transition-all cursor-pointer p-6 ${
+                      isDragging
+                        ? 'border-indigo-600 bg-indigo-50/50'
+                        : 'border-gray-300 bg-gray-50/50 hover:bg-gray-50 hover:border-gray-400'
+                    }`}
+                  >
+                    <input
+                      id="resumeFile"
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={loading}
+                      onChange={handleFileChange}
+                    />
+                    <div className="w-12 h-12 rounded-2xl bg-white shadow-xs border border-gray-200 flex items-center justify-center text-indigo-600 mb-3">
+                      <FiUploadCloud className="w-6 h-6" />
+                    </div>
+                    <p className="text-xs sm:text-sm font-semibold text-gray-800 text-center">
+                      Click to upload or drag & drop your resume
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      PDF format only • Maximum file size 20 MB
+                    </p>
+                  </div>
+                ) : (
+                  /* Selected File Preview Card */
+                  <div className="flex items-center justify-between p-4 rounded-xl border border-emerald-200 bg-emerald-50/40">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0 shadow-xs">
+                        <FiFileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{file.name}</p>
+                        <p className="text-[11px] text-emerald-700 font-medium">
+                          {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for ATS scan
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFile(null)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-lg transition cursor-pointer"
+                      title="Remove file"
+                    >
+                      <FiTrash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-800">
+                  <FiAlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">{error}</p>
+                </div>
               )}
 
-              <input
-                id="resumeFile"
-                type="file"
-                accept=".pdf,application/pdf"
-                className="hidden"
-                disabled={loading}
-                onChange={handleFileChange}
-              />
-            </label>
-          </div>
+              {/* Primary Analyze CTA Button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={uploadResume}
+                  disabled={!file || !targetRole || loading || rolesLoading}
+                  className="w-full h-12 rounded-xl font-bold text-xs sm:text-sm bg-[#111318] text-white hover:bg-black shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {loading ? (
+                    <>
+                      <FiRefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Parsing & Analyzing Resume with AI...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiZap className="w-4 h-4 text-amber-400" />
+                      <span>Analyze Resume & Calculate ATS Match</span>
+                    </>
+                  )}
+                </button>
 
-          {/* ERROR MESSAGE */}
-
-          {error && (
-            <div className="relative flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-3">
-              <FiAlertCircle
-                className="text-red-400 mt-0.5 shrink-0"
-                size={14}
-              />
-
-              <p className="text-red-300 text-[10px]">
-                {error}
-              </p>
+                <div className="flex items-center justify-center gap-2 mt-3 text-[11px] text-gray-500">
+                  <FiShield className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Costs 10 Interview Coins • Instant multi-factor role feedback</span>
+                </div>
+              </div>
             </div>
-          )}
-
-          {/* ANALYZE BUTTON */}
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={uploadResume}
-            disabled={
-              !file ||
-              !targetRole ||
-              loading ||
-              rolesLoading ||
-              !!roleError ||
-              roles.length === 0
-            }
-            className="relative mt-1 w-full h-11 rounded-xl font-semibold text-xs bg-white text-[#0A0A0A] shadow-[0_4px_14px_rgba(255,255,255,0.15)] hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <FiRefreshCw className="animate-spin" size={14} />
-                Analyzing Resume...
-              </>
-            ) : (
-              <>
-                <FiZap size={14} />
-                Analyze Resume
-              </>
-            )}
-          </motion.button>
-
-          {/* FOOTER */}
-
-          <div className="relative flex items-center justify-center gap-1.5 mt-4">
-            <FiBookOpen className="text-white/30" size={11} />
-
-            <p className="text-[9px] text-white/35">
-              AI-powered resume analysis with role-based skill matching
-            </p>
           </div>
 
-        </motion.div>
-      </section>
+          {/* ========================================================== */}
+          {/* RIGHT COLUMN: ROLE BENCHMARK PREVIEW (5 cols on lg)        */}
+          {/* ========================================================== */}
+          <div className="lg:col-span-5 sticky top-20 flex flex-col">
+            {/* Header */}
+            <div className="bg-[#111318] text-white rounded-t-2xl px-5 py-4 border-b border-gray-800 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-bold tracking-wider uppercase text-gray-100">
+                  ATS Evaluation Benchmark
+                </span>
+              </div>
+              <span className="text-[10px] bg-white/10 text-gray-300 font-mono px-2 py-0.5 rounded">
+                Live Guide
+              </span>
+            </div>
+
+            {/* Benchmark Card Body */}
+            <div className="bg-white border-x border-b border-gray-200 rounded-b-2xl p-5 sm:p-6 shadow-sm space-y-5">
+              {/* Active Role Benchmark Header */}
+              <div className="border-b border-gray-100 pb-4">
+                <span className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">
+                  Target Role Profile
+                </span>
+                <h3 className="text-base font-bold text-gray-900 mt-0.5">{currentBenchmark.label}</h3>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{currentBenchmark.focus}</p>
+              </div>
+
+              {/* Required Core Skills Checklist */}
+              <div>
+                <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5 mb-2">
+                  <FiCheckCircle className="text-emerald-600 w-3.5 h-3.5" />
+                  Required Core Skills Evaluated:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {currentBenchmark.required.map((skill, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/80"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preferred Bonus Skills */}
+              <div>
+                <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5 mb-2">
+                  <FiTrendingUp className="text-amber-600 w-3.5 h-3.5" />
+                  Preferred Standout Skills:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {currentBenchmark.preferred.map((skill, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200/80"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* ATS Parser Checklist */}
+              <div className="pt-4 border-t border-gray-100">
+                <span className="text-xs font-bold text-gray-900 block mb-2">
+                  What Recruiters Check in ATS:
+                </span>
+                <ul className="space-y-1.5 text-xs text-gray-600">
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                    <span>Exact keyword matching for framework names</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                    <span>Quantifiable metrics in project descriptions</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                    <span>Clean section headings (Experience, Skills, Education)</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

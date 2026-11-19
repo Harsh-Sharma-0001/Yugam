@@ -1,548 +1,775 @@
-import React from 'react'
-import { AnimatePresence, motion } from "motion/react"
-import { FiArrowLeft, FiCheck, FiChevronDown, FiClock, FiFileText, FiRefreshCw, FiSend, FiUploadCloud, FiX, FiZap } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import { BsRocketTakeoff } from "react-icons/bs";
-import api from '../utils/axios'
-import { useDispatch, useSelector } from 'react-redux'
-import { setResume } from '../redux/resumeSlice'
-import RoadmapResult from '../components/roadmap/RoadmapResult'
+import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import {
+  FiArrowLeft,
+  FiBookOpen,
+  FiCheck,
+  FiChevronDown,
+  FiClock,
+  FiCode,
+  FiCpu,
+  FiDatabase,
+  FiFileText,
+  FiLayers,
+  FiRefreshCw,
+  FiSend,
+  FiServer,
+  FiShield,
+  FiTarget,
+  FiTerminal,
+  FiUploadCloud,
+  FiX,
+  FiZap,
+} from 'react-icons/fi';
+import { BsRocketTakeoff } from 'react-icons/bs';
+import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import api from '../utils/axios';
+import { setResume } from '../redux/resumeSlice';
+import RoadmapResult from '../components/roadmap/RoadmapResult';
 
-const PACKAGE_OPTIONS = ["10 LPA", "15 LPA", "20 LPA", "30 LPA", "40 LPA"];
+const PACKAGE_OPTIONS = ['10 LPA', '15 LPA', '20 LPA', '30 LPA', '40 LPA'];
+
+// Categorized role tracks for interactive launchpad
+const CATEGORIZED_ROLE_TRACKS = [
+  {
+    category: 'Full-Stack & Frontend',
+    roles: [
+      {
+        name: 'MERN Stack Developer',
+        duration: '12 Weeks',
+        comp: '15-25 LPA',
+        icon: FiCode,
+        badge: 'High Demand',
+      },
+      {
+        name: 'Full-Stack Software Engineer',
+        duration: '16 Weeks',
+        comp: '20-35 LPA',
+        icon: FiLayers,
+        badge: 'Enterprise',
+      },
+      {
+        name: 'Frontend Developer',
+        duration: '10 Weeks',
+        comp: '12-20 LPA',
+        icon: FiTerminal,
+        badge: 'UI/UX Focus',
+      },
+    ],
+  },
+  {
+    category: 'Backend & Cloud / DevOps',
+    roles: [
+      {
+        name: 'Java Backend Developer',
+        duration: '14 Weeks',
+        comp: '18-30 LPA',
+        icon: FiServer,
+        badge: 'Enterprise Core',
+      },
+      {
+        name: 'Python Backend Developer',
+        duration: '12 Weeks',
+        comp: '15-28 LPA',
+        icon: FiCode,
+        badge: 'API & Microservices',
+      },
+      {
+        name: 'Backend Developer',
+        duration: '12 Weeks',
+        comp: '16-30 LPA',
+        icon: FiDatabase,
+        badge: 'Distributed Systems',
+      },
+      {
+        name: 'DevOps Engineer',
+        duration: '16 Weeks',
+        comp: '20-35 LPA',
+        icon: FiCpu,
+        badge: 'Cloud & Kubernetes',
+      },
+    ],
+  },
+  {
+    category: 'AI/ML & Data / QA',
+    roles: [
+      {
+        name: 'Data Analyst',
+        duration: '10 Weeks',
+        comp: '10-18 LPA',
+        icon: FiDatabase,
+        badge: 'SQL & Analytics',
+      },
+      {
+        name: 'ML Engineer',
+        duration: '18 Weeks',
+        comp: '25-45 LPA',
+        icon: FiCpu,
+        badge: 'Deep Learning',
+      },
+      {
+        name: 'QA Automation Engineer',
+        duration: '10 Weeks',
+        comp: '10-18 LPA',
+        icon: FiCheck,
+        badge: 'Test Architecture',
+      },
+    ],
+  },
+];
 
 export const ROADMAP_TRACKS = [
-    "MERN Stack Developer",
-    "Full-Stack Software Engineer",
-    "Java Backend Developer",
-    "Frontend Developer",
-    "Backend Developer",
-    "Python Backend Developer",
-    "QA Automation Engineer",
-    "DevOps Engineer",
-    "Data Analyst",
-    "ML Engineer",
+  'MERN Stack Developer',
+  'Full-Stack Software Engineer',
+  'Java Backend Developer',
+  'Frontend Developer',
+  'Backend Developer',
+  'Python Backend Developer',
+  'QA Automation Engineer',
+  'DevOps Engineer',
+  'Data Analyst',
+  'ML Engineer',
 ];
 
 function Roadmap({ user, setUser }) {
-    const navigate = useNavigate()
-    const dispatch = useDispatch()
-    const [historyOpen, setHistoryOpen] = useState(false);
-    const [roadmap, setRoadmap] = useState(null);
-    const [role, setRole] = useState("");
-    const [targetPackage, setTargetPackage] = useState(PACKAGE_OPTIONS[2]); // default "20 LPA"
-    const [packageOpen, setPackageOpen] = useState(false);
-    const [useResume, setUseResume] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [historyLoading, setHistoryLoading] = useState(false);
-    const [history, setHistory] = useState([]);
-    const [error, setError] = useState("");
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-    // Modal state for uploading / replacing resume
-    const [showResumeModal, setShowResumeModal] = useState(false);
-    const [modalFile, setModalFile] = useState(null);
-    const [modalUploading, setModalUploading] = useState(false);
-    const [modalError, setModalError] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [roadmap, setRoadmap] = useState(null);
+  const [role, setRole] = useState('');
+  const [targetPackage, setTargetPackage] = useState(PACKAGE_OPTIONS[2]); // default "20 LPA"
+  const [useResume, setUseResume] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [error, setError] = useState('');
 
-    const { resume } = useSelector((state) => state.resume)
+  // Modal state for uploading / replacing resume
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [modalFile, setModalFile] = useState(null);
+  const [modalUploading, setModalUploading] = useState(false);
+  const [modalError, setModalError] = useState('');
 
-    useEffect(() => {
-        getAllRoadmaps()
-    }, [])
+  const { resume } = useSelector((state) => state.resume);
 
-    const getAllRoadmaps = async () => {
-        setHistoryLoading(true)
-        try {
-            const response = await api.get("/api/roadmap/all")
-            setHistory(response.data.data || [])
-            setHistoryLoading(false)
-        } catch (error) {
-            console.error("Failed to load roadmaps:", error)
-            setHistoryLoading(false)
-        }
+  useEffect(() => {
+    getAllRoadmaps();
+  }, []);
+
+  const getAllRoadmaps = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await api.get('/api/roadmap/all');
+      setHistory(response.data.data || []);
+      setHistoryLoading(false);
+    } catch (err) {
+      console.error('Failed to load roadmaps:', err);
+      setHistoryLoading(false);
+    }
+  };
+
+  const getRoadmapById = async (id) => {
+    try {
+      const response = await api.get(`/api/roadmap/${id}`);
+      setRoadmap(response.data.data);
+    } catch (err) {
+      console.error('Failed to load roadmap by id:', err);
+    }
+  };
+
+  const handleResumeToggle = () => {
+    if (useResume) {
+      setUseResume(false);
+      return;
     }
 
-    const getRoadmapById = async (id) => {
-        try {
-            const response = await api.get(`/api/roadmap/${id}`)
-            setRoadmap(response.data.data)
-        } catch (error) {
-            console.error("Failed to load roadmap by id:", error)
-        }
+    if (resume && (resume.skills?.length || resume._id)) {
+      setUseResume(true);
+      return;
     }
 
-    // Toggle resume attachment
-    const handleResumeToggle = () => {
-        if (useResume) {
-            setUseResume(false);
-            return;
-        }
+    setModalFile(null);
+    setModalError('');
+    setShowResumeModal(true);
+  };
 
-        if (resume && (resume.skills?.length || resume._id)) {
-            setUseResume(true);
-            return;
-        }
+  const handleModalUpload = async () => {
+    if (!modalFile) {
+      setModalError('Please select a PDF file.');
+      return;
+    }
 
-        // If no resume in Redux, prompt to upload
+    try {
+      setModalUploading(true);
+      setModalError('');
+
+      const formData = new FormData();
+      formData.append('resume', modalFile);
+      if (role && role.trim()) {
+        formData.append('targetRole', role.trim());
+      }
+
+      const response = await api.post('/api/resume/upload', formData);
+      if (response?.data?.data) {
+        const uploadedResume = response.data.data;
+        if (typeof response?.data?.interviewCoin === 'number') {
+          setUser((prev) => ({
+            ...prev,
+            interviewCoin: response.data.interviewCoin,
+          }));
+        }
+        dispatch(setResume(uploadedResume));
+        setUseResume(true);
+        setShowResumeModal(false);
         setModalFile(null);
-        setModalError("");
-        setShowResumeModal(true);
-    };
 
-    const handleModalUpload = async () => {
-        if (!modalFile) {
-            setModalError("Please select a PDF file.");
-            return;
+        const detectedTitle =
+          uploadedResume?.suggestedRole ||
+          uploadedResume?.roleSkillAnalysis?.targetRoleLabel ||
+          uploadedResume?.targetRole;
+        if (!role.trim() && detectedTitle) {
+          setRole(detectedTitle);
         }
+      } else {
+        throw new Error('No resume data returned');
+      }
+    } catch (err) {
+      console.error('Roadmap resume modal upload error:', err);
+      if (err.response?.status === 402) {
+        setModalError(
+          `Insufficient interview coins! You need ${err.response.data?.required || 10} coins to analyze a resume.`
+        );
+      } else {
+        setModalError(
+          err.response?.data?.message || 'Failed to analyze resume. Please try again.'
+        );
+      }
+    } finally {
+      setModalUploading(false);
+    }
+  };
 
-        try {
-            setModalUploading(true);
-            setModalError("");
+  const handleGenerate = async () => {
+    if (!role.trim() || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const payload = {
+        role: role.trim(),
+        targetPackage,
+        useResume,
+        resume: useResume ? resume : null,
+      };
 
-            const formData = new FormData();
-            formData.append("resume", modalFile);
-            if (role && role.trim()) {
-                formData.append("targetRole", role.trim());
-            }
+      const response = await api.post('/api/roadmap/generate', payload);
+      if (typeof response.data?.interviewCoin === 'number') {
+        setUser((prev) => ({
+          ...prev,
+          interviewCoin: response.data.interviewCoin,
+        }));
+      }
+      setRoadmap(response.data.data);
+      getAllRoadmaps();
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to generate roadmap:', err);
+      if (err.response?.status === 402) {
+        setError(
+          `Insufficient interview coins! You need ${
+            err.response.data?.required || 20
+          } coins to generate a roadmap. Please recharge your balance.`
+        );
+      } else {
+        const errMsg =
+          err.response?.data?.message ||
+          'Something went wrong while generating your roadmap. Please try again.';
+        setError(errMsg);
+      }
+      setLoading(false);
+    }
+  };
 
-            const response = await api.post("/api/resume/upload", formData);
-            if (response?.data?.data) {
-                const uploadedResume = response.data.data;
-                if (typeof response?.data?.interviewCoin === "number") {
-                    setUser((prev) => ({
-                        ...prev,
-                        interviewCoin: response.data.interviewCoin,
-                    }));
-                }
-                dispatch(setResume(uploadedResume));
-                setUseResume(true);
-                setShowResumeModal(false);
-                setModalFile(null);
+  return (
+    <div className="min-h-screen bg-[#F8F9FA] text-gray-900 flex flex-col font-sans">
+      {/* 1. STICKY TOP STUDIO HEADER */}
+      <motion.nav
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          {/* Brand Mark + Studio Badge */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 group cursor-pointer text-left"
+            >
+              <div className="w-8 h-8 rounded-lg bg-[#111318] flex items-center justify-center text-white font-black text-sm shadow-sm group-hover:scale-105 transition-transform">
+                Y
+              </div>
+              <span className="font-extrabold text-base tracking-tight text-gray-900 hidden sm:inline">
+                Yugam
+              </span>
+            </button>
+            <span className="bg-[#111318] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+              Career Roadmap Studio
+            </span>
+          </div>
 
-                const detectedTitle =
-                    uploadedResume?.suggestedRole ||
-                    uploadedResume?.roleSkillAnalysis?.targetRoleLabel ||
-                    uploadedResume?.targetRole;
-                if (!role.trim() && detectedTitle) {
-                    setRole(detectedTitle);
-                }
-            } else {
-                throw new Error("No resume data returned");
-            }
-        } catch (err) {
-            console.error("Roadmap resume modal upload error:", err);
-            if (err.response?.status === 402) {
-                setModalError(`Insufficient interview coins! You need ${err.response.data?.required || 10} coins to analyze a resume.`);
-            } else {
-                setModalError(err.response?.data?.message || "Failed to analyze resume. Please try again.");
-            }
-        } finally {
-            setModalUploading(false);
-        }
-    };
-
-    const handleGenerate = async () => {
-        if (!role.trim() || loading) return;
-        setLoading(true);
-        setError("");
-        try {
-            const payload = {
-                role: role.trim(),
-                targetPackage,
-                useResume,
-                resume: useResume ? resume : null,
-            };
-
-            const response = await api.post("/api/roadmap/generate", payload);
-            if (typeof response.data?.interviewCoin === "number") {
-                setUser((prev) => ({
-                    ...prev,
-                    interviewCoin: response.data.interviewCoin,
-                }));
-            }
-            setRoadmap(response.data.data);
-            getAllRoadmaps();
-            setLoading(false);
-
-        } catch (error) {
-            console.error("Failed to generate roadmap:", error);
-            if (error.response?.status === 402) {
-                setError(`Insufficient interview coins! You need ${error.response.data?.required || 20} coins to generate a roadmap. Please recharge your balance.`);
-            } else {
-                const errMsg = error.response?.data?.message || "Something went wrong while generating your roadmap. Please try again.";
-                setError(errMsg);
-            }
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className='min-h-screen bg-white text-[#0A0A0A] flex flex-col'>
-            <motion.nav
-                initial={{ y: -60, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className='sticky top-0 z-20 border-b border-black/8 bg-white/80 backdrop-blur-xl'>
-                <div className='mx-auto flex h-12 max-w-7xl items-center justify-between px-3 sm:px-5'>
-                    <div onClick={() => navigate("/dashboard")}
-                        className='flex cursor-pointer items-center gap-1.5'>
-                        <span className='text-sm font-extrabold sm:text-base text-[#0A0A0A]'>Yugam</span>
-                        <span className='hidden rounded bg-black/5 px-1.5 py-0.5 text-[10px] text-black/50 sm:block'>Roadmap Builder</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button 
-                            onClick={() => navigate("/dashboard")}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-4 py-1.5 text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition cursor-pointer"
-                        >
-                            <FiArrowLeft className="w-4 h-4" />
-                            <span>Back to Overview</span>
-                        </button>
-                        <button onClick={() => setHistoryOpen(!historyOpen)} className='flex h-8 items-center justify-center gap-1 rounded-lg border border-black/15 text-black/60 transition px-2 hover:border-[#0A0A0A] hover:text-[#0A0A0A] text-[10px]'>
-                            <FiClock />
-                            <span className="hidden sm:inline">History</span>
-                        </button>
-                    </div>
-                </div>
-            </motion.nav>
-
-            <main className='flex-1 overflow-y-auto pb-28 sm:pb-32 pt-16 sm:pt-20'>
-                <div className='max-w-3xl mx-auto px-3 sm:px-4 pt-5 sm:pt-6'>
-                    <AnimatePresence mode='wait'>
-                        {!roadmap ? (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.97 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.97 }}
-                                transition={{ duration: 0.4 }}
-                                className='flex flex-col items-center justify-center min-h-[60vh] text-center px-2 sm:px-4'>
-                                <div className='text-4xl sm:text-5xl mb-4 sm:mb-5'>
-                                    <BsRocketTakeoff className='text-gray-700' />
-                                </div>
-
-                                <h3 className='text-xl sm:text-2xl font-bold text-[#0A0A0A] mb-2'>AI Roadmap Generator</h3>
-
-                                <p className='text-black/45 text-sm max-w-xs sm:max-w-md mb-1'>Generate a personalised roadmap for your dream job.</p>
-
-                                <p className='text-black/35 text-xs sm:text-sm max-w-xs sm:max-w-md'>
-                                    Choose a role and let AI build a complete learning path.
-                                </p>
-
-                                {error && <p className="mt-4 text-xs text-red-500 max-w-xs sm:max-w-md">{error}</p>}
-
-                                <div className='mt-6 sm:mt-8 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 w-full max-w-2xl px-2'>
-                                    {ROADMAP_TRACKS.map((track) => {
-                                        const isSelected = role.trim().toLowerCase() === track.toLowerCase();
-                                        return (
-                                            <motion.button
-                                                key={track}
-                                                type="button"
-                                                onClick={() => setRole(track)}
-                                                whileHover={{ y: -2, scale: 1.02 }}
-                                                whileTap={{ scale: 0.97 }}
-                                                className={`relative overflow-hidden text-xs py-2 sm:py-2.5 px-3.5 sm:px-4 rounded-xl border transition-all ${
-                                                    isSelected
-                                                        ? "bg-white text-black font-semibold border-white shadow-[0_0_20px_rgba(255,255,255,0.25)]"
-                                                        : "bg-[#000000]/80 backdrop-blur-2xl border-white/10 text-white/65 hover:text-white hover:border-white/25 shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
-                                                }`}
-                                            >
-                                                <div className='absolute inset-0 bg-gradient-to-br from-white/[0.07] via-transparent to-transparent pointer-events-none' />
-                                                <span className='relative'>{track}</span>
-                                            </motion.button>
-                                        );
-                                    })}
-                                </div>
-                            </motion.div>
-                        ) : (
-                            <RoadmapResult
-                                roadmap={roadmap}
-                                onClear={() => setRoadmap(null)}
-                            />
-                        )}
-                    </AnimatePresence>
-                </div>
-            </main>
-
-            {/* Bottom Bar */}
-            <div className='fixed bottom-0 left-0 right-0 z-30 pb-3 sm:pb-4 pt-3 px-3 sm:px-4 bg-gradient-to-t from-white via-white/95 to-transparent'>
-                <div className='max-w-3xl mx-auto'>
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className='relative overflow-visible flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl bg-[#000000]/90 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.25)]'>
-
-                        <input
-                            type='text'
-                            list='roadmap-roles'
-                            placeholder='Choose or type a target role (e.g. MERN Stack Developer)'
-                            onChange={(e) => setRole(e.target.value)}
-                            value={role}
-                            className='relative flex-1 min-w-0 bg-transparent text-xs sm:text-sm text-white placeholder-white/30 outline-none px-2 py-1.5' 
-                        />
-                        <datalist id='roadmap-roles'>
-                            {ROADMAP_TRACKS.map((track) => (
-                                <option key={track} value={track} />
-                            ))}
-                        </datalist>
-
-                        <div className='relative'>
-                            <motion.button
-                                type='button'
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.97 }}
-                                onClick={() => setPackageOpen(!packageOpen)}
-                                className='relative flex items-center gap-1 text-xs px-2.5 py-2 rounded-xl border border-white/10 text-white/60 hover:text-white/90 hover:border-white/20 transition-all whitespace-nowrap bg-white/5'>
-                                {targetPackage}
-                                <FiChevronDown size={11} className={`transition-transform ${packageOpen ? "rotate-180" : ""}`} />
-                            </motion.button>
-
-                            <AnimatePresence>
-                                {packageOpen && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: 6, scale: 0.97 }}
-                                        transition={{ duration: 0.15 }}
-                                        className='absolute bottom-full mb-4 right-0 w-28 rounded-xl overflow-hidden border border-white/10 bg-[#0A0A0A] shadow-[0_8px_24px_rgba(0,0,0,0.35)] z-10'>
-                                        {
-                                            PACKAGE_OPTIONS.map((pkg) => (
-                                                <button key={pkg}
-                                                    onClick={() => {
-                                                        setTargetPackage(pkg);
-                                                        setPackageOpen(false)
-                                                    }}
-                                                    className={`w-full text-left text-xs px-3 py-2 transition-colors ${pkg === targetPackage
-                                                        ? "bg-white/10 text-white"
-                                                        : "text-white/55 hover:bg-white/5 hover:text-white/90"
-                                                        }`}>
-                                                    {pkg}
-                                                </button>
-                                            ))
-                                        }
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-
-                        {/* Resume Management / Replacement Option */}
-                        {resume ? (
-                            <div className={`flex items-center rounded-xl border transition-all ${
-                                useResume
-                                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-medium"
-                                    : "bg-white/5 border-white/10 text-white/60"
-                            }`}>
-                                <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    type='button'
-                                    onClick={handleResumeToggle}
-                                    title={useResume ? "Click to disable resume for this roadmap" : "Click to enable resume"}
-                                    className='flex items-center text-xs gap-1.5 px-2.5 sm:px-3 py-2 hover:text-white transition-colors whitespace-nowrap'>
-                                    {useResume ? (
-                                        <>
-                                            <FiCheck size={12} className="text-emerald-400" />
-                                            <span>✓ Resume Attached</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <FiFileText size={12} />
-                                            <span>Attach Resume</span>
-                                        </>
-                                    )}
-                                </motion.button>
-
-                                <div className={`h-4 w-[1px] ${useResume ? "bg-emerald-500/25" : "bg-white/10"}`} />
-
-                                <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    type='button'
-                                    onClick={() => {
-                                        setModalFile(null);
-                                        setModalError("");
-                                        setShowResumeModal(true);
-                                    }}
-                                    title='Upload and replace with a newer resume'
-                                    className='flex items-center gap-1 text-[11px] px-2 py-2 text-zinc-400 hover:text-white transition-colors whitespace-nowrap'>
-                                    <FiRefreshCw size={11} />
-                                    <span>Change</span>
-                                </motion.button>
-                            </div>
-                        ) : (
-                            <motion.button
-                                whileHover={{ scale: 1.03 }}
-                                whileTap={{ scale: 0.97 }}
-                                type='button'
-                                onClick={handleResumeToggle}
-                                className='flex items-center text-xs gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-white/60 hover:text-white hover:border-white/20 transition-all whitespace-nowrap'>
-                                <FiUploadCloud size={12} />
-                                <span>Attach Resume</span>
-                            </motion.button>
-                        )}
-
-                        <motion.button
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            disabled={loading || !role.trim()}
-                            onClick={handleGenerate}
-                            className='relative flex items-center gap-1.5 text-xs px-3 sm:px-4 py-2 rounded-xl font-semibold text-[#0A0A0A] bg-white hover:bg-white/90 shadow-[0_2px_10px_rgba(255,255,255,0.12)] transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap'>
-                            {loading ? (
-                                <>
-                                    <motion.span
-                                        animate={{ rotate: 360 }}
-                                        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                                        className="inline-block"
-                                    >
-                                        <FiZap size={12} />
-                                    </motion.span>
-                                    <span className="hidden sm:inline">Generating…</span>
-                                </>
-                            ) : (
-                                <>
-                                    <FiSend size={12} />
-                                    <span className="hidden sm:inline">Generate</span>
-                                </>
-                            )}
-                        </motion.button>
-                    </motion.div>
-                </div>
+          {/* Center Badge if Roadmap Active */}
+          {roadmap && (
+            <div className="hidden md:flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full truncate max-w-sm">
+                Active: {roadmap.title} ({roadmap.targetPackage})
+              </span>
             </div>
+          )}
 
-            {/* History Drawer */}
-            <AnimatePresence>
-                {
-                    historyOpen && (
-                        <>
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setHistoryOpen(false)}
-                                className='fixed inset-0 z-40 bg-black/20 backdrop-blur-sm' />
+          {/* Right Action Suite */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Back to Overview */}
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-3.5 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <FiArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Back to Overview</span>
+            </button>
 
-                            <motion.aside
-                                initial={{ x: 320 }}
-                                animate={{ x: 0 }}
-                                exit={{ x: 320 }}
-                                transition={{ type: "spring", stiffness: 320, damping: 32 }}
-                                className='fixed right-0 top-0 bottom-0 z-50 w-[280px] sm:w-[300px] max-w-[85vw] bg-white border-l border-black/8 flex flex-col overflow-y-auto shadow-[0_0_40px_rgba(0,0,0,0.1)]'>
-                                <div className='flex items-center justify-between px-4 py-3 sm:py-4 border-b border-black/8 sticky top-0 bg-white/90 backdrop-blur-xl'>
-                                    <span className='text-sm font-semibold text-[#0A0A0A]'>Previous Roadmaps</span>
-                                    <button onClick={() => setHistoryOpen(false)} className='text-black/35 hover:text-[#0A0A0A] transition-colors'><FiX size={16} /></button>
-                                </div>
-
-                                <div className='flex flex-col gap-2 p-3'>
-                                    {historyLoading ? (
-                                        <p className="text-xs text-black/35 text-center py-6">Loading…</p>
-                                    )
-                                        : history.length === 0 ?
-                                            (
-                                                <p className="text-xs text-black/35 text-center py-6">No roadmaps yet.</p>
-                                            ) :
-                                            (
-                                                history.map((h, i) => (
-                                                    <button key={i} onClick={()=>{
-                                                        getRoadmapById(h._id);
-                                                        setHistoryOpen(false)
-                                                    }} className='relative overflow-hidden text-left p-4 rounded-xl bg-[#000]/90 border border-white/10'>
-                                                        <h3 className='text-white font-semibold'>{h.title}</h3>
-                                                        <div className='flex justify-between items-center my-1'>
-                                                            <span className='text-violet-400 text-xs'>{h.targetPackage}</span>
-                                                            <p className='text-xs text-white/40'>{h.duration}</p>
-                                                        </div>
-
-                                                        <p className='text-xs text-white/30 mt-1'>
-                                                        {new Date(h.createdAt).toLocaleDateString()}</p>
-                                                    </button>
-                                                ))
-                                            )}
-                                </div>
-                            </motion.aside>
-                        </>
-                    )
-                }
-            </AnimatePresence>
-
-            {/* Resume Upload / Replacement Modal */}
-            <AnimatePresence>
-                {showResumeModal && (
-                    <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm'>
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                            transition={{ duration: 0.2 }}
-                            className='w-full max-w-md rounded-2xl bg-[#0E1016] border border-white/10 p-5 sm:p-6 shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col gap-4 text-white'>
-                            
-                            <div className='flex items-center justify-between border-b border-white/10 pb-3'>
-                                <div className='flex items-center gap-2.5'>
-                                    <div className='w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center'>
-                                        {resume ? <FiRefreshCw className='text-emerald-400' size={16} /> : <FiUploadCloud className='text-emerald-400' size={16} />}
-                                    </div>
-                                    <h3 className='text-sm font-semibold text-white'>
-                                        {resume ? "Replace / Update Resume" : "Attach Resume for Roadmap"}
-                                    </h3>
-                                </div>
-                                <button 
-                                    onClick={() => { setShowResumeModal(false); setModalFile(null); setModalError(""); }} 
-                                    className='p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition'>
-                                    <FiX size={16} />
-                                </button>
-                            </div>
-
-                            <p className='text-xs text-zinc-400 leading-relaxed'>
-                                {resume 
-                                    ? `Upload a newer resume PDF to replace your current resume (${resume.suggestedRole || "Stored Resume"}) and personalize upcoming roadmaps with updated skills.`
-                                    : "Upload your resume PDF to personalize this roadmap based on your current skills, projects, and detected gaps."}
-                            </p>
-
-                            <label className='cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-white/15 hover:border-white/30 rounded-xl p-6 transition-all bg-white/[0.02] hover:bg-white/[0.04]'>
-                                <FiUploadCloud size={28} className={modalFile ? 'text-emerald-400' : 'text-zinc-500'} />
-                                <span className='mt-2.5 text-xs font-medium text-zinc-200 text-center max-w-[280px] truncate'>
-                                    {modalFile ? modalFile.name : (resume ? "Click to select a new resume (PDF)" : "Click to select your resume (PDF)")}
-                                </span>
-                                <span className='text-[10px] text-zinc-500 mt-1'>Max size: 5MB • Costs 10 Coins</span>
-                                <input 
-                                    type='file' 
-                                    accept='.pdf' 
-                                    className='hidden' 
-                                    onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                            setModalFile(e.target.files[0]);
-                                            setModalError("");
-                                        }
-                                    }} 
-                                />
-                            </label>
-
-                            {modalError && (
-                                <p className='text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5'>
-                                    {modalError}
-                                </p>
-                            )}
-
-                            <div className='flex items-center justify-end gap-2.5 pt-2 border-t border-white/5'>
-                                <button
-                                    type='button'
-                                    onClick={() => { setShowResumeModal(false); setModalFile(null); setModalError(""); }}
-                                    className='px-3.5 py-2 rounded-xl text-xs text-zinc-400 hover:text-white transition'>
-                                    Cancel
-                                </button>
-                                <button
-                                    type='button'
-                                    onClick={handleModalUpload}
-                                    disabled={!modalFile || modalUploading}
-                                    className='px-4 py-2 rounded-xl text-xs font-semibold bg-white text-black hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition'>
-                                    {modalUploading ? "Analyzing Resume..." : (resume ? "Analyze & Replace" : "Upload & Attach")}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            {/* Saved Roadmaps (History) Button */}
+            <button
+              onClick={() => setHistoryOpen(!historyOpen)}
+              className="bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 rounded-full px-3.5 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            >
+              <FiClock className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Saved Roadmaps</span>
+              {history.length > 0 && (
+                <span className="bg-[#111318] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                  {history.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
-    )
+      </motion.nav>
+
+      {/* 2. MAIN CONTENT AREA */}
+      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-8 flex-1">
+        <AnimatePresence mode="wait">
+          {!roadmap ? (
+            /* ======================================================== */
+            /* EMPTY / GENERATOR LAUNCHPAD HERO STATE                    */
+            /* ======================================================== */
+            <motion.div
+              key="launchpad"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-8"
+            >
+              {/* Obsidian Hero Command Center */}
+              <div className="bg-[#111318] text-white rounded-3xl p-6 sm:p-9 shadow-lg border border-gray-800 relative overflow-hidden">
+                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 space-y-6">
+                  {/* Headline & Badges */}
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
+                      <FiZap className="w-3 h-3" />
+                      AI-Powered Learning Pathways
+                    </span>
+                    <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mt-3">
+                      Architect Your Engineering Roadmap
+                    </h1>
+                    <p className="text-xs sm:text-sm text-gray-300 mt-2 max-w-2xl leading-relaxed">
+                      Generate a personalized, milestone-driven curriculum tailored to target compensation tiers, complete with curated YouTube masterclasses, verified documentation, and completion tracking.
+                    </p>
+                  </div>
+
+                  {/* Integrated Command Center Controls */}
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4">
+                    {/* Role Input Bar */}
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 flex items-center gap-1.5">
+                        <FiTarget className="text-emerald-400" />
+                        Target Career Role
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          list="roadmap-roles-list"
+                          placeholder="Type or select a target role (e.g. Full-Stack Software Engineer)"
+                          value={role}
+                          onChange={(e) => {
+                            setRole(e.target.value);
+                            setError('');
+                          }}
+                          className="w-full h-12 bg-white/10 border border-white/15 rounded-xl px-4 text-xs sm:text-sm text-white placeholder-gray-400 outline-none focus:border-emerald-400 transition"
+                        />
+                        <datalist id="roadmap-roles-list">
+                          {ROADMAP_TRACKS.map((track) => (
+                            <option key={track} value={track} />
+                          ))}
+                        </datalist>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: LPA Selector + Resume Status + Generate Button */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                      {/* Target Package Selector */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                        <span className="text-[11px] uppercase font-bold text-gray-400 mr-1 hidden sm:inline">
+                          Package:
+                        </span>
+                        {PACKAGE_OPTIONS.map((pkg) => (
+                          <button
+                            key={pkg}
+                            type="button"
+                            onClick={() => setTargetPackage(pkg)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                              targetPackage === pkg
+                                ? 'bg-white text-black shadow-xs'
+                                : 'bg-white/10 text-gray-300 hover:bg-white/15'
+                            }`}
+                          >
+                            {pkg}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Right Cluster: Attach Resume Pill + CTA Button */}
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        {/* Attach Resume Button */}
+                        {resume ? (
+                          <div
+                            className={`flex items-center rounded-xl border text-xs transition ${
+                              useResume
+                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                : 'bg-white/10 border-white/15 text-gray-300'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={handleResumeToggle}
+                              className="px-3 py-2 flex items-center gap-1.5 hover:text-white transition cursor-pointer"
+                            >
+                              <FiCheck className="w-3.5 h-3.5" />
+                              <span>{useResume ? 'Resume Linked' : 'Link Resume'}</span>
+                            </button>
+                            <span className="h-4 w-[1px] bg-white/15" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setModalFile(null);
+                                setModalError('');
+                                setShowResumeModal(true);
+                              }}
+                              className="p-2 text-gray-400 hover:text-white transition cursor-pointer"
+                              title="Replace resume"
+                            >
+                              <FiRefreshCw className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleResumeToggle}
+                            className="px-3 py-2 rounded-xl border border-white/15 bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 text-xs font-medium inline-flex items-center gap-1.5 transition cursor-pointer"
+                          >
+                            <FiUploadCloud className="w-3.5 h-3.5" />
+                            <span>Attach Resume</span>
+                          </button>
+                        )}
+
+                        {/* Primary Generate Button */}
+                        <button
+                          type="button"
+                          onClick={handleGenerate}
+                          disabled={loading || !role.trim()}
+                          className="h-10 px-5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                        >
+                          {loading ? (
+                            <>
+                              <FiRefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Architecting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FiZap className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Generate Roadmap</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Error Banner inside Hero */}
+                    {error && (
+                      <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                        <FiAlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        <span>{error}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Categorized Role Preset Grid */}
+              <div className="space-y-6">
+                <div className="text-center sm:text-left">
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Explore High-Growth Engineering Pathways
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Select a specialization below to auto-populate curriculum parameters.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {CATEGORIZED_ROLE_TRACKS.map((category) => (
+                    <div
+                      key={category.category}
+                      className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs flex flex-col gap-3"
+                    >
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 pb-2 border-b border-gray-100">
+                        {category.category}
+                      </h3>
+
+                      <div className="space-y-2">
+                        {category.roles.map((r) => {
+                          const Icon = r.icon;
+                          const isSelected = role.trim().toLowerCase() === r.name.toLowerCase();
+
+                          return (
+                            <button
+                              key={r.name}
+                              type="button"
+                              onClick={() => {
+                                setRole(r.name);
+                                setError('');
+                              }}
+                              className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                                isSelected
+                                  ? 'bg-[#111318] text-white border-[#111318] shadow-sm'
+                                  : 'bg-gray-50/70 hover:bg-gray-100 text-gray-800 border-gray-200/80'
+                              }`}
+                            >
+                              <div
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                  isSelected ? 'bg-white/10 text-emerald-400' : 'bg-white text-indigo-600 shadow-2xs'
+                                }`}
+                              >
+                                <Icon className="w-4 h-4" />
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className="text-xs font-bold truncate">{r.name}</p>
+                                  {isSelected && <FiCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
+                                  <span>{r.duration}</span>
+                                  <span>•</span>
+                                  <span className={isSelected ? 'text-emerald-300' : 'text-gray-600 font-semibold'}>
+                                    {r.comp}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            /* ======================================================== */
+            /* ACTIVE ROADMAP VIEW                                       */
+            /* ======================================================== */
+            <motion.div
+              key="roadmap-view"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3 }}
+            >
+              <RoadmapResult roadmap={roadmap} onClear={() => setRoadmap(null)} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* 3. HISTORY DRAWER */}
+      <AnimatePresence>
+        {historyOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setHistoryOpen(false)}
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
+            />
+
+            <motion.aside
+              initial={{ x: 360 }}
+              animate={{ x: 0 }}
+              exit={{ x: 360 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="fixed right-0 top-0 bottom-0 z-50 w-[320px] sm:w-[360px] max-w-[90vw] bg-white border-l border-gray-200 flex flex-col overflow-y-auto shadow-2xl"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 sticky top-0 bg-white/95 backdrop-blur-md z-10">
+                <div>
+                  <span className="text-sm font-bold text-gray-900 block">Saved Roadmaps</span>
+                  <span className="text-[11px] text-gray-500">Your generated learning tracks</span>
+                </div>
+                <button
+                  onClick={() => setHistoryOpen(false)}
+                  className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3 p-4 flex-1">
+                {historyLoading ? (
+                  <div className="text-center py-12 text-gray-400 text-xs flex items-center justify-center gap-2">
+                    <FiRefreshCw className="animate-spin" />
+                    <span>Loading saved roadmaps...</span>
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400 text-xs">
+                    No roadmaps generated yet. Generate your first one above!
+                  </div>
+                ) : (
+                  history.map((h, i) => (
+                    <button
+                      key={h._id || i}
+                      onClick={() => {
+                        getRoadmapById(h._id);
+                        setHistoryOpen(false);
+                      }}
+                      className="text-left p-4 rounded-2xl bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 transition-all cursor-pointer group shadow-2xs"
+                    >
+                      <h4 className="text-sm font-bold text-gray-900 group-hover:text-black">
+                        {h.title}
+                      </h4>
+                      <div className="flex justify-between items-center my-1.5">
+                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                          {h.targetPackage}
+                        </span>
+                        <span className="text-xs text-gray-500">{h.duration}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Generated on {new Date(h.createdAt).toLocaleDateString()}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* 4. RESUME UPLOAD / REPLACEMENT MODAL */}
+      <AnimatePresence>
+        {showResumeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-3xl bg-white border border-gray-200 p-6 shadow-2xl flex flex-col gap-4 text-gray-900"
+            >
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                    <FiUploadCloud size={16} />
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    {resume ? 'Replace Stored Resume' : 'Attach Resume for Personalized Roadmap'}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowResumeModal(false);
+                    setModalFile(null);
+                    setModalError('');
+                  }}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition cursor-pointer"
+                >
+                  <FiX size={16} />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 leading-relaxed">
+                {resume
+                  ? `Upload a newer resume PDF to replace your current resume (${
+                      resume.suggestedRole || 'Stored Profile'
+                    }) and calibrate upcoming curriculum modules to your updated skills.`
+                  : 'Upload your resume PDF so our AI engine can assess your current proficiencies and identify targeted skill gaps.'}
+              </p>
+
+              <label className="cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-gray-300 hover:border-gray-500 rounded-2xl p-6 transition-all bg-gray-50/60 hover:bg-gray-50">
+                <FiUploadCloud size={28} className={modalFile ? 'text-emerald-600' : 'text-gray-400'} />
+                <span className="mt-2 text-xs font-semibold text-gray-800 text-center max-w-[280px] truncate">
+                  {modalFile ? modalFile.name : 'Click to select resume PDF'}
+                </span>
+                <span className="text-[11px] text-gray-400 mt-1">PDF format • Costs 10 Coins</span>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      setModalFile(e.target.files[0]);
+                      setModalError('');
+                    }
+                  }}
+                />
+              </label>
+
+              {modalError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
+                  {modalError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResumeModal(false);
+                    setModalFile(null);
+                    setModalError('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleModalUpload}
+                  disabled={!modalFile || modalUploading}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-[#111318] text-white hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  {modalUploading ? 'Analyzing Resume...' : 'Analyze & Link'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
-export default Roadmap
+export default Roadmap;
