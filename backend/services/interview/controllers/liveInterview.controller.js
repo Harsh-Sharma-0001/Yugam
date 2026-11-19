@@ -2,6 +2,7 @@ import LiveInterview from "../models/liveInterview.model.js";
 import ScheduledInterview from "../models/scheduledInterview.model.js";
 import redis from "../../../shared/redis/redis.js";
 import llm from "../config/llm.js";
+import { isGibberishOrEmpty } from "../utils/answerValidator.js";
 
 /**
  * Real-time Groq LLM evaluation for a candidate's answer and submitted code.
@@ -13,11 +14,11 @@ const evaluateLiveQuestionWithGroq = async (q, defaultScore = 75) => {
   const studentAnswer = (q?.studentAnswer || q?.answer || q?.userAnswer || "").trim();
   const submittedCode = (q?.submittedCode || q?.code || "").trim();
 
-  // If no answer and no code submitted
-  if (!studentAnswer && !submittedCode) {
+  // If no answer or gibberish submitted
+  if (isGibberishOrEmpty(studentAnswer, submittedCode)) {
     return {
       score: 0,
-      feedback: "No answer submitted for this question.",
+      feedback: "No valid response detected. The submitted text appears to be random characters, numbers, or symbols rather than a genuine answer to the interview question.",
     };
   }
 

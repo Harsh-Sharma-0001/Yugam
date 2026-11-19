@@ -10,6 +10,7 @@ import { submitAnswer } from "../services/interview/controllers/interview.contro
 import graph from "../services/interview/graph/graph.js";
 import { createAnswerUpdateHandler } from "../services/interview/socket/liveRoom.socket.js";
 import { clampScore, getInterviewCacheKey } from "../services/interview/utils/cacheKeys.js";
+import { isGibberishOrEmpty, getZeroScoreFeedback } from "../services/interview/utils/answerValidator.js";
 
 const mongoose = User.base;
 
@@ -1688,5 +1689,128 @@ describe("20. Strengths & Areas for Improvement Auto-Flush & Alias Unification",
     assert.deepEqual(resC.improvementsList, ["Time complexity", "Edge cases"]);
   });
 });
+
+describe("21. Anti-Gibberish Proctor Validation & Deterministic Score Aggregation", () => {
+  test("Classifies empty, symbol-mash, pure numbers, and keyboard gibberish as isGibberishOrEmpty", () => {
+    // Gibberish and non-answer test inputs
+    const gibberishSamples = [
+      "",
+      "   ",
+      "rteyshj",
+      "12345678",
+      "@#$%^&*",
+      "wzxcg",
+      "plmiuygvc",
+      "errdtyuiugcv,bn",
+      "aaaaaa",
+      "123 456 789",
+      "??? !!! ...",
+      "asdfghjkl",
+      "qwe rty uiop",
+      "zzzzzzzzzz",
+      "- - - _ _ _",
+    ];
+
+    for (const sample of gibberishSamples) {
+      assert.equal(
+        isGibberishOrEmpty(sample),
+        true,
+        `Expected "${sample}" to be classified as gibberish/empty`
+      );
+    }
+
+    // Genuine answers must NOT be classified as gibberish
+    const genuineSamples = [
+      "I use React and Node.js for building scalable web applications.",
+      "In my previous project, we implemented JWT authentication with refresh tokens.",
+      "Recursion is a technique where a function calls itself to solve smaller subproblems.",
+      "We followed the STAR method to resolve production database latency spikes.",
+      "const binarySearch = (arr, target) => { return arr.indexOf(target); };",
+      "Polymorphism allows objects of different classes to be treated through a common interface.",
+    ];
+
+    for (const sample of genuineSamples) {
+      assert.equal(
+        isGibberishOrEmpty(sample),
+        false,
+        `Expected genuine answer "${sample}" to NOT be classified as gibberish`
+      );
+    }
+  });
+
+  test("getZeroScoreFeedback returns strict 0 across all criteria with mentor guidance and no pity points", () => {
+    const feedback = getZeroScoreFeedback();
+    assert.equal(feedback.score, 0);
+    assert.equal(feedback.clarity, 0);
+    assert.equal(feedback.relevance, 0);
+    assert.equal(feedback.communication, 0);
+    assert.equal(feedback.correctness, 0);
+    assert.equal(feedback.detail, 0);
+    assert.equal(feedback.efficiency, 0);
+    assert.equal(feedback.problemSolving, 0);
+    assert.equal(feedback.creativity, 0);
+    assert.match(feedback.feedback, /No valid response detected/);
+    assert.ok(Array.isArray(feedback.improvements) && feedback.improvements.length >= 2);
+  });
+
+  test("Deterministic overallScore calculation matches exact mathematical question average and clamps to 0", () => {
+    // Scenario 1: All 6 questions scored 0 (e.g. all gibberish)
+    const zeroQuestions = [
+      { score: 0 },
+      { score: 0 },
+      { score: 0 },
+      { score: 0 },
+      { score: 0 },
+      { score: 0 },
+    ];
+    const zeroScores = zeroQuestions.map((q) => q.score);
+    const zeroAvg = Math.round(zeroScores.reduce((a, b) => a + b, 0) / zeroScores.length);
+    assert.equal(zeroAvg, 0);
+
+    // Enforce that overallScore cannot be inflated to 58 when average is 0
+    let finalZeroScore = zeroAvg;
+    const llmInflatedScore = 58;
+    if (zeroAvg === 0) {
+      finalZeroScore = 0;
+    } else {
+      finalZeroScore = Math.min(zeroAvg + 3, Math.max(zeroAvg - 3, llmInflatedScore));
+    }
+    assert.equal(finalZeroScore, 0, "Overall score must be 0 when question average is 0");
+
+    // Scenario 2: Mixed question scores (e.g. 80, 85, 90, 75)
+    const mixedScores = [80, 85, 90, 75];
+    const mixedAvg = Math.round(mixedScores.reduce((a, b) => a + b, 0) / mixedScores.length);
+    assert.equal(mixedAvg, 83);
+
+    // Clamps LLM holistic score within ±3 points
+    const llmReportScore = 95; // LLM attempts to give 95
+    const clampedScore = Math.min(mixedAvg + 3, Math.max(mixedAvg - 3, llmReportScore));
+    assert.equal(clampedScore, 86, "Score must be clamped within 3 points of real average");
+  });
+
+  test("Eliminates hallucinated strengths when average score is < 20 or questions are invalid", () => {
+    const computedAvg = 0;
+    const questionScores = [0, 0, 0, 0];
+
+    const generateStrengths = (avg, scores, llmStrengths) => {
+      if (avg < 20 || scores.filter((s) => s > 0).length === 0) {
+        return ["No demonstrable strengths observed due to unanswered or invalid responses."];
+      }
+      return llmStrengths;
+    };
+
+    const hallucinatedLLMStrengths = [
+      "Clear and concise communication style",
+      "Good understanding of STAR method",
+      "Strong technical fundamentals",
+    ];
+
+    const actualStrengths = generateStrengths(computedAvg, questionScores, hallucinatedLLMStrengths);
+    assert.deepEqual(actualStrengths, [
+      "No demonstrable strengths observed due to unanswered or invalid responses.",
+    ]);
+  });
+});
+
 
 

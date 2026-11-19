@@ -55,7 +55,7 @@ function Step3report({ report, user, setUser }) {
               <p className='mt-5 text-zinc-500 text-xs'>Overall Score</p>
 
               <h2 className='mt-2 text-4xl font-bold text-white'>
-                {report.overallScore}
+                {report.overallScore ?? 0}
 
                 <span className='text-lg text-zinc-500'>/100</span>
               </h2>

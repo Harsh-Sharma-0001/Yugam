@@ -365,19 +365,19 @@ function InterviewDetailView({ interviewId, onBack }) {
                                     Overall Score
                                 </span>
                                 <div className="text-3xl font-black text-white">
-                                    {interview.overallScore || 0}
+                                    {interview.overallScore ?? 0}
                                     <span className="text-sm font-normal text-zinc-500"> / 100</span>
                                 </div>
                                 <span className={`text-[11px] font-semibold mt-1 inline-block ${
-                                    (interview.overallScore || 0) >= 75
+                                    (interview.overallScore ?? 0) >= 75
                                         ? 'text-emerald-400'
-                                        : (interview.overallScore || 0) >= 50
+                                        : (interview.overallScore ?? 0) >= 50
                                         ? 'text-amber-400'
                                         : 'text-red-400'
                                 }`}>
-                                    {(interview.overallScore || 0) >= 75
+                                    {(interview.overallScore ?? 0) >= 75
                                         ? 'Strong Performance'
-                                        : (interview.overallScore || 0) >= 50
+                                        : (interview.overallScore ?? 0) >= 50
                                         ? 'Moderate Competence'
                                         : 'Needs Preparation'}
                                 </span>
@@ -503,7 +503,7 @@ function InterviewDetailView({ interviewId, onBack }) {
                             </span>
                             <div className="bg-[#17181E] border border-white/10 px-3.5 py-1.5 rounded-xl text-center">
                                 <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Weighted Composite</span>
-                                <span className="text-sm font-black text-white">{interview.overallScore || 0} / 100</span>
+                                <span className="text-sm font-black text-white">{interview.overallScore ?? 0} / 100</span>
                             </div>
                         </div>
                     </div>

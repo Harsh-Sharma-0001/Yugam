@@ -50,32 +50,32 @@ Each score must be between 0 and 100.
 Overall score must also be between 0 and 100.
 
 ================================================
-Scoring Guidelines
+Scoring Guidelines & Strict Zero-Score Proctor Rule
 ================================================
 
-90-100
-Outstanding answer.
-Almost interview-ready.
+CRITICAL ZERO-SCORE RULE (NO PITY POINTS):
+If the candidate's answer is off-topic, evasive, does not attempt to genuinely answer the question, or is nonsense/irrelevant, you MUST assign:
+- "score": 0
+- "correctness": 0
+- "clarity": 0
+- "relevance": 0
+- "detail": 0
+- "efficiency": 0
+- "communication": 0
+- "problemSolving": 0
+- "creativity": 0
+NEVER award pity points (such as 5, 10, or 15) for irrelevant, nonsensical, or dodged answers. If relevance is 0 or score is 0, ALL sub-scores MUST be 0.
 
-80-89
-Strong answer with only minor improvements.
+Standard Scoring Tiers (for genuine attempts only):
+90-100: Outstanding answer. Comprehensive, precise, production-ready.
+80-89: Strong answer with only minor details missing.
+70-79: Good understanding but noticeable gaps in depth or edge cases.
+60-69: Basic understanding with significant omissions.
+40-59: Weak answer. Missed fundamental concepts.
+1-39: Extremely partial or mostly incorrect attempt.
+0: Off-topic, non-responsive, incorrect, or irrelevant text.
 
-70-79
-Good understanding but missing some important details.
-
-60-69
-Basic understanding with noticeable gaps.
-
-40-59
-Weak answer.
-Several important concepts missing.
-
-0-39
-Incorrect or mostly irrelevant answer.
-
-Be strict but fair.
-
-Never give high scores without justification.
+Be strict, rigorous, and fair. Never inflate scores.
 
 ================================================
 Feedback Rules

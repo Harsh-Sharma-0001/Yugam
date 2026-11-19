@@ -272,11 +272,46 @@ export const submitAnswer = async (req, res) => {
 
             if (completed) {
                 updateFields.$set.status = "completed";
-                updateFields.$set.overallScore = result.report?.overallScore || 0;
+
+                // Deterministic calculation of overall score across all questions
+                const allQuestions = Array.isArray(interview.questions) ? [...interview.questions] : [];
+                const questionScores = allQuestions.map((q, idx) => {
+                    if (idx === expectedIndex && result.feedback) {
+                        return Number(result.feedback.score ?? 0) || 0;
+                    }
+                    return Number(q.feedback?.score ?? q.score ?? 0) || 0;
+                });
+
+                const totalQCount = questionScores.length;
+                const computedAvg = totalQCount > 0
+                    ? Math.round(questionScores.reduce((sum, s) => sum + s, 0) / totalQCount)
+                    : 0;
+
+                let finalOverall = computedAvg;
+                const repScore = Number(result.report?.overallScore);
+                if (computedAvg === 0) {
+                    finalOverall = 0;
+                } else if (Number.isFinite(repScore)) {
+                    const minAllowed = Math.max(0, computedAvg - 3);
+                    const maxAllowed = Math.min(100, computedAvg + 3);
+                    finalOverall = Math.min(maxAllowed, Math.max(minAllowed, Math.round(repScore)));
+                }
+
+                updateFields.$set.overallScore = finalOverall;
                 updateFields.$set.summary = result.report?.summary || "";
-                updateFields.$set.strengths = result.report?.strengths || [];
-                updateFields.$set.weaknesses = result.report?.weaknesses || [];
-                updateFields.$set.recommendations = result.report?.recommendations || [];
+
+                if (computedAvg < 20 || questionScores.filter((s) => s > 0).length === 0) {
+                    updateFields.$set.strengths = [
+                        "No demonstrable strengths observed due to unanswered or invalid responses."
+                    ];
+                } else {
+                    updateFields.$set.strengths = Array.isArray(result.report?.strengths) && result.report.strengths.length > 0
+                        ? result.report.strengths
+                        : ["Demonstrated foundational domain awareness."];
+                }
+
+                updateFields.$set.weaknesses = Array.isArray(result.report?.weaknesses) ? result.report.weaknesses : [];
+                updateFields.$set.recommendations = Array.isArray(result.report?.recommendations) ? result.report.recommendations : [];
             }
 
             const updatedInterview = await Interview.findOneAndUpdate(
