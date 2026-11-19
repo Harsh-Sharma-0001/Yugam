@@ -259,14 +259,48 @@ export const initLiveRoomSocket = (httpServer) => {
           yourSocketId: socket.id,
           peers: existingPeers,
         });
+
+        // Authoritative real-time room presence snapshot broadcast (Part 1)
+        await broadcastRoomPresence(actualLiveId);
       } catch (joinErr) {
         console.error("Room join authorization error:", joinErr);
         socket.emit("room:error", { message: "Failed to authorize room access." });
       }
     };
 
+    // Broadcast authoritative room presence to all connected sockets in live room
+    const broadcastRoomPresence = async (liveId) => {
+      try {
+        const roomKey = `live:${liveId}`;
+        const roomSockets = await io.in(roomKey).fetchSockets();
+        const participants = roomSockets
+          .filter((s) => s.data?.verified && String(s.data?.liveId) === String(liveId))
+          .map((s) => ({
+            userId: s.data.userId,
+            name: s.data.userName,
+            userName: s.data.userName,
+            role: s.data.role,
+            socketId: s.id,
+          }));
+
+        const peerCount = participants.length;
+        const presencePayload = {
+          liveId,
+          peerCount,
+          participants,
+        };
+
+        io.to(roomKey).emit("room:presence", presencePayload);
+        io.to(roomKey).emit("room:participants", presencePayload);
+        return presencePayload;
+      } catch (presenceErr) {
+        console.error("Error broadcasting room presence:", presenceErr);
+      }
+    };
+
     socket.on("room:join", handleRoomJoin);
     socket.on("live-room:join", handleRoomJoin);
+    socket.on("join-room", handleRoomJoin);
 
     // Helper to verify target socket belongs to the exact same room
     const verifySignalingTarget = async (targetSocketId) => {
@@ -547,25 +581,66 @@ export const initLiveRoomSocket = (httpServer) => {
     });
 
     // Workspace: Participant left the room / concluded session
-    socket.on("workspace:peer-left", ({ reason } = {}) => {
+    socket.on("workspace:peer-left", async ({ reason } = {}) => {
       if (!socket.data?.verified) return;
+      const liveId = socket.data.liveId;
       const safeReason = String(reason || "ended").slice(0, 100);
-      io.to(`live:${socket.data.liveId}`).emit("workspace:peer-left", {
-        liveId: socket.data.liveId,
+      io.to(`live:${liveId}`).emit("workspace:peer-left", {
+        liveId,
         leftByRole: socket.data.role,
         leftByName: socket.data.userName,
         reason: safeReason,
       });
+
+      // Socket leaves the live room channel & presence updates
+      socket.leave(`live:${liveId}`);
+      await broadcastRoomPresence(liveId);
+    });
+
+    // Room leave event
+    socket.on("room:leave", async () => {
+      if (socket.data?.liveId) {
+        const liveId = socket.data.liveId;
+        socket.leave(`live:${liveId}`);
+        await broadcastRoomPresence(liveId);
+      }
     });
 
     // Disconnect handling
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       if (socket.data?.liveId) {
-        socket.to(`live:${socket.data.liveId}`).emit("user:left", {
+        const liveId = socket.data.liveId;
+        const roomKey = `live:${liveId}`;
+        socket.to(roomKey).emit("user:left", {
           socketId: socket.id,
           role: socket.data.role,
           userName: socket.data.userName,
         });
+
+        // Recalculate room presence for remaining active sockets
+        try {
+          const remainingSockets = await io.in(roomKey).fetchSockets();
+          const participants = remainingSockets
+            .filter((s) => s.id !== socket.id && s.data?.verified && String(s.data?.liveId) === String(liveId))
+            .map((s) => ({
+              userId: s.data.userId,
+              name: s.data.userName,
+              userName: s.data.userName,
+              role: s.data.role,
+              socketId: s.id,
+            }));
+
+          const presencePayload = {
+            liveId,
+            peerCount: participants.length,
+            participants,
+          };
+
+          io.to(roomKey).emit("room:presence", presencePayload);
+          io.to(roomKey).emit("room:participants", presencePayload);
+        } catch (discErr) {
+          console.error("Error broadcasting presence on disconnect:", discErr);
+        }
       }
     });
   });

@@ -155,6 +155,8 @@ function LiveInterviewRoom({ user }) {
   const {
     socketRef,
     peerInfo,
+    isPeerInRoom,
+    participants,
     pushQuestion,
     switchActiveQuestion,
     updateAnswer,
@@ -211,6 +213,14 @@ function LiveInterviewRoom({ user }) {
     },
     onCallEnded: triggerCallEnded,
   });
+
+  // Effective peer presence: true if socket presence confirms peer is in room, or WebRTC connected
+  const isPeerConnected = Boolean(
+    isPeerInRoom ||
+    peerConnected ||
+    remoteStream ||
+    pcRef?.current?.connectionState === "connected"
+  );
 
   // Countdown timer for automatic redirect to dashboard
   useEffect(() => {
@@ -553,8 +563,8 @@ function LiveInterviewRoom({ user }) {
         </div>
       )}
 
-      {/* 1. STUDIO HEADER */}
-      <header className="h-16 border-b border-gray-200 bg-white/95 backdrop-blur-md px-5 flex items-center justify-between shrink-0 z-30 shadow-xs">
+      {/* 1. STUDIO COMMAND HEADER */}
+      <header className="h-16 border-b border-gray-200 bg-white/95 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-xs">
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -573,46 +583,68 @@ function LiveInterviewRoom({ user }) {
             <FiArrowLeft size={16} />
           </button>
 
+          {/* Brand Mark + Studio Beacon */}
           <div className="flex items-center gap-2.5">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+            <div className="w-8 h-8 rounded-lg bg-[#111318] flex items-center justify-center text-white font-black text-sm shadow-sm">
+              Y
+            </div>
+            <span className="font-extrabold text-base tracking-tight text-gray-900 hidden sm:inline">
+              Yugam
             </span>
-            <h1 className="text-sm font-black text-gray-900 tracking-wide flex items-center gap-2">
-              <span>YUGAM LIVE STUDIO</span>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-gray-900 text-white uppercase shadow-xs">
-                {scheduled?.role || "Technical Interview"}
+            <span className="h-4 w-px bg-gray-200 hidden sm:inline" />
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600"></span>
               </span>
-            </h1>
+              <span className="text-xs font-black tracking-wider text-gray-900 uppercase">
+                YUGAM LIVE STUDIO
+              </span>
+            </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 text-xs text-gray-700 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 shadow-xs">
+          {/* High-Contrast Obsidian Role Pill */}
+          <span className="hidden md:inline-flex text-[11px] font-bold px-3 py-1 rounded-full bg-[#111318] text-white uppercase tracking-wider shadow-xs">
+            {scheduled?.role || "Software Engineer"}
+          </span>
+
+          {/* Monospace Session Timer Pill */}
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-gray-800 bg-gray-100/90 px-3 py-1.5 rounded-xl border border-gray-200/90 shadow-2xs">
             <FiClock size={13} className="text-gray-500" />
-            <span className="font-mono font-bold">{formatTime(elapsedSeconds)}</span>
+            <span className="font-mono font-bold tracking-tight">{formatTime(elapsedSeconds)}</span>
           </div>
         </div>
 
         {/* Right Header Status & Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Real-time Peer Presence Badge */}
           <div
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${
-              peerConnected
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : "bg-amber-50 text-amber-700 border-amber-200"
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+              isPeerConnected
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200 shadow-2xs"
+                : "bg-amber-50 text-amber-800 border-amber-200"
             }`}
+            title={
+              isPeerConnected
+                ? `Peer connected in room: ${peerInfo?.userName || "Active"}`
+                : "Waiting for other participant to join..."
+            }
           >
             <span
               className={`w-2 h-2 rounded-full ${
-                peerConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
+                isPeerConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
               }`}
             />
-            <span className="text-[11px]">
-              {peerConnected ? `Peer: ${peerInfo.userName || "Connected"}` : "Waiting for Peer..."}
+            <span className="text-[11px] font-bold">
+              {isPeerConnected
+                ? `Peer Connected • ${peerInfo?.userName || (participantRole === "trainer" ? scheduled?.studentName || "Candidate" : scheduled?.trainerName || "Faculty")}`
+                : "Waiting for Peer..."}
             </span>
           </div>
 
+          {/* Participant Role Pill */}
           <span
-            className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl border ${
+            className={`text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-xl border shadow-2xs ${
               participantRole === "trainer"
                 ? "bg-purple-50 text-purple-700 border-purple-200"
                 : "bg-blue-50 text-blue-700 border-blue-200"
@@ -621,6 +653,7 @@ function LiveInterviewRoom({ user }) {
             {participantRole === "trainer" ? "👨‍🏫 FACULTY TRAINER" : "🎓 CANDIDATE STUDENT"}
           </span>
 
+          {/* Trainer Evaluation CTA */}
           {participantRole === "trainer" && (
             <button
               onClick={() => {
@@ -634,6 +667,7 @@ function LiveInterviewRoom({ user }) {
             </button>
           )}
 
+          {/* Leave Room Button */}
           <button
             onClick={() => {
               if (window.confirm("Disconnect and conclude this live session?")) {
@@ -645,7 +679,7 @@ function LiveInterviewRoom({ user }) {
                 });
               }
             }}
-            className="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             title="Leave Room"
           >
             <FiPhoneOff size={14} />
@@ -664,7 +698,9 @@ function LiveInterviewRoom({ user }) {
             remoteStream={remoteStream}
             isCameraOn={isCameraOn}
             isMicOn={isMicOn}
-            peerConnected={peerConnected}
+            peerConnected={isPeerConnected}
+            isPeerConnected={isPeerConnected}
+            isPeerInRoom={isPeerInRoom}
             peerInfo={peerInfo}
             participantRole={participantRole}
             scheduled={scheduled}

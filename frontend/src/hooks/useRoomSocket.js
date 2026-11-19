@@ -20,6 +20,8 @@ export function useRoomSocket({
   onCallEnded,
 } = {}) {
   const [peerInfo, setPeerInfo] = useState({ userName: "", role: "" });
+  const [isPeerInRoom, setIsPeerInRoom] = useState(false);
+  const [participants, setParticipants] = useState([]);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -91,8 +93,33 @@ export function useRoomSocket({
       });
     });
 
+    // Authoritative room presence update from Socket.IO server
+    const handlePresence = (presence) => {
+      if (!presence) return;
+      const list = Array.isArray(presence.participants) ? presence.participants : [];
+      setParticipants(list);
+
+      const myId = socket.id;
+      const otherPeers = list.filter((p) => p.socketId !== myId);
+
+      if (otherPeers.length > 0) {
+        setIsPeerInRoom(true);
+        const activePeer = otherPeers[0];
+        setPeerInfo((prev) => ({
+          userName: activePeer.userName || activePeer.name || prev.userName,
+          role: activePeer.role || prev.role,
+        }));
+      } else {
+        setIsPeerInRoom(false);
+      }
+    };
+
+    socket.on("room:presence", handlePresence);
+    socket.on("room:participants", handlePresence);
+
     // When another peer joins the room
     socket.on("user:joined", async (peer) => {
+      setIsPeerInRoom(true);
       setPeerInfo({ userName: peer.userName, role: peer.role });
 
       // Faculty Trainer initiates the WebRTC offer
@@ -113,6 +140,7 @@ export function useRoomSocket({
 
     socket.on("room:joined", async ({ peers }) => {
       if (peers && peers.length > 0) {
+        setIsPeerInRoom(true);
         setPeerInfo({ userName: peers[0].userName, role: peers[0].role });
       }
     });
@@ -208,6 +236,7 @@ export function useRoomSocket({
 
     // Peer disconnected
     socket.on("user:left", (data) => {
+      setIsPeerInRoom(false);
       if (onPeerConnected) onPeerConnected(false);
       if (onCallEnded) {
         onCallEnded({
@@ -307,6 +336,8 @@ export function useRoomSocket({
     socketRef,
     peerInfo,
     setPeerInfo,
+    isPeerInRoom,
+    participants,
     pushQuestion,
     switchActiveQuestion,
     updateAnswer,

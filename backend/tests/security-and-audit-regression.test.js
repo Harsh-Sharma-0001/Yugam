@@ -1812,5 +1812,164 @@ describe("21. Anti-Gibberish Proctor Validation & Deterministic Score Aggregatio
   });
 });
 
+describe("22. Real-Time Room Presence & Peer State Tracking", () => {
+  test("Calculates authoritative room presence with verified participants and peerCount", () => {
+    const mockSockets = [
+      {
+        id: "socket-trainer-1",
+        data: {
+          verified: true,
+          liveId: "live-session-123",
+          userId: "user-trainer",
+          userName: "Sumedh Sir",
+          role: "trainer",
+        },
+      },
+      {
+        id: "socket-student-1",
+        data: {
+          verified: true,
+          liveId: "live-session-123",
+          userId: "user-student",
+          userName: "Harsh Sharma",
+          role: "student",
+        },
+      },
+      {
+        id: "socket-unverified",
+        data: {
+          verified: false,
+          liveId: "live-session-123",
+        },
+      },
+    ];
+
+    const computePresence = (sockets, liveId) => {
+      const participants = sockets
+        .filter((s) => s.data?.verified && String(s.data?.liveId) === String(liveId))
+        .map((s) => ({
+          userId: s.data.userId,
+          name: s.data.userName,
+          userName: s.data.userName,
+          role: s.data.role,
+          socketId: s.id,
+        }));
+
+      return {
+        liveId,
+        peerCount: participants.length,
+        participants,
+      };
+    };
+
+    const presence = computePresence(mockSockets, "live-session-123");
+    assert.equal(presence.peerCount, 2, "Only verified participants in the room must be counted");
+    assert.equal(presence.participants[0].role, "trainer");
+    assert.equal(presence.participants[0].name, "Sumedh Sir");
+    assert.equal(presence.participants[1].role, "student");
+    assert.equal(presence.participants[1].name, "Harsh Sharma");
+  });
+
+  test("Recalculates room presence correctly upon socket disconnect or room exit", () => {
+    const activeSockets = [
+      {
+        id: "socket-trainer-1",
+        data: {
+          verified: true,
+          liveId: "live-session-123",
+          userId: "user-trainer",
+          userName: "Sumedh Sir",
+          role: "trainer",
+        },
+      },
+      {
+        id: "socket-student-1",
+        data: {
+          verified: true,
+          liveId: "live-session-123",
+          userId: "user-student",
+          userName: "Harsh Sharma",
+          role: "student",
+        },
+      },
+    ];
+
+    const disconnectSocketId = "socket-student-1";
+    const remainingSockets = activeSockets.filter((s) => s.id !== disconnectSocketId);
+
+    const remainingParticipants = remainingSockets
+      .filter((s) => s.data?.verified && String(s.data?.liveId) === "live-session-123")
+      .map((s) => ({
+        userId: s.data.userId,
+        name: s.data.userName,
+        userName: s.data.userName,
+        role: s.data.role,
+        socketId: s.id,
+      }));
+
+    assert.equal(remainingParticipants.length, 1);
+    assert.equal(remainingParticipants[0].role, "trainer");
+  });
+
+  test("Evaluates client-side isPeerConnected correctly across single-PC and WebRTC states", () => {
+    const evaluatePeerConnected = ({ isPeerInRoom, peerConnected, remoteStream, connectionState }) => {
+      return Boolean(
+        isPeerInRoom ||
+        peerConnected ||
+        remoteStream ||
+        connectionState === "connected"
+      );
+    };
+
+    // Case 1: Sole participant in room (Waiting for peer)
+    assert.equal(
+      evaluatePeerConnected({
+        isPeerInRoom: false,
+        peerConnected: false,
+        remoteStream: null,
+        connectionState: "new",
+      }),
+      false,
+      "Must show waiting when alone in room"
+    );
+
+    // Case 2: Both in Socket.IO room but WebRTC video stream pending (Single-PC test tab or camera shared)
+    assert.equal(
+      evaluatePeerConnected({
+        isPeerInRoom: true,
+        peerConnected: false,
+        remoteStream: null,
+        connectionState: "checking",
+      }),
+      true,
+      "Must transition to Peer Connected immediately once peer is in Socket.IO room"
+    );
+
+    // Case 3: WebRTC video stream connected
+    assert.equal(
+      evaluatePeerConnected({
+        isPeerInRoom: true,
+        peerConnected: true,
+        remoteStream: { active: true },
+        connectionState: "connected",
+      }),
+      true,
+      "Must remain Peer Connected with active WebRTC stream"
+    );
+
+    // Case 4: Peer leaves the room
+    assert.equal(
+      evaluatePeerConnected({
+        isPeerInRoom: false,
+        peerConnected: false,
+        remoteStream: null,
+        connectionState: "disconnected",
+      }),
+      false,
+      "Must revert to waiting when peer leaves"
+    );
+  });
+});
+
 
 
