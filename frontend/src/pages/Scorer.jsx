@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 
 import {
   FiAlertCircle,
+  FiArrowLeft,
   FiTrendingUp,
   FiUploadCloud,
   FiUser,
@@ -209,7 +210,7 @@ const Navbar = ({ label }) => {
       }}
       className="fixed inset-x-0 top-0 z-20 border-b border-black/8 bg-white/80 backdrop-blur-xl"
     >
-      <div className="mx-auto flex h-12 max-w-7xl items-center justify-start px-3 sm:px-5">
+      <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-3 sm:px-5">
         <div
           onClick={() => navigate("/dashboard")}
           className="flex cursor-pointer items-center gap-1.5"
@@ -222,6 +223,14 @@ const Navbar = ({ label }) => {
             {label}
           </span>
         </div>
+
+        <button 
+          onClick={() => navigate("/dashboard")}
+          className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-4 py-1.5 text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition cursor-pointer"
+        >
+          <FiArrowLeft className="w-4 h-4" />
+          <span>Back to Overview</span>
+        </button>
       </div>
     </motion.nav>
   );

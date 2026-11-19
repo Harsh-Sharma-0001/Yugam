@@ -55,8 +55,18 @@ function ResumeBuilder({user , setUser}) {
                     <span className='hidden rounded bg-black/5 px-1.5 py-0.5 text-[10px] text-black/50 sm:block'>Resume Builder</span>
                 </div>
 
-                <button onClick={()=>setShowPreview(true)} className='flex h-8 items-center justify-center  rounded-lg border border-black/15 text-black/60 transition px-2 hover:border-[#0A0A0A] hover:text-[#0A0A0A]'>
-                <FiEye size={13}/></button>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => navigate("/dashboard")}
+                        className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-4 py-1.5 text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition cursor-pointer"
+                    >
+                        <FiArrowLeft className="w-4 h-4" />
+                        <span>Back to Overview</span>
+                    </button>
+                    <button onClick={()=>setShowPreview(true)} className='flex h-8 items-center justify-center rounded-lg border border-black/15 text-black/60 transition px-2 hover:border-[#0A0A0A] hover:text-[#0A0A0A]'>
+                        <FiEye size={13}/>
+                    </button>
+                </div>
 
             </div>
 

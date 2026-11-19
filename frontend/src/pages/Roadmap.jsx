@@ -1,6 +1,6 @@
 import React from 'react'
 import { AnimatePresence, motion } from "motion/react"
-import { FiCheck, FiChevronDown, FiClock, FiFileText, FiRefreshCw, FiSend, FiUploadCloud, FiX, FiZap } from 'react-icons/fi'
+import { FiArrowLeft, FiCheck, FiChevronDown, FiClock, FiFileText, FiRefreshCw, FiSend, FiUploadCloud, FiX, FiZap } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { BsRocketTakeoff } from "react-icons/bs";
@@ -190,10 +190,19 @@ function Roadmap({ user, setUser }) {
                         <span className='hidden rounded bg-black/5 px-1.5 py-0.5 text-[10px] text-black/50 sm:block'>Roadmap Builder</span>
                     </div>
 
-                    <button onClick={() => setHistoryOpen(!historyOpen)} className='flex h-8 items-center justify-center gap-1 rounded-lg border border-black/15 text-black/60 transition px-2 hover:border-[#0A0A0A] hover:text-[#0A0A0A] text-[10px]'>
-                        <FiClock />
-                        <span className="hidden sm:inline">History</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => navigate("/dashboard")}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 rounded-full px-4 py-1.5 text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition cursor-pointer"
+                        >
+                            <FiArrowLeft className="w-4 h-4" />
+                            <span>Back to Overview</span>
+                        </button>
+                        <button onClick={() => setHistoryOpen(!historyOpen)} className='flex h-8 items-center justify-center gap-1 rounded-lg border border-black/15 text-black/60 transition px-2 hover:border-[#0A0A0A] hover:text-[#0A0A0A] text-[10px]'>
+                            <FiClock />
+                            <span className="hidden sm:inline">History</span>
+                        </button>
+                    </div>
                 </div>
             </motion.nav>
 

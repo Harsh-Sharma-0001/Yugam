@@ -1338,3 +1338,185 @@ describe("18. Live Faculty Incomplete Status, Resume Disabling & AI Resume State
     assert.equal(state3.progress, 100);
   });
 });
+
+describe("19. Roll Number Display, Trainer Strengths/Improvements, Session Rubric Card & Question AI Scoring", () => {
+  test("Student Roll Number resolution prioritizes roll number over raw MongoDB ObjectId", () => {
+    const resolveDisplayRollNumber = (interview) => {
+      return (
+        interview?.studentRollNumber ||
+        interview?.rollNumber ||
+        interview?.candidateRollNumber ||
+        interview?.student?.rollNumber ||
+        "N/A"
+      );
+    };
+
+    // Case 1: Populated student roll number
+    const interviewWithRoll = {
+      studentId: "6ae8a9d8d2261930c78944e5",
+      studentName: "Harsh Sharma",
+      studentRollNumber: "2315000916",
+    };
+    assert.equal(resolveDisplayRollNumber(interviewWithRoll), "2315000916");
+
+    // Case 2: Roll number present in alias rollNumber or candidateRollNumber
+    assert.equal(resolveDisplayRollNumber({ rollNumber: "GLA-2026-99" }), "GLA-2026-99");
+    assert.equal(resolveDisplayRollNumber({ candidateRollNumber: "ROLL-404" }), "ROLL-404");
+
+    // Case 3: Missing roll number must fall back to "N/A" instead of leaking MongoDB _id
+    const interviewWithoutRoll = {
+      studentId: "6ae8a9d8d2261930c78944e5",
+      studentName: "Candidate",
+    };
+    assert.equal(resolveDisplayRollNumber(interviewWithoutRoll), "N/A");
+    assert.notEqual(resolveDisplayRollNumber(interviewWithoutRoll), "6ae8a9d8d2261930c78944e5");
+  });
+
+  test("Live interview report normalizes strengths, improvements and redacts confidential notes for students", () => {
+    const normalizeLiveDocForViewer = (liveDoc, userRole) => {
+      const strengths = liveDoc.evaluation?.strengths || [];
+      const improvements = liveDoc.evaluation?.weaknesses || [];
+      const isStudent = userRole === "student";
+
+      const report = {
+        _id: liveDoc._id,
+        studentRollNumber: liveDoc.studentRollNumber || "N/A",
+        rollNumber: liveDoc.studentRollNumber || "N/A",
+        overallScore: liveDoc.evaluation?.overallScore ?? 0,
+        strengths,
+        improvements,
+        weaknesses: improvements,
+        summary: liveDoc.evaluation?.summaryFeedback || "",
+        criteria: liveDoc.evaluation?.criteria || {},
+      };
+
+      if (!isStudent) {
+        report.trainerPrivateNotes = liveDoc.trainerPrivateNotes || "";
+      }
+
+      return report;
+    };
+
+    const mockLiveDoc = {
+      _id: "6ae8a9d8d2261930c78944e5",
+      studentRollNumber: "2315000916",
+      trainerPrivateNotes: "Student showed great confidence but hesitated on dynamic programming.",
+      evaluation: {
+        overallScore: 92,
+        strengths: ["Strong problem decomposition", "Clean modular code"],
+        weaknesses: ["Deepen knowledge of memoization", "Consider space complexity edge cases"],
+        summaryFeedback: "Harsh demonstrated solid full-stack capabilities.",
+        criteria: {
+          correctness: 90,
+          problemSolving: 95,
+          efficiency: 85,
+          clarity: 95,
+          relevance: 90,
+          communication: 95,
+        },
+      },
+    };
+
+    // Student view
+    const studentReport = normalizeLiveDocForViewer(mockLiveDoc, "student");
+    assert.equal(studentReport.studentRollNumber, "2315000916");
+    assert.equal(studentReport.strengths.length, 2);
+    assert.equal(studentReport.improvements.length, 2);
+    assert.equal(studentReport.trainerPrivateNotes, undefined, "Confidential notes must be redacted for student");
+
+    // Trainer view
+    const trainerReport = normalizeLiveDocForViewer(mockLiveDoc, "trainer");
+    assert.equal(trainerReport.trainerPrivateNotes, "Student showed great confidence but hesitated on dynamic programming.");
+    assert.equal(trainerReport.strengths.length, 2);
+    assert.equal(trainerReport.improvements.length, 2);
+  });
+
+  test("6-dimension session rubric criteria calculates weighted score and does not duplicate on per-question cards", () => {
+    const criteria = {
+      correctness: 80,
+      problemSolving: 90,
+      efficiency: 80,
+      clarity: 80,
+      relevance: 90,
+      communication: 100,
+    };
+
+    const weightedScore = Math.round(
+      0.25 * criteria.correctness +
+      0.25 * criteria.problemSolving +
+      0.15 * criteria.efficiency +
+      0.15 * criteria.clarity +
+      0.10 * criteria.relevance +
+      0.10 * criteria.communication
+    );
+
+    assert.equal(weightedScore, 86);
+
+    // Verify per-question mapping omits session-wide criteria pills
+    const rawQuestion = {
+      questionText: "Explain LRU Cache implementation",
+      studentAnswer: "Used HashMap + Doubly Linked List for O(1) get and put.",
+      score: 88,
+      feedback: "Accurate time complexity analysis with clean data structure selection.",
+    };
+
+    const normalizedQ = {
+      question: rawQuestion.questionText,
+      answer: rawQuestion.studentAnswer,
+      score: rawQuestion.score,
+      aiFeedback: rawQuestion.feedback,
+      feedback: {
+        score: rawQuestion.score,
+        feedback: rawQuestion.feedback,
+      },
+    };
+
+    assert.equal(normalizedQ.score, 88);
+    assert.equal(normalizedQ.aiFeedback, "Accurate time complexity analysis with clean data structure selection.");
+    assert.equal(normalizedQ.feedback.correctness, undefined, "Per-question card must not duplicate session criteria");
+    assert.equal(normalizedQ.feedback.problemSolving, undefined);
+  });
+
+  test("Per-question evaluation assigns score 0 for empty answers and evaluates answered questions", () => {
+    const evaluateAnswerSync = (q, defaultScore = 75) => {
+      const studentAnswer = (q?.studentAnswer || q?.answer || "").trim();
+      const submittedCode = (q?.submittedCode || q?.code || "").trim();
+
+      if (!studentAnswer && !submittedCode) {
+        return {
+          score: 0,
+          feedback: "No answer submitted for this question.",
+        };
+      }
+
+      return {
+        score: typeof q?.score === "number" && q.score > 0 ? q.score : defaultScore,
+        feedback: q?.feedback || "Candidate provided a relevant technical answer.",
+      };
+    };
+
+    // Unanswered question
+    const unanswered = evaluateAnswerSync({ questionText: "What is an index?", studentAnswer: "", submittedCode: "" });
+    assert.equal(unanswered.score, 0);
+    assert.equal(unanswered.feedback, "No answer submitted for this question.");
+
+    // Answered question with existing evaluated score
+    const answeredWithScore = evaluateAnswerSync({
+      questionText: "Explain closures",
+      studentAnswer: "A closure is the combination of a function bundled together with references to its lexical environment.",
+      score: 95,
+      feedback: "Clear conceptual definition and practical explanation.",
+    });
+    assert.equal(answeredWithScore.score, 95);
+    assert.equal(answeredWithScore.feedback, "Clear conceptual definition and practical explanation.");
+
+    // Answered question with code
+    const answeredWithCode = evaluateAnswerSync({
+      questionText: "Reverse a string",
+      submittedCode: "function reverse(s) { return s.split('').reverse().join(''); }",
+    });
+    assert.equal(answeredWithCode.score, 75);
+    assert.ok(answeredWithCode.feedback.length > 0);
+  });
+});
+

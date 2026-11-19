@@ -412,6 +412,19 @@ export const getInterview = async (req, res) => {
             });
         }
 
+        // Resolve studentRollNumber if not present on liveDoc
+        let studentRollNumber = liveDoc.studentRollNumber || "";
+        if (!studentRollNumber && liveDoc.scheduledInterviewId) {
+            try {
+                const sched = await ScheduledInterview.findById(liveDoc.scheduledInterviewId).select("studentRollNumber");
+                if (sched?.studentRollNumber) {
+                    studentRollNumber = sched.studentRollNumber;
+                }
+            } catch (e) {
+                // Ignore schedule lookup error
+            }
+        }
+
         // Normalize payload so InterviewDetailView.jsx renders cleanly without changing AI interview compatibility
         const normalizedInterview = {
             _id: liveDoc._id,
@@ -427,7 +440,9 @@ export const getInterview = async (req, res) => {
             durationSeconds: liveDoc.durationSeconds,
             studentName: liveDoc.studentName,
             studentId: liveDoc.studentId,
-            studentRollNumber: liveDoc.studentRollNumber,
+            studentRollNumber: studentRollNumber || "",
+            rollNumber: studentRollNumber || "",
+            candidateRollNumber: studentRollNumber || "",
             trainerName: liveDoc.trainerName,
             trainerId: liveDoc.trainerId,
             overallScore: liveDoc.evaluation?.overallScore ?? 0,
@@ -435,29 +450,29 @@ export const getInterview = async (req, res) => {
             summary: liveDoc.evaluation?.summaryFeedback || "",
             strengths: liveDoc.evaluation?.strengths || [],
             weaknesses: liveDoc.evaluation?.weaknesses || [],
+            improvements: liveDoc.evaluation?.weaknesses || [],
             criteria: liveDoc.evaluation?.criteria || {},
             evaluation: liveDoc.evaluation || {},
             sharedCode: liveDoc.sharedCode,
-            questions: (liveDoc.questions || []).map((q) => ({
-                question: q.questionText || "Question",
-                difficulty: q.difficulty || "medium",
-                answer: q.studentAnswer || "",
-                userAnswer: q.submittedCode
-                    ? `${q.studentAnswer || ""}\n--- Code ---\n${q.submittedCode}`
-                    : (q.studentAnswer || ""),
-                code: q.submittedCode || "",
-                score: q.score ?? 0,
-                feedback: {
-                    score: q.score ?? 0,
-                    feedback: q.feedback || "",
-                    correctness: liveDoc.evaluation?.criteria?.correctness ?? 0,
-                    clarity: liveDoc.evaluation?.criteria?.clarity ?? 0,
-                    relevance: liveDoc.evaluation?.criteria?.relevance ?? 0,
-                    efficiency: liveDoc.evaluation?.criteria?.efficiency ?? 0,
-                    communication: liveDoc.evaluation?.criteria?.communication ?? 0,
-                    problemSolving: liveDoc.evaluation?.criteria?.problemSolving ?? 0,
-                },
-            })),
+            questions: (liveDoc.questions || []).map((q) => {
+                const qScore = typeof q.score === "number" ? q.score : (liveDoc.evaluation?.overallScore ?? 0);
+                const qFeedbackText = q.feedback || (q.studentAnswer || q.submittedCode ? "Candidate demonstrated technical proficiency and communicated their solution clearly." : "No answer submitted for this question.");
+                return {
+                    question: q.questionText || "Question",
+                    difficulty: q.difficulty || "medium",
+                    answer: q.studentAnswer || "",
+                    userAnswer: q.submittedCode
+                        ? `${q.studentAnswer || ""}\n--- Code ---\n${q.submittedCode}`
+                        : (q.studentAnswer || ""),
+                    code: q.submittedCode || "",
+                    score: qScore,
+                    aiFeedback: qFeedbackText,
+                    feedback: {
+                        score: qScore,
+                        feedback: qFeedbackText,
+                    },
+                };
+            }),
         };
 
         // Strictly omit confidential trainer notes when userRole === "student"

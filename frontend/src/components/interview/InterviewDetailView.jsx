@@ -137,6 +137,97 @@ function InterviewDetailView({ interviewId, onBack }) {
           })
         : 'Recent Session';
 
+    const strengthsList = Array.isArray(interview.strengths) && interview.strengths.length > 0
+        ? interview.strengths
+        : (Array.isArray(interview.evaluation?.strengths) && interview.evaluation.strengths.length > 0
+            ? interview.evaluation.strengths
+            : []);
+
+    const improvementsList = Array.isArray(interview.improvements) && interview.improvements.length > 0
+        ? interview.improvements
+        : (Array.isArray(interview.weaknesses) && interview.weaknesses.length > 0
+            ? interview.weaknesses
+            : (Array.isArray(interview.evaluation?.weaknesses) && interview.evaluation.weaknesses.length > 0
+                ? interview.evaluation.weaknesses
+                : []));
+
+    const rubricCriteria = interview.criteria || interview.evaluation?.criteria || null;
+    const hasRubric = Boolean(
+        rubricCriteria &&
+        (typeof rubricCriteria.correctness === 'number' ||
+         typeof rubricCriteria.problemSolving === 'number' ||
+         typeof rubricCriteria.efficiency === 'number' ||
+         typeof rubricCriteria.clarity === 'number' ||
+         typeof rubricCriteria.relevance === 'number' ||
+         typeof rubricCriteria.communication === 'number')
+    );
+
+    const RUBRIC_CRITERIA_CONFIG = [
+        {
+            key: 'correctness',
+            label: 'Correctness',
+            weight: '25%',
+            description: 'Technical accuracy of solutions, conceptual soundness, and handling of edge cases.',
+        },
+        {
+            key: 'problemSolving',
+            label: 'Problem Solving',
+            weight: '25%',
+            description: 'Analytical decomposition, methodical approach to algorithmic challenges, and troubleshooting.',
+        },
+        {
+            key: 'efficiency',
+            label: 'Efficiency & Complexity',
+            weight: '15%',
+            description: 'Optimal time and space complexity, scalable design, and resource-conscious implementation.',
+        },
+        {
+            key: 'clarity',
+            label: 'Clarity & Structure',
+            weight: '15%',
+            description: 'Clean code architecture, readability, naming conventions, and modular problem breakdown.',
+        },
+        {
+            key: 'relevance',
+            label: 'Technical Relevance',
+            weight: '10%',
+            description: 'Alignment with modern industry standards, domain conventions, and relevant frameworks.',
+        },
+        {
+            key: 'communication',
+            label: 'Communication',
+            weight: '10%',
+            description: 'Articulation of thoughts, collaborative responsiveness, and reasoning explanations.',
+        },
+    ];
+
+    const getRubricTier = (score) => {
+        if (score >= 85) {
+            return {
+                label: 'Strong Performance',
+                badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+            };
+        }
+        if (score >= 70) {
+            return {
+                label: 'Proficient Competence',
+                badgeClass: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
+            };
+        }
+        if (score >= 50) {
+            return {
+                label: 'Moderate Competence',
+                badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+            };
+        }
+        return {
+            label: 'Needs Practice',
+            badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+        };
+    };
+
+    const rubricTier = getRubricTier(interview.overallScore || 0);
+
     return (
         <div className="w-full space-y-6">
             {/* Top Navigation Bar */}
@@ -206,21 +297,23 @@ function InterviewDetailView({ interviewId, onBack }) {
                             {interview.role || 'Software Engineering Track'}
                         </h1>
 
-                        {isLive && interview.studentName && (
+                        {isLive && (
                             <div className="bg-[#17181E] border border-white/5 rounded-xl p-3 inline-flex flex-wrap items-center gap-4 text-xs">
                                 <div>
                                     <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Candidate</span>
-                                    <span className="text-white font-bold">{interview.studentName}</span>
-                                    {interview.studentRollNumber && (
-                                        <span className="text-zinc-400 ml-1.5 font-mono">({interview.studentRollNumber})</span>
+                                    <span className="text-white font-bold">{interview.studentName || "Candidate"}</span>
+                                    {(interview.studentRollNumber || interview.rollNumber || interview.candidateRollNumber) && (
+                                        <span className="text-zinc-400 ml-1.5 font-mono">
+                                            ({interview.studentRollNumber || interview.rollNumber || interview.candidateRollNumber})
+                                        </span>
                                     )}
                                 </div>
-                                {interview.studentId && (
-                                    <div>
-                                        <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Student ID</span>
-                                        <span className="text-zinc-300 font-mono text-[11px]">{interview.studentId}</span>
-                                    </div>
-                                )}
+                                <div>
+                                    <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">University Roll No.</span>
+                                    <span className="text-zinc-300 font-mono text-[11px]">
+                                        {interview.studentRollNumber || interview.rollNumber || interview.candidateRollNumber || interview.student?.rollNumber || "N/A"}
+                                    </span>
+                                </div>
                                 {interview.trainerName && (
                                     <div>
                                         <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Conducted By</span>
@@ -294,46 +387,57 @@ function InterviewDetailView({ interviewId, onBack }) {
 
                 {/* Executive Summary Details (if available) */}
                 {interview.summary && (
-                    <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
-                        <div>
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                                Executive Summary
-                            </h4>
-                            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed bg-[#17181E] border border-white/5 p-4 rounded-xl">
-                                {interview.summary}
-                            </p>
-                        </div>
+                    <div className="mt-6 pt-6 border-t border-white/10">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5 flex items-center gap-1.5">
+                            <FiFileText size={13} className="text-zinc-400" />
+                            <span>Executive Summary</span>
+                        </h4>
+                        <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed bg-[#17181E] border border-white/5 p-4 rounded-xl">
+                            {interview.summary}
+                        </p>
+                    </div>
+                )}
 
-                        {/* Strengths & Weaknesses Grids */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                            {interview.strengths && interview.strengths.length > 0 && (
-                                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
-                                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">
-                                        <FiTrendingUp size={14} />
-                                        <span>Candidate Strengths</span>
+                {/* Candidate Strengths & Areas for Improvement (Trainer Feedback for Student & Trainer) */}
+                {(strengthsList.length > 0 || improvementsList.length > 0) && (
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${interview.summary ? 'pt-4' : 'mt-6 pt-6 border-t border-white/10'}`}>
+                        {strengthsList.length > 0 && (
+                            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 sm:p-5 shadow-sm">
+                                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2.5">
+                                    <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                                        <FiTrendingUp size={12} />
                                     </div>
-                                    <ul className="space-y-1 text-xs text-zinc-300 list-disc list-inside">
-                                        {interview.strengths.map((str, idx) => (
-                                            <li key={idx} className="leading-relaxed">{str}</li>
-                                        ))}
-                                    </ul>
+                                    <span>Candidate Strengths</span>
                                 </div>
-                            )}
+                                <ul className="space-y-2 text-xs text-zinc-200">
+                                    {strengthsList.map((str, idx) => (
+                                        <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                                            <span className="text-emerald-400 font-bold mt-0.5">•</span>
+                                            <span>{str}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
 
-                            {interview.weaknesses && interview.weaknesses.length > 0 && (
-                                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
-                                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">
-                                        <FiTarget size={14} />
-                                        <span>Areas for Improvement</span>
+                        {improvementsList.length > 0 && (
+                            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 sm:p-5 shadow-sm">
+                                <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider mb-2.5">
+                                    <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">
+                                        <FiTarget size={12} />
                                     </div>
-                                    <ul className="space-y-1 text-xs text-zinc-300 list-disc list-inside">
-                                        {interview.weaknesses.map((weak, idx) => (
-                                            <li key={idx} className="leading-relaxed">{weak}</li>
-                                        ))}
-                                    </ul>
+                                    <span>Areas for Improvement</span>
                                 </div>
-                            )}
-                        </div>
+                                <ul className="space-y-2 text-xs text-zinc-200">
+                                    {improvementsList.map((weak, idx) => (
+                                        <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                                            <span className="text-amber-400 font-bold mt-0.5">•</span>
+                                            <span>{weak}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -348,6 +452,86 @@ function InterviewDetailView({ interviewId, onBack }) {
                     <p className="text-xs sm:text-sm text-amber-100/90 whitespace-pre-wrap leading-relaxed bg-black/40 border border-amber-500/20 p-4 rounded-xl">
                         {interview.trainerPrivateNotes}
                     </p>
+                </div>
+            )}
+
+            {/* Dedicated Session-Level Trainer Rubric Hero Card */}
+            {hasRubric && isCompleted && (
+                <div className="bg-[#111318] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl space-y-5 text-white">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                <h3 className="text-base sm:text-lg font-bold tracking-tight text-white">
+                                    Trainer Evaluation Rubric Breakdown
+                                </h3>
+                            </div>
+                            <p className="text-xs text-zinc-400">
+                                Standardized dimensional assessment graded by faculty instructor across 6 industry criteria.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <span className={`text-xs font-bold px-3 py-1 rounded-full border ${rubricTier.badgeClass}`}>
+                                {rubricTier.label}
+                            </span>
+                            <div className="bg-[#17181E] border border-white/10 px-3.5 py-1.5 rounded-xl text-center">
+                                <span className="text-[10px] text-zinc-400 uppercase tracking-wider block font-semibold">Weighted Composite</span>
+                                <span className="text-sm font-black text-white">{interview.overallScore || 0} / 100</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {RUBRIC_CRITERIA_CONFIG.map((metric) => {
+                            const rawScore = rubricCriteria[metric.key];
+                            const score = typeof rawScore === 'number' ? Math.max(0, Math.min(100, Math.round(rawScore))) : 0;
+                            const isHigh = score >= 75;
+                            const isMid = score >= 50;
+
+                            return (
+                                <div
+                                    key={metric.key}
+                                    className="bg-[#17181E] border border-white/5 hover:border-white/15 rounded-xl p-4 transition-all duration-200 group flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                            <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition">
+                                                {metric.label}
+                                            </span>
+                                            <span className="text-[10px] font-semibold text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                                {metric.weight}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-zinc-400 leading-snug mb-3">
+                                            {metric.description}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between text-xs font-mono mb-1.5">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-sans font-semibold">Criterion Score</span>
+                                            <span className={`font-bold ${isHigh ? 'text-emerald-400' : isMid ? 'text-amber-400' : 'text-rose-400'}`}>
+                                                {score} / 100
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-700 ease-out ${
+                                                    isHigh
+                                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                                                        : isMid
+                                                        ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                                                        : 'bg-gradient-to-r from-rose-500 to-red-400'
+                                                }`}
+                                                style={{ width: `${score}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
 
@@ -376,19 +560,25 @@ function InterviewDetailView({ interviewId, onBack }) {
                 <div className="space-y-4">
                     {(interview.questions || []).map((q, idx) => {
                         const isExpanded = Boolean(expandedQuestions[idx]);
-                        const rawAnswer = q.userAnswer || q.answer || '';
+                        const rawAnswer = q.userAnswer || q.answer || q.studentAnswer || '';
                         const hasAnswer = Boolean(rawAnswer && typeof rawAnswer === 'string' && rawAnswer.trim().length > 0);
-                        const hasFeedback = Boolean(q.feedback && (q.feedback.feedback || q.feedback.score !== undefined));
+
+                        const qScore = typeof q.score === 'number'
+                            ? q.score
+                            : (typeof q.feedback?.score === 'number' ? q.feedback.score : null);
+
+                        const feedbackText = q.aiFeedback || (typeof q.feedback === 'string' ? q.feedback : q.feedback?.feedback) || '';
+                        const hasFeedback = Boolean(feedbackText || qScore !== null);
 
                         // Check if answer contains formatted code
-                        const hasCodeBlock = (hasAnswer && rawAnswer.includes('--- Code ---')) || Boolean(q.code);
+                        const hasCodeBlock = (hasAnswer && rawAnswer.includes('--- Code ---')) || Boolean(q.code || q.submittedCode);
                         let textPart = rawAnswer;
-                        let codePart = q.code || '';
+                        let codePart = q.code || q.submittedCode || '';
 
                         if (rawAnswer.includes('--- Code ---')) {
                             const parts = rawAnswer.split('--- Code ---');
                             textPart = parts[0]?.trim() || '';
-                            codePart = parts.slice(1).join('--- Code ---')?.trim() || q.code || '';
+                            codePart = parts.slice(1).join('--- Code ---')?.trim() || q.code || q.submittedCode || '';
                         }
 
                         return (
@@ -426,9 +616,15 @@ function InterviewDetailView({ interviewId, onBack }) {
                                                     </span>
                                                 )}
 
-                                                {q.feedback?.score !== undefined && (
-                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                                        Score: {q.feedback.score}/100
+                                                {qScore !== null && qScore !== undefined && (
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                                        qScore >= 75
+                                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                            : qScore >= 50
+                                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                            : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                                    }`}>
+                                                        Score: {qScore}/100
                                                     </span>
                                                 )}
                                             </div>
@@ -491,61 +687,28 @@ function InterviewDetailView({ interviewId, onBack }) {
                                                             <span>AI Evaluation Feedback</span>
                                                         </h5>
 
-                                                        {q.feedback.score !== undefined && (
-                                                            <span className="text-xs font-bold text-white bg-blue-500/20 px-2.5 py-0.5 rounded-full border border-blue-500/30">
-                                                                {q.feedback.score} / 100
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Metric Criteria Badges */}
-                                                    <div className="flex flex-wrap gap-2 text-[10px] text-zinc-300">
-                                                        {q.feedback.correctness !== undefined && (
-                                                            <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                                                Correctness: <b>{q.feedback.correctness}</b>
-                                                            </span>
-                                                        )}
-                                                        {q.feedback.clarity !== undefined && (
-                                                            <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                                                Clarity: <b>{q.feedback.clarity}</b>
-                                                            </span>
-                                                        )}
-                                                        {q.feedback.relevance !== undefined && (
-                                                            <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                                                Relevance: <b>{q.feedback.relevance}</b>
-                                                            </span>
-                                                        )}
-                                                        {q.feedback.detail !== undefined && (
-                                                            <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                                                Detail: <b>{q.feedback.detail}</b>
-                                                            </span>
-                                                        )}
-                                                        {q.feedback.efficiency !== undefined && (
-                                                            <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                                                Efficiency: <b>{q.feedback.efficiency}</b>
-                                                            </span>
-                                                        )}
-                                                        {q.feedback.communication !== undefined && (
-                                                            <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                                                Communication: <b>{q.feedback.communication}</b>
-                                                            </span>
-                                                        )}
-                                                        {q.feedback.problemSolving !== undefined && (
-                                                            <span className="bg-white/5 px-2 py-0.5 rounded border border-white/5">
-                                                                Problem Solving: <b>{q.feedback.problemSolving}</b>
+                                                        {qScore !== null && qScore !== undefined && (
+                                                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                                                                qScore >= 75
+                                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                                                    : qScore >= 50
+                                                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                                                    : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                                            }`}>
+                                                                {qScore} / 100
                                                             </span>
                                                         )}
                                                     </div>
 
                                                     {/* Feedback Text */}
-                                                    {q.feedback.feedback && (
+                                                    {feedbackText && (
                                                         <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed pt-1">
-                                                            {q.feedback.feedback}
+                                                            {feedbackText}
                                                         </p>
                                                     )}
 
                                                     {/* Improvements */}
-                                                    {q.feedback.improvements && q.feedback.improvements.length > 0 && (
+                                                    {Array.isArray(q.feedback?.improvements) && q.feedback.improvements.length > 0 && (
                                                         <div className="pt-2">
                                                             <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block mb-1">
                                                                 Constructive Suggestions
