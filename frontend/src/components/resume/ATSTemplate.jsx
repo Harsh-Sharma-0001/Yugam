@@ -1,6 +1,6 @@
 import React from 'react'
 
-function ATSTemplate({ data }) {
+function ATSTemplate({ data, accentColor = "#111318" }) {
     const {
         name,
         email,
@@ -77,8 +77,8 @@ function ATSTemplate({ data }) {
                 fontFamily: "'Times New Roman', Times, serif",
             }}>
             {/* header */}
-            <div className='mb-[10px] border-b-2 border-black pb-[10px] text-center'>
-                <h2 className='m-0 mb-[7px] text-[28px] font-bold uppercase tracking-[0.08em]'>{name || "YOUR NAME"}</h2>
+            <div className='mb-[10px] border-b-2 pb-[10px] text-center' style={{ borderColor: accentColor }}>
+                <h2 className='m-0 mb-[7px] text-[28px] font-bold uppercase tracking-[0.08em]' style={{ color: accentColor }}>{name || "YOUR NAME"}</h2>
 
                 <div className='flex flex-wrap justify-center text-[10.5px] text-black'>
                     {[
@@ -103,7 +103,7 @@ function ATSTemplate({ data }) {
 
             {summary &&
                 <section className='mb-[13px]'>
-                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] border-black pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em] text-black'>
+                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em]' style={{ borderColor: accentColor, color: accentColor }}>
                         Professional Summary
                     </h2>
                     <p className='m-0 text-[11px] leading-[1.65] text-black'>{summary}</p>
@@ -112,7 +112,7 @@ function ATSTemplate({ data }) {
 
             {skillsList.length > 0 &&
                 <section className='mb-[13px]'>
-                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] border-black pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em] text-black'>
+                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em]' style={{ borderColor: accentColor, color: accentColor }}>
                         Technical Skills
                     </h2>
 
@@ -140,7 +140,7 @@ function ATSTemplate({ data }) {
 
             {experience.length > 0 &&
                 <section className='mb-[13px]'>
-                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] border-black pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em] text-black'>
+                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em]' style={{ borderColor: accentColor, color: accentColor }}>
                         Work Experience
                     </h2>
 
@@ -165,7 +165,7 @@ function ATSTemplate({ data }) {
 
             {projects.length > 0 &&
                 <section className='mb-[13px]'>
-                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] border-black pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em] text-black'>
+                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em]' style={{ borderColor: accentColor, color: accentColor }}>
                         Projects
                     </h2>
 
@@ -193,7 +193,7 @@ function ATSTemplate({ data }) {
 
             {education.length > 0 &&
                 <section className='mb-[13px]'>
-                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] border-black pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em] text-black'>
+                    <h2 className='mt-0 mb-[9px] border-b-[1.5px] pb-[3px] text-[10.5px] font-bold uppercase tracking-[0.14em]' style={{ borderColor: accentColor, color: accentColor }}>
                         Education
                     </h2>
 

@@ -3,7 +3,7 @@ import { FiDownload } from 'react-icons/fi'
 import { useReactToPrint } from "react-to-print";
 import { useCoins, refundCoins } from '../../apis/user.api';
 
-function DownloadBtn({ docRef, user, setUser }) {
+function DownloadBtn({ docRef, user, setUser, className, children }) {
     const [isDownloading, setIsDownloading] = useState(false);
 
     const handlePdf = useReactToPrint({
@@ -66,16 +66,18 @@ function DownloadBtn({ docRef, user, setUser }) {
         }
     };
 
+    const defaultClass = `flex items-center gap-2 rounded-lg bg-black px-3 py-2 text-xs text-white transition-opacity ${
+        isDownloading ? "opacity-50 cursor-not-allowed" : "hover:bg-zinc-800"
+    }`;
+
     return (
         <button
             onClick={handleDownload}
             disabled={isDownloading}
-            className={`flex items-center gap-2 rounded-lg bg-black px-3 py-2 text-xs text-white transition-opacity ${
-                isDownloading ? "opacity-50 cursor-not-allowed" : "hover:bg-zinc-800"
-            }`}
+            className={className ? `${className} ${isDownloading ? "opacity-60 cursor-not-allowed" : ""}` : defaultClass}
         >
-            <FiDownload />
-            {isDownloading ? "Preparing PDF..." : "Download PDF"}
+            <FiDownload className={isDownloading ? "animate-bounce" : ""} />
+            {children || (isDownloading ? "Preparing PDF..." : "Download PDF")}
         </button>
     );
 }
