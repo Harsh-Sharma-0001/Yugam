@@ -99,24 +99,40 @@ export const scheduleInterview = async (req, res) => {
         });
       }
 
-      const recordsToInsert = targetStudents.map((s) => ({
-        institutionId,
-        mode,
-        studentId: s._id,
-        studentName: s.name || "Student",
-        studentEmail: s.email || "",
-        studentRollNumber: s.profile?.rollNumber || "",
-        section: s.profile?.section || targetSection,
-        trainerId,
-        trainerName,
-        role: role.trim(),
-        interviewType,
-        experience,
-        scheduledAt: scheduledDate,
-        durationMinutes: Number(durationMinutes) || 45,
-        instructions: instructions.trim(),
-        status: "scheduled",
-      }));
+      const isSlug = (val) => {
+        if (!val) return true;
+        const lower = String(val).toLowerCase().trim();
+        return lower === "default_college" || lower === "default" || lower === "null" || lower === "undefined";
+      };
+
+      const recordsToInsert = targetStudents.map((s) => {
+        const studentCollege =
+          s.profile?.collegeName ||
+          s.profile?.institutionName ||
+          s.collegeName ||
+          s.institutionName ||
+          req.body.collegeName ||
+          "";
+        return {
+          institutionId,
+          collegeName: !isSlug(studentCollege) ? studentCollege.trim() : "",
+          mode,
+          studentId: s._id,
+          studentName: s.name || "Student",
+          studentEmail: s.email || "",
+          studentRollNumber: s.profile?.rollNumber || "",
+          section: s.profile?.section || targetSection,
+          trainerId,
+          trainerName,
+          role: role.trim(),
+          interviewType,
+          experience,
+          scheduledAt: scheduledDate,
+          durationMinutes: Number(durationMinutes) || 45,
+          instructions: instructions.trim(),
+          status: "scheduled",
+        };
+      });
 
       const createdRecords = await ScheduledInterview.insertMany(recordsToInsert);
 
@@ -177,8 +193,27 @@ export const scheduleInterview = async (req, res) => {
     const finalStudentRoll = (resolvedStudent?.profile?.rollNumber || studentRollNumber || "").trim();
     const finalSection = (resolvedStudent?.profile?.section || section || "").trim();
 
+    const isSlug = (val) => {
+      if (!val) return true;
+      const lower = String(val).toLowerCase().trim();
+      return lower === "default_college" || lower === "default" || lower === "null" || lower === "undefined";
+    };
+
+    const resolvedCollege =
+      resolvedStudent?.profile?.collegeName ||
+      resolvedStudent?.profile?.institutionName ||
+      resolvedStudent?.collegeName ||
+      resolvedStudent?.institutionName ||
+      resolvedStudent?.college ||
+      resolvedStudent?.university ||
+      req.body.collegeName ||
+      req.body.institutionName ||
+      "";
+    const finalCollegeName = !isSlug(resolvedCollege) ? resolvedCollege.trim() : "";
+
     const scheduled = await ScheduledInterview.create({
       institutionId,
+      collegeName: finalCollegeName,
       mode,
       studentId: finalStudentId,
       studentName: finalStudentName,

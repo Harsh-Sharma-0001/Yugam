@@ -55,7 +55,25 @@ export function renderInterviewNotificationEmail({
   const safeFormatTitle = escapeHtml(formatTitle);
   const safeCategory = escapeHtml(String(schedule.interviewType || "technical").toUpperCase());
   const safeSection = escapeHtml(schedule.section || "General");
-  const safeInstitution = escapeHtml(schedule.institutionId || "College Placement Cell");
+
+  const isSlug = (val) => {
+    if (!val) return true;
+    const lower = String(val).toLowerCase().trim();
+    return lower === "default_college" || lower === "default" || lower === "null" || lower === "undefined";
+  };
+
+  const rawCollegeName =
+    schedule.collegeName ||
+    schedule.institutionName ||
+    schedule.college ||
+    schedule.university ||
+    "";
+
+  const resolvedCollege = !isSlug(rawCollegeName)
+    ? rawCollegeName.trim()
+    : (!isSlug(schedule.institutionId) ? schedule.institutionId.trim() : "Institutional Placement Cell");
+
+  const safeCollege = escapeHtml(resolvedCollege);
   const safeTrainer = escapeHtml(schedule.trainerName || "Faculty Instructor");
   const safeDuration = escapeHtml(`${schedule.durationMinutes || 45} Minutes`);
   const safeInstructions = escapeHtml(schedule.instructions || "");
@@ -101,9 +119,8 @@ Format: ${formatTitle}
 Category: ${String(schedule.interviewType || "technical").toUpperCase()}
 Date & Time: ${formattedDateTime}
 Duration: ${schedule.durationMinutes || 45} Minutes
-Institution: ${schedule.institutionId || "College Placement Cell"} (Section: ${schedule.section || "General"})
-${isLive ? `Trainer: ${schedule.trainerName || "Faculty Instructor"}` : ""}
-Status: ${badgeText}
+Institution: ${resolvedCollege} (Section: ${schedule.section || "General"})
+${isLive ? `Trainer: ${schedule.trainerName || "Faculty Instructor"}\n` : ""}Status: ${badgeText}
 
 ${safeInstructions ? `Trainer Instructions:\n${schedule.instructions}\n` : ""}
 Preparation Guidance:
@@ -113,7 +130,7 @@ Open your dashboard to view the room or session:
 ${dashboardUrl}
 
 Best regards,
-Yugam Institutional Assessment Platform
+${resolvedCollege} • Yugam Assessment Platform
 `.trim();
 
   // Responsive HTML Email Template
@@ -337,7 +354,7 @@ Yugam Institutional Assessment Platform
           }
           <tr>
             <td class="label">Institution / Section</td>
-            <td class="value">${safeInstitution} (Section ${safeSection})</td>
+            <td class="value">${safeCollege} (Section ${safeSection})</td>
           </tr>
         </table>
       </div>
@@ -365,7 +382,7 @@ Yugam Institutional Assessment Platform
 
       <div class="footer">
         <p>This is an automated notification from the Yugam Campus Placement Platform.</p>
-        <p>University Placement Cell • GLA University / Institutional Partner</p>
+        <p>${safeCollege} • Placement & Assessment Division</p>
       </div>
     </div>
   </div>

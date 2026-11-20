@@ -23,6 +23,11 @@ const scheduledInterviewSchema = new mongoose.Schema(
       type: String,
       default: "Student",
     },
+    collegeName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     studentEmail: {
       type: String,
       default: "",

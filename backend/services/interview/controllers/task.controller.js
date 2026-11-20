@@ -186,7 +186,7 @@ export const submitTask = async (req, res) => {
         status: "submitted",
         submittedAt: new Date(),
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
 
     return res.status(200).json({

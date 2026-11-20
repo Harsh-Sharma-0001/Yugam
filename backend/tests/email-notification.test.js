@@ -441,31 +441,7 @@ describe("5. Diagnostic Delivery Logging & Student Email Resolution Fallback", (
     assert.ok(!warnMsg.includes("key"), "Must not leak API keys");
   });
 
-  test("Logs '[EmailService] Sent via Brevo' with recipient and messageId on success", async () => {
-    process.env.EMAIL_NOTIFICATIONS_ENABLED = "true";
-    process.env.BREVO_API_KEY = "test-brevo-key";
-
-    let logMsg = "";
-    console.log = (...args) => {
-      logMsg = args.join(" ");
-    };
-
-    globalThis.fetch = async () => ({
-      ok: true,
-      status: 201,
-      json: async () => ({ messageId: "<msg-99999.brevo@smtp>" }),
-    });
-
-    await sendViaBrevo({
-      toEmail: "student99@college.edu",
-      subject: "Test Subject",
-      htmlContent: "<p>Test</p>",
-    });
-
-    assert.ok(logMsg.includes("[EmailService] Sent via Brevo to student99@college.edu messageId: <msg-99999.brevo@smtp>"));
-  });
-
-  test("Logs '[EmailService] Delivery error' with HTTP status and detail on Brevo error", async () => {
+  test("Logs '[EmailService] Delivery failed with HTTP' and sanitizes raw PII from console.error", async () => {
     process.env.EMAIL_NOTIFICATIONS_ENABLED = "true";
     process.env.BREVO_API_KEY = "test-brevo-key";
 
@@ -491,7 +467,70 @@ describe("5. Diagnostic Delivery Logging & Student Email Resolution Fallback", (
       /credit quota exhausted/
     );
 
-    assert.ok(errorMsg.includes("[EmailService] Delivery error: 402 Payment required: credit quota exhausted"));
+    assert.ok(errorMsg.includes("[EmailService] Delivery failed with HTTP 402"));
+    assert.ok(!errorMsg.includes("student@college.edu"), "Must not leak student email PII to terminal");
+  });
+
+  test("Renders student's actual college name and replaces DEFAULT_COLLEGE in email table and footer", () => {
+    const scheduleWithCollege = {
+      _id: "sched-gla-1",
+      institutionId: "DEFAULT_COLLEGE", // raw slug
+      collegeName: "GLA University Mathura",
+      section: "E",
+      role: "Full Stack Engineer",
+      scheduledAt: new Date("2026-11-25T10:00:00.000Z"),
+      mode: "live",
+    };
+
+    const rendered = renderInterviewNotificationEmail({
+      notificationType: "INTERVIEW_SCHEDULED",
+      schedule: scheduleWithCollege,
+      recipientName: "Harsh Sharma",
+    });
+
+    assert.ok(
+      rendered.htmlContent.includes("GLA University Mathura (Section E)"),
+      "Must render human-readable college name and section in details table"
+    );
+    assert.ok(
+      rendered.htmlContent.includes("GLA University Mathura • Placement & Assessment Division"),
+      "Must render human-readable college name in footer"
+    );
+    assert.ok(
+      !rendered.htmlContent.includes("DEFAULT_COLLEGE"),
+      "Must never expose raw DEFAULT_COLLEGE slug in email"
+    );
+    assert.ok(
+      rendered.textContent.includes("Institution: GLA University Mathura (Section: E)"),
+      "Must render human-readable college name in textContent"
+    );
+  });
+
+  test("Falls back gracefully to 'Institutional Placement Cell' when college name is missing or raw slug", () => {
+    const scheduleWithSlugOnly = {
+      _id: "sched-default-1",
+      institutionId: "DEFAULT_COLLEGE",
+      collegeName: "DEFAULT_COLLEGE", // slug placeholder
+      section: "A",
+      role: "Backend Engineer",
+      scheduledAt: new Date("2026-11-25T10:00:00.000Z"),
+      mode: "ai",
+    };
+
+    const rendered = renderInterviewNotificationEmail({
+      notificationType: "INTERVIEW_SCHEDULED",
+      schedule: scheduleWithSlugOnly,
+      recipientName: "Student",
+    });
+
+    assert.ok(
+      rendered.htmlContent.includes("Institutional Placement Cell (Section A)"),
+      "Must fall back to Institutional Placement Cell"
+    );
+    assert.ok(
+      !rendered.htmlContent.includes("DEFAULT_COLLEGE"),
+      "Must never expose DEFAULT_COLLEGE in email"
+    );
   });
 
   test("Student email resolution falls back cleanly to schedule.studentEmail if Auth Service has no records", () => {

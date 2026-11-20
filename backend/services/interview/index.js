@@ -6,9 +6,9 @@ import dotenv from "dotenv";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Explicitly load backend/.env, then services/interview/.env
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
-dotenv.config({ path: path.resolve(__dirname, ".env"), override: true });
+// Explicitly load backend/.env, then services/interview/.env quietly
+dotenv.config({ path: path.resolve(__dirname, "../../.env"), quiet: true });
+dotenv.config({ path: path.resolve(__dirname, ".env"), override: true, quiet: true });
 
 import express from "express";
 import http from "http";

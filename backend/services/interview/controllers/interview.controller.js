@@ -224,7 +224,7 @@ export const submitAnswer = async (req, res) => {
                     evaluationToken,
                 },
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         if (!reservedInterview) {
@@ -341,7 +341,7 @@ export const submitAnswer = async (req, res) => {
             const updatedInterview = await Interview.findOneAndUpdate(
                 updateQuery,
                 updateFields,
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updatedInterview) {

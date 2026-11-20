@@ -69,13 +69,12 @@ export async function sendViaBrevo({
     } catch {
       errorDetail = await response.text();
     }
-    console.error("[EmailService] Delivery error:", response.status, errorDetail);
+    console.error("[EmailService] Delivery failed with HTTP", response.status);
     throw new Error(`Brevo API error (${response.status}): ${errorDetail}`);
   }
 
   const data = await response.json();
   const messageId = data.messageId || "BREVO_SENT";
-  console.log("[EmailService] Sent via Brevo to", toEmail.trim(), "messageId:", messageId);
   return {
     success: true,
     messageId,
@@ -103,22 +102,15 @@ async function fetchAuthStudents(institutionId) {
       const data = await authRes.json();
       if (Array.isArray(data?.students)) {
         if (data.students.length === 0) {
-          console.error("[EmailService] Delivery error:", authRes.status, "Auth Service lookup returned 0 recipients");
+          console.warn("[EmailService] Auth Service lookup returned 0 recipients");
         }
         return data.students;
       }
     } else {
-      let errText = "";
-      try {
-        const errJson = await authRes.json();
-        errText = errJson.message || JSON.stringify(errJson);
-      } catch {
-        errText = await authRes.text();
-      }
-      console.error("[EmailService] Delivery error:", authRes.status, errText || "Auth Service request failed");
+      console.error("[EmailService] Delivery failed with HTTP", authRes.status);
     }
   } catch (err) {
-    console.error("[EmailService] Delivery error:", "CONNECTION_ERROR", err.message);
+    console.error("[EmailService] Auth Service connection error");
   }
   return [];
 }
@@ -180,22 +172,43 @@ export async function enqueueInterviewNotifications({
       const studentEmail = (resolvedStudent?.email || schedule.studentEmail || "").trim();
       const studentName = (resolvedStudent?.name || schedule.studentName || "Student").trim();
 
+      const isSlug = (val) => {
+        if (!val) return true;
+        const lower = String(val).toLowerCase().trim();
+        return lower === "default_college" || lower === "default" || lower === "null" || lower === "undefined";
+      };
+
+      const studentCollege =
+        resolvedStudent?.profile?.collegeName ||
+        resolvedStudent?.profile?.institutionName ||
+        resolvedStudent?.collegeName ||
+        resolvedStudent?.institutionName ||
+        resolvedStudent?.college ||
+        resolvedStudent?.university ||
+        schedule.collegeName ||
+        schedule.institutionName ||
+        "";
+
+      const finalCollege = !isSlug(studentCollege) ? studentCollege.trim() : "";
+
       if (!studentEmail || !EMAIL_REGEX.test(studentEmail)) {
-        console.warn(
-          `[EmailService] Skipping email notification for schedule ${schedule._id}: student email not found or invalid.`
-        );
+        console.warn("[EmailService] Skipping notification: student email missing or invalid");
         continue;
       }
 
       // Check cross-institution security constraint
       if (resolvedStudent && resolvedStudent.institutionId && String(resolvedStudent.institutionId) !== String(instId)) {
-        console.warn(
-          `[EmailService] Cross-institution mismatch: Student ${resolvedStudent._id} does not belong to ${instId}`
-        );
+        console.warn("[EmailService] Cross-institution student mismatch rejected");
         continue;
       }
 
       const idempotencyKey = `${schedule._id}:${type}:${version}`;
+
+      const rawPayload = schedule.toObject ? schedule.toObject() : schedule;
+      const payload = {
+        ...rawPayload,
+        collegeName: finalCollege || (!isSlug(rawPayload.collegeName) ? rawPayload.collegeName : ""),
+      };
 
       const notificationDoc = {
         idempotencyKey,
@@ -205,7 +218,7 @@ export async function enqueueInterviewNotifications({
         recipientName: studentName,
         recipientEmail: studentEmail,
         notificationType: type,
-        payload: schedule.toObject ? schedule.toObject() : schedule,
+        payload,
         status: "pending",
         attemptCount: 0,
         maxAttempts: 3,
@@ -227,9 +240,7 @@ export async function enqueueInterviewNotifications({
       }
     }
 
-    const scheduleIdSummary =
-      instSchedules.length === 1 ? instSchedules[0]._id : instSchedules.map((s) => s._id).join(", ");
-    console.log("[EmailService] Enqueued", enqueuedDocs.length, "notification(s) for schedule", scheduleIdSummary);
+    console.log("[EmailService] Enqueued", enqueuedDocs.length, "notification(s)");
   }
 
   // Trigger non-blocking asynchronous processor pass
@@ -278,7 +289,7 @@ export async function processPendingNotifications() {
         $set: { status: "sending" },
         $inc: { attemptCount: 1 },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!claimed) continue; // Concurrently claimed by another worker
@@ -319,6 +330,10 @@ export async function processPendingNotifications() {
 
     // Small pacing delay to respect Brevo free-tier rate limits during batches
     await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  if (succeeded > 0 || failed > 0) {
+    console.log(`[EmailService] Batch dispatch completed: ${succeeded} sent${failed > 0 ? `, ${failed} failed` : ""}`);
   }
 
   return { processed: candidates.length, succeeded, failed };
