@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   FiFileText,
   FiPlus,
@@ -101,6 +101,68 @@ export default function QuestionWorkspace({
   isSubmittingEvaluation,
 }) {
   const [copiedAnswer, setCopiedAnswer] = useState(false);
+  const [isTrainerDictating, setIsTrainerDictating] = useState(false);
+  const trainerSpeechRecognitionRef = useRef(null);
+
+  const toggleTrainerDictation = () => {
+    if (isTrainerDictating) {
+      if (trainerSpeechRecognitionRef.current) {
+        try {
+          trainerSpeechRecognitionRef.current.stop();
+        } catch (_) {}
+      }
+      setIsTrainerDictating(false);
+    } else {
+      const SpeechRecognition =
+        typeof window !== "undefined" &&
+        (window.SpeechRecognition || window.webkitSpeechRecognition);
+      if (!SpeechRecognition) {
+        alert("Speech recognition is not supported in this browser.");
+        return;
+      }
+      try {
+        const rec = new SpeechRecognition();
+        rec.lang = "en-US";
+        rec.continuous = true;
+        rec.interimResults = false;
+
+        rec.onresult = (event) => {
+          const transcript = event.results[event.results.length - 1][0].transcript;
+          if (transcript) {
+            setNewQuestionText((prev) => {
+              return prev ? `${prev} ${transcript.trim()}` : transcript.trim();
+            });
+          }
+        };
+
+        rec.onerror = (e) => {
+          console.warn("Trainer speech recognition error:", e);
+          setIsTrainerDictating(false);
+        };
+
+        rec.onend = () => {
+          setIsTrainerDictating(false);
+        };
+
+        trainerSpeechRecognitionRef.current = rec;
+        rec.start();
+        setIsTrainerDictating(true);
+      } catch (e) {
+        console.warn("Trainer speech recognition start error:", e);
+        setIsTrainerDictating(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (trainerSpeechRecognitionRef.current) {
+        try {
+          trainerSpeechRecognitionRef.current.stop();
+        } catch (_) {}
+      }
+    };
+  }, []);
 
   const activeQuestion = questions[activeQuestionIndex] || {
     questionText: "Welcome to your live interview session. The trainer will push questions shortly.",
@@ -210,15 +272,30 @@ export default function QuestionWorkspace({
                   <FiPlus size={14} className="text-gray-900" />
                   <span>Push New Question to Student</span>
                 </span>
-                <select
-                  value={newQuestionDifficulty}
-                  onChange={(e) => setNewQuestionDifficulty(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 text-xs text-gray-800 rounded-xl px-2.5 py-1 outline-none font-semibold shadow-2xs"
-                >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleTrainerDictation}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold transition border ${
+                      isTrainerDictating
+                        ? "bg-rose-500/15 text-rose-600 border-rose-300 animate-pulse"
+                        : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                    }`}
+                    title={isTrainerDictating ? "Stop voice dictation" : "Dictate question with voice"}
+                  >
+                    <FiMic size={13} className={isTrainerDictating ? "text-rose-600 animate-bounce" : "text-gray-600"} />
+                    <span>{isTrainerDictating ? "Listening..." : "Voice Dictate"}</span>
+                  </button>
+                  <select
+                    value={newQuestionDifficulty}
+                    onChange={(e) => setNewQuestionDifficulty(e.target.value)}
+                    className="bg-gray-50 border border-gray-200 text-xs text-gray-800 rounded-xl px-2.5 py-1 outline-none font-semibold shadow-2xs"
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
               </div>
 
               <textarea

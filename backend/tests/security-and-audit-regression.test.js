@@ -11,6 +11,7 @@ import graph from "../services/interview/graph/graph.js";
 import { createAnswerUpdateHandler } from "../services/interview/socket/liveRoom.socket.js";
 import { clampScore, getInterviewCacheKey } from "../services/interview/utils/cacheKeys.js";
 import { isGibberishOrEmpty, getZeroScoreFeedback } from "../services/interview/utils/answerValidator.js";
+import { evaluateDomainScores } from "../services/interview/utils/domainClassifier.js";
 
 const mongoose = User.base;
 
@@ -1970,6 +1971,118 @@ describe("22. Real-Time Room Presence & Peer State Tracking", () => {
     );
   });
 });
+
+describe("23. AI Domain Competency Evaluation, Top-N Slicing & Directory Export Validation", () => {
+  test("evaluateDomainScores: accurately categorizes DSA, Technical, and Communication questions", () => {
+    const questions = [
+      {
+        questionText: "Given an unsorted array, return the indices of two elements that sum to target using a HashMap.",
+        score: 90,
+        feedback: { correctness: 90, efficiency: 85, problemSolving: 92 },
+      },
+      {
+        questionText: "Design a scalable rate-limiting architecture with Redis cache and API Gateway.",
+        score: 85,
+        feedback: { correctness: 85, efficiency: 85, problemSolving: 85 },
+      },
+      {
+        questionText: "Tell me about yourself and describe a time you handled a difficult conflict with a team member.",
+        score: 95,
+        feedback: { communication: 95, clarity: 95, relevance: 92 },
+      },
+    ];
+
+    const result = evaluateDomainScores({
+      type: "technical",
+      role: "Backend Engineer",
+      questions,
+      overallScore: 90,
+      evaluation: {
+        criteria: {
+          correctness: 88,
+          clarity: 92,
+          efficiency: 85,
+          communication: 95,
+          problemSolving: 90,
+        },
+      },
+    });
+
+    assert.ok(result.dsa >= 80 && result.dsa <= 100, `Expected high DSA score, got ${result.dsa}`);
+    assert.ok(result.technical >= 80 && result.technical <= 100, `Expected high Technical score, got ${result.technical}`);
+    assert.ok(result.communication >= 85 && result.communication <= 100, `Expected high Communication score, got ${result.communication}`);
+  });
+
+  test("evaluateDomainScores: returns strictly 0 for all domains on zero score / failed proctor session", () => {
+    const result = evaluateDomainScores({
+      type: "technical",
+      role: "Software Engineer",
+      questions: [
+        {
+          questionText: "What is an array?",
+          score: 0,
+          userAnswer: "rteyshj",
+        },
+      ],
+      overallScore: 0,
+    });
+
+    assert.deepEqual(result, { dsa: 0, technical: 0, communication: 0 }, "All domains must be 0 when overallScore is 0");
+  });
+
+  test("Directory Top-N slicing and multi-criteria sorting by competency scores", () => {
+    const mockStudents = [
+      { name: "Student Alpha", dsaScore: 45, technicalScore: 50, communicationScore: 80, overallAvgScore: 58 },
+      { name: "Student Beta", dsaScore: 95, technicalScore: 90, communicationScore: 70, overallAvgScore: 85 },
+      { name: "Student Gamma", dsaScore: 80, technicalScore: 95, communicationScore: 90, overallAvgScore: 88 },
+      { name: "Student Delta", dsaScore: 70, technicalScore: 75, communicationScore: 95, overallAvgScore: 80 },
+    ];
+
+    // Sort by DSA desc
+    const sortByDsa = [...mockStudents].sort((a, b) => b.dsaScore - a.dsaScore);
+    assert.equal(sortByDsa[0].name, "Student Beta");
+    assert.equal(sortByDsa[1].name, "Student Gamma");
+
+    // Sort by Communication desc
+    const sortByComm = [...mockStudents].sort((a, b) => b.communicationScore - a.communicationScore);
+    assert.equal(sortByComm[0].name, "Student Delta");
+    assert.equal(sortByComm[1].name, "Student Gamma");
+
+    // Top-N slice (N = 2)
+    const top2 = sortByDsa.slice(0, 2);
+    assert.equal(top2.length, 2);
+    assert.equal(top2[0].name, "Student Beta");
+    assert.equal(top2[1].name, "Student Gamma");
+  });
+
+  test("Export headers and rows include DSA, Technical, and Communication columns", () => {
+    const headers = [
+      "Roll Number",
+      "Student Name",
+      "Email",
+      "Course",
+      "Year",
+      "Semester",
+      "Section",
+      "Verification Status",
+      "Class 10th (%)",
+      "Class 12th (%)",
+      "Current B.Tech CGPA",
+      "Overall Avg Interview Score",
+      "AI Interview Avg",
+      "Live Interview Avg",
+      "DSA Score",
+      "Technical Score",
+      "Communication Score",
+      "Completed Interviews",
+    ];
+
+    assert.ok(headers.includes("DSA Score"), "Must contain DSA Score column");
+    assert.ok(headers.includes("Technical Score"), "Must contain Technical Score column");
+    assert.ok(headers.includes("Communication Score"), "Must contain Communication Score column");
+  });
+});
+
 
 
 

@@ -1207,6 +1207,8 @@ function Dashboard({ user: propUser, setUser: setAppUser }) {
                 interviews={interviews}
                 onSelectInterview={handleSelectInterview}
                 onNewInterview={() => navigate("/interview")}
+                onScheduleInterview={() => setScheduleModalOpen(true)}
+                role={role}
               />
             </motion.div>
           )}

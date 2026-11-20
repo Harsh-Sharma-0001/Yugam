@@ -17,6 +17,9 @@ import {
   FiPlay,
   FiFileText,
   FiRefreshCw,
+  FiCode,
+  FiLayers,
+  FiMessageSquare,
 } from 'react-icons/fi';
 import {
   getStudentsPerformanceDirectory,
@@ -39,7 +42,8 @@ function StudentDirectory({ onScheduleStudent }) {
   const [sectionFilter, setSectionFilter] = useState('all');
   const [scoreFilter, setScoreFilter] = useState('all'); // 'all' | 'high' (>=75) | 'mid' (50-74) | 'low' (<50)
   const [cgpaFilter, setCgpaFilter] = useState('all'); // 'all' | 'high' (>=8.5) | 'mid' (7.5-8.49) | 'low' (<7.5)
-  const [sortBy, setSortBy] = useState('overallAvgScore'); // 'overallAvgScore' | 'currentCGPA' | 'name' | 'rollNumber'
+  const [topN, setTopN] = useState(''); // Numeric Top-N limit filter
+  const [sortBy, setSortBy] = useState('overallAvgScore'); // 'overallAvgScore' | 'currentCGPA' | 'name' | 'rollNumber' | 'dsa' | 'technical' | 'communication'
   const [sortOrder, setSortOrder] = useState('desc');
 
   // Expanded student row IDs
@@ -57,6 +61,10 @@ function StudentDirectory({ onScheduleStudent }) {
         sortBy,
         sortOrder,
       };
+
+      if (topN && !isNaN(Number(topN)) && Number(topN) > 0) {
+        queryParams.topN = Number(topN);
+      }
 
       if (scoreFilter === 'high') queryParams.minScore = 75;
       if (scoreFilter === 'mid') {
@@ -90,7 +98,7 @@ function StudentDirectory({ onScheduleStudent }) {
 
   useEffect(() => {
     fetchDirectory();
-  }, [page, sectionFilter, scoreFilter, cgpaFilter, sortBy, sortOrder]);
+  }, [page, sectionFilter, scoreFilter, cgpaFilter, sortBy, sortOrder, topN]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -107,6 +115,10 @@ function StudentDirectory({ onScheduleStudent }) {
         sortBy,
         sortOrder,
       };
+
+      if (topN && !isNaN(Number(topN)) && Number(topN) > 0) {
+        queryParams.topN = Number(topN);
+      }
 
       if (scoreFilter === 'high') queryParams.minScore = 75;
       if (scoreFilter === 'mid') {
@@ -175,7 +187,7 @@ function StudentDirectory({ onScheduleStudent }) {
         </div>
 
         {/* Real-time Search & Multi-Criteria Filter Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-white/10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 pt-3 border-t border-white/10">
           {/* Search Input */}
           <form onSubmit={handleSearchSubmit} className="relative lg:col-span-2">
             <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={15} />
@@ -240,11 +252,26 @@ function StudentDirectory({ onScheduleStudent }) {
               <option value="low">Below 7.5 CGPA</option>
             </select>
           </div>
+
+          {/* Top N Filter */}
+          <div>
+            <input
+              type="number"
+              min="1"
+              placeholder="Top N (e.g. 150)"
+              value={topN}
+              onChange={(e) => {
+                setTopN(e.target.value);
+                setPage(1);
+              }}
+              className="w-full bg-[#17181E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-white/30"
+            />
+          </div>
         </div>
 
         {/* Sort Controls Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 mt-3 border-t border-white/5 text-xs text-zinc-400">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span>Sort by:</span>
             <button
               onClick={() => {
@@ -262,6 +289,60 @@ function StudentDirectory({ onScheduleStudent }) {
               }`}
             >
               Avg. Interview Score {sortBy === 'overallAvgScore' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </button>
+
+            <button
+              onClick={() => {
+                if (sortBy === 'dsa') {
+                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                } else {
+                  setSortBy('dsa');
+                  setSortOrder('desc');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg transition ${
+                sortBy === 'dsa'
+                  ? 'bg-emerald-400 text-black font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-white'
+              }`}
+            >
+              DSA {sortBy === 'dsa' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </button>
+
+            <button
+              onClick={() => {
+                if (sortBy === 'technical') {
+                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                } else {
+                  setSortBy('technical');
+                  setSortOrder('desc');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg transition ${
+                sortBy === 'technical'
+                  ? 'bg-blue-400 text-black font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-white'
+              }`}
+            >
+              Technical {sortBy === 'technical' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </button>
+
+            <button
+              onClick={() => {
+                if (sortBy === 'communication') {
+                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                } else {
+                  setSortBy('communication');
+                  setSortOrder('desc');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg transition ${
+                sortBy === 'communication'
+                  ? 'bg-purple-400 text-black font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-white'
+              }`}
+            >
+              Communication {sortBy === 'communication' && (sortOrder === 'asc' ? '↑' : '↓')}
             </button>
 
             <button
@@ -576,7 +657,83 @@ function StudentDirectory({ onScheduleStudent }) {
                           </div>
                         </div>
 
-                        {/* 3. Quick Actions Footer */}
+                        {/* 3. AI Domain Competency Breakdown (DSA, Technical & Communication) */}
+                        <div>
+                          <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5 mb-2.5">
+                            <FiCode size={13} className="text-emerald-400" />
+                            <span>AI Domain Competency Breakdown</span>
+                          </h5>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* DSA Score */}
+                            <div className="bg-[#1B1C26] border border-white/5 rounded-xl p-3.5 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider flex items-center gap-1">
+                                  <FiCode size={12} className="text-emerald-400" />
+                                  <span>DSA Score</span>
+                                </span>
+                                <span className="text-xs font-black text-emerald-400">
+                                  {student.dsaScore !== null ? `${student.dsaScore} / 100` : '—'}
+                                </span>
+                              </div>
+                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className="bg-emerald-400 h-1.5 rounded-full transition-all duration-500"
+                                  style={{ width: `${Math.min(100, Math.max(0, student.dsaScore || 0))}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-zinc-500 block">
+                                Algorithms, Data Structures & Problem Solving
+                              </span>
+                            </div>
+
+                            {/* Technical Score */}
+                            <div className="bg-[#1B1C26] border border-white/5 rounded-xl p-3.5 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider flex items-center gap-1">
+                                  <FiLayers size={12} className="text-blue-400" />
+                                  <span>Technical Score</span>
+                                </span>
+                                <span className="text-xs font-black text-blue-400">
+                                  {student.technicalScore !== null ? `${student.technicalScore} / 100` : '—'}
+                                </span>
+                              </div>
+                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className="bg-blue-400 h-1.5 rounded-full transition-all duration-500"
+                                  style={{ width: `${Math.min(100, Math.max(0, student.technicalScore || 0))}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-zinc-500 block">
+                                System Design, Databases & Architecture
+                              </span>
+                            </div>
+
+                            {/* Communication Score */}
+                            <div className="bg-[#1B1C26] border border-white/5 rounded-xl p-3.5 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider flex items-center gap-1">
+                                  <FiMessageSquare size={12} className="text-purple-400" />
+                                  <span>Communication Score</span>
+                                </span>
+                                <span className="text-xs font-black text-purple-400">
+                                  {student.communicationScore !== null ? `${student.communicationScore} / 100` : '—'}
+                                </span>
+                              </div>
+                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className="bg-purple-400 h-1.5 rounded-full transition-all duration-500"
+                                  style={{ width: `${Math.min(100, Math.max(0, student.communicationScore || 0))}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-zinc-500 block">
+                                Clarity, Articulation & Behavioral Fluency
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 4. Quick Actions Footer */}
                         <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex items-center gap-3 text-xs text-zinc-400">
                             {p.contactNumber && <span>📞 {p.contactNumber}</span>}

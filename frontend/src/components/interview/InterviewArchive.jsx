@@ -12,11 +12,12 @@ import {
     FiX,
     FiPlus,
     FiFilter,
-    FiVideo
+    FiVideo,
+    FiCalendar
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 
-function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }) {
+function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview, onScheduleInterview, role = 'student' }) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'completed' | 'in-progress'
@@ -68,13 +69,23 @@ function InterviewArchive({ interviews = [], onSelectInterview, onNewInterview }
                         </p>
                     </div>
 
-                    <button
-                        onClick={onNewInterview}
-                        className="inline-flex items-center gap-2 self-start sm:self-auto px-4 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-zinc-800 transition shadow-sm"
-                    >
-                        <FiPlus size={14} />
-                        <span>New Interview</span>
-                    </button>
+                    {role === 'student' ? (
+                        <button
+                            onClick={onNewInterview}
+                            className="inline-flex items-center gap-2 self-start sm:self-auto px-4 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-zinc-800 transition shadow-sm"
+                        >
+                            <FiPlus size={14} />
+                            <span>New Interview</span>
+                        </button>
+                    ) : onScheduleInterview ? (
+                        <button
+                            onClick={onScheduleInterview}
+                            className="inline-flex items-center gap-2 self-start sm:self-auto px-4 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-zinc-800 transition shadow-sm"
+                        >
+                            <FiCalendar size={14} />
+                            <span>Schedule Interview</span>
+                        </button>
+                    ) : null}
                 </div>
             </div>
 

@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { getInterview } from '../apis/interview.api'
 import Step2interview from '../components/interview/Step2interview'
 import { FiAlertCircle, FiArrowLeft } from 'react-icons/fi'
 
 function InterviewPage({ user, setUser }) {
+    if (user && user.role && user.role !== "student") {
+        return <Navigate to="/dashboard" replace />
+    }
+
     const { id } = useParams()
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)

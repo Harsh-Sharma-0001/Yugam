@@ -246,32 +246,34 @@ function Sidebar({
         </div>
       </div>
 
-      {/* New Interview CTA (Active for Student / Trainer) */}
-      <div className="px-2.5 pt-3 pb-1.5 shrink-0">
-        <motion.button
-          onClick={onNewInterview}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          className={`w-full flex items-center gap-2 bg-[#000000] text-white font-semibold rounded-lg py-2 transition-all shadow-[0_4px_14px_rgba(0,0,0,0.25)] cursor-pointer hover:bg-[#1a1a1a] ${
-            sidebarOpen ? 'px-2.5' : 'justify-center px-0'
-          }`}
-        >
-          <FiPlus size={14} className="shrink-0" />
-          <AnimatePresence>
-            {sidebarOpen && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.13 }}
-                className="text-xs whitespace-nowrap"
-              >
-                {role === 'trainer' ? 'Start Live Interview' : 'Create Interview'}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </motion.button>
-      </div>
+      {/* New Interview CTA (Active for Student only) */}
+      {role === 'student' && (
+        <div className="px-2.5 pt-3 pb-1.5 shrink-0">
+          <motion.button
+            onClick={onNewInterview}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className={`w-full flex items-center gap-2 bg-[#000000] text-white font-semibold rounded-lg py-2 transition-all shadow-[0_4px_14px_rgba(0,0,0,0.25)] cursor-pointer hover:bg-[#1a1a1a] ${
+              sidebarOpen ? 'px-2.5' : 'justify-center px-0'
+            }`}
+          >
+            <FiPlus size={14} className="shrink-0" />
+            <AnimatePresence>
+              {sidebarOpen && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.13 }}
+                  className="text-xs whitespace-nowrap"
+                >
+                  Create Interview
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
+        </div>
+      )}
 
       <AnimatePresence>
         {sidebarOpen && (

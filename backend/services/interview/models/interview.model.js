@@ -187,6 +187,12 @@ const interviewSchema = new mongoose.Schema(
             enum: ["in-progress", "completed"],
             default: "in-progress",
         },
+
+        domainScores: {
+            dsa: { type: Number, default: 0, min: 0, max: 100 },
+            technical: { type: Number, default: 0, min: 0, max: 100 },
+            communication: { type: Number, default: 0, min: 0, max: 100 },
+        },
     },
     {
         timestamps: true,

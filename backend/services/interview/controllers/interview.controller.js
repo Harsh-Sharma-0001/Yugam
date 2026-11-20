@@ -8,6 +8,7 @@ import LiveInterview from "../models/liveInterview.model.js";
 import ScheduledInterview from "../models/scheduledInterview.model.js";
 import { deductCoins, refundCoins } from "../utils/coinClient.js";
 import { getInterviewCacheKey, invalidateInterviewCache, clampScore } from "../utils/cacheKeys.js";
+import { evaluateDomainScores } from "../utils/domainClassifier.js";
 
 export const startInterview = async (req, res) => {
     let reservationId;
@@ -312,6 +313,29 @@ export const submitAnswer = async (req, res) => {
 
                 updateFields.$set.weaknesses = Array.isArray(result.report?.weaknesses) ? result.report.weaknesses : [];
                 updateFields.$set.recommendations = Array.isArray(result.report?.recommendations) ? result.report.recommendations : [];
+
+                // AI Domain Competency Evaluation (DSA, Technical, Communication)
+                const evaluatedQuestionsForDomain = allQuestions.map((q, idx) => {
+                    if (idx === expectedIndex) {
+                        return {
+                            question: q.question,
+                            userAnswer: trimmedAnswer,
+                            difficulty: q.difficulty,
+                            feedback: result.feedback || {},
+                        };
+                    }
+                    return q;
+                });
+
+                const domainScores = evaluateDomainScores({
+                    type: interview.type,
+                    role: interview.role,
+                    questions: evaluatedQuestionsForDomain,
+                    evaluation: result.report || {},
+                    overallScore: finalOverall,
+                });
+
+                updateFields.$set.domainScores = domainScores;
             }
 
             const updatedInterview = await Interview.findOneAndUpdate(

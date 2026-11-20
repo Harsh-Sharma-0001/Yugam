@@ -169,6 +169,11 @@ const liveInterviewSchema = new mongoose.Schema(
       type: liveEvaluationSchema,
       default: () => ({}),
     },
+    domainScores: {
+      dsa: { type: Number, default: 0, min: 0, max: 100 },
+      technical: { type: Number, default: 0, min: 0, max: 100 },
+      communication: { type: Number, default: 0, min: 0, max: 100 },
+    },
   },
   {
     timestamps: true,

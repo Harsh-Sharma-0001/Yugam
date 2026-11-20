@@ -3,6 +3,7 @@ import ScheduledInterview from "../models/scheduledInterview.model.js";
 import redis from "../../../shared/redis/redis.js";
 import llm from "../config/llm.js";
 import { isGibberishOrEmpty } from "../utils/answerValidator.js";
+import { evaluateDomainScores } from "../utils/domainClassifier.js";
 
 /**
  * Real-time Groq LLM evaluation for a candidate's answer and submitted code.
@@ -386,6 +387,16 @@ export const completeLiveRoom = async (req, res) => {
         lastOutput: sharedCode.lastOutput || "",
       };
     }
+
+    // AI Domain Competency Evaluation (DSA, Technical, Communication)
+    const domainScores = evaluateDomainScores({
+      type: liveInterview.interviewType || "technical",
+      role: liveInterview.role,
+      questions: liveInterview.questions,
+      evaluation: liveInterview.evaluation,
+      overallScore: liveInterview.evaluation?.overallScore || Number(overallScore) || 0,
+    });
+    liveInterview.domainScores = domainScores;
 
     await liveInterview.save();
 

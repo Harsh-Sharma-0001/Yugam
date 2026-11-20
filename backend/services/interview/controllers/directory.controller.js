@@ -3,6 +3,7 @@ import Interview from "../models/interview.model.js";
 import LiveInterview from "../models/liveInterview.model.js";
 import ScheduledInterview from "../models/scheduledInterview.model.js";
 import { generateCsvString, sanitizeFormula } from "../utils/exportSanitizer.js";
+import { evaluateDomainScores } from "../utils/domainClassifier.js";
 
 /**
  * Helper to fetch students from auth service and aggregate with MongoDB interview metrics.
@@ -47,13 +48,13 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
       userId: { $in: studentIds },
       status: "completed",
     })
-      .select("userId overallScore mode createdAt type role")
+      .select("userId overallScore mode createdAt type role domainScores questions")
       .lean(),
     LiveInterview.find({
       studentId: { $in: studentIds },
       status: "completed",
     })
-      .select("studentId evaluation createdAt role interviewType")
+      .select("studentId evaluation createdAt role interviewType domainScores questions")
       .lean(),
     ScheduledInterview.find({
       institutionId,
@@ -71,13 +72,25 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
     createdAt: l.createdAt,
     type: l.interviewType || "technical",
     role: l.role,
+    domainScores: l.domainScores,
+    questions: l.questions,
+    evaluation: l.evaluation,
   }));
 
   const allCompletedInterviews = [...completedAiInterviews, ...liveFormatted];
 
-  // Group interviews by studentId
+  // Group interviews by studentId and ensure domainScores are evaluated
   const interviewMap = new Map();
   allCompletedInterviews.forEach((interview) => {
+    if (!interview.domainScores || typeof interview.domainScores.dsa !== "number") {
+      interview.domainScores = evaluateDomainScores({
+        type: interview.type,
+        role: interview.role,
+        questions: interview.questions || [],
+        evaluation: interview.evaluation || {},
+        overallScore: interview.overallScore,
+      });
+    }
     const sid = String(interview.userId);
     if (!interviewMap.has(sid)) {
       interviewMap.set(sid, []);
@@ -131,6 +144,32 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
         ? Number((liveScores.reduce((a, b) => a + b, 0) / liveScores.length).toFixed(1))
         : null;
 
+    // AI Domain Competency Aggregation (DSA, Technical, Communication)
+    const dsaScores = studentInterviews
+      .map((i) => i.domainScores?.dsa)
+      .filter((s) => typeof s === "number" && !isNaN(s));
+    const techScores = studentInterviews
+      .map((i) => i.domainScores?.technical)
+      .filter((s) => typeof s === "number" && !isNaN(s));
+    const commScores = studentInterviews
+      .map((i) => i.domainScores?.communication)
+      .filter((s) => typeof s === "number" && !isNaN(s));
+
+    const dsaScore =
+      dsaScores.length > 0
+        ? Number((dsaScores.reduce((a, b) => a + b, 0) / dsaScores.length).toFixed(1))
+        : null;
+
+    const technicalScore =
+      techScores.length > 0
+        ? Number((techScores.reduce((a, b) => a + b, 0) / techScores.length).toFixed(1))
+        : null;
+
+    const communicationScore =
+      commScores.length > 0
+        ? Number((commScores.reduce((a, b) => a + b, 0) / commScores.length).toFixed(1))
+        : null;
+
     const currentCGPA =
       student.profile?.currentCGPA !== undefined && student.profile?.currentCGPA !== null
         ? Number(student.profile.currentCGPA)
@@ -146,6 +185,9 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
       overallAvgScore,
       aiAvgScore,
       liveAvgScore,
+      dsaScore,
+      technicalScore,
+      communicationScore,
       aiCompletedCount: aiInterviews.length,
       liveCompletedCount: liveInterviews.length,
       totalCompleted: studentInterviews.length,
@@ -251,6 +293,24 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
         valB = b.profile?.currentCGPA ?? -1;
         return sortOrder * (valA - valB);
 
+      case "dsa":
+      case "dsaScore":
+        valA = a.dsaScore ?? -1;
+        valB = b.dsaScore ?? -1;
+        return sortOrder * (valA - valB);
+
+      case "technical":
+      case "technicalScore":
+        valA = a.technicalScore ?? -1;
+        valB = b.technicalScore ?? -1;
+        return sortOrder * (valA - valB);
+
+      case "communication":
+      case "communicationScore":
+        valA = a.communicationScore ?? -1;
+        valB = b.communicationScore ?? -1;
+        return sortOrder * (valA - valB);
+
       case "overallAvgScore":
       default:
         valA = a.overallAvgScore ?? -1;
@@ -258,6 +318,14 @@ export const fetchAggregatedStudents = async (institutionId, queryParams = {}) =
         return sortOrder * (valA - valB);
     }
   });
+
+  // Top N Filtering (e.g. Top 150 Students by active sort criterion)
+  const topN = Number(
+    queryParams.topN || queryParams.top_n || (queryParams.isExport ? queryParams.limit : null)
+  );
+  if (Number.isInteger(topN) && topN > 0) {
+    aggregated = aggregated.slice(0, topN);
+  }
 
   return aggregated;
 };
@@ -320,10 +388,16 @@ export const exportStudentsDirectory = async (req, res) => {
     const institutionId = req.institutionId || "DEFAULT_COLLEGE";
     const format = (req.query.format || "csv").toLowerCase().trim();
 
-    // Fetch the complete filtered dataset (ignoring page/limit)
-    const exportQuery = { ...req.query };
+    // Fetch the complete filtered dataset (respecting topN or limit if provided)
+    const exportQuery = { ...req.query, isExport: true };
     delete exportQuery.page;
-    delete exportQuery.limit;
+    if (req.query.topN && !isNaN(Number(req.query.topN))) {
+      exportQuery.topN = Number(req.query.topN);
+    } else if (req.query.limit && !isNaN(Number(req.query.limit))) {
+      exportQuery.limit = Number(req.query.limit);
+    } else {
+      delete exportQuery.limit;
+    }
 
     const allMatchingStudents = await fetchAggregatedStudents(institutionId, exportQuery);
 
@@ -342,6 +416,9 @@ export const exportStudentsDirectory = async (req, res) => {
       "Overall Avg Interview Score",
       "AI Interview Avg",
       "Live Interview Avg",
+      "DSA Score",
+      "Technical Score",
+      "Communication Score",
       "Completed Interviews",
     ];
 
@@ -364,6 +441,9 @@ export const exportStudentsDirectory = async (req, res) => {
       s.overallAvgScore !== null ? `${s.overallAvgScore} / 100` : "N/A",
       s.aiAvgScore !== null ? `${s.aiAvgScore} / 100` : "N/A",
       s.liveAvgScore !== null ? `${s.liveAvgScore} / 100` : "N/A",
+      s.dsaScore !== null ? `${s.dsaScore} / 100` : "N/A",
+      s.technicalScore !== null ? `${s.technicalScore} / 100` : "N/A",
+      s.communicationScore !== null ? `${s.communicationScore} / 100` : "N/A",
       s.totalCompleted,
     ]);
 
