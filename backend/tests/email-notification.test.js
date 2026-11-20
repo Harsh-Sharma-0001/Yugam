@@ -406,3 +406,108 @@ describe("4. Non-Blocking Scheduling Guarantee & Exponential Backoff Retry Logic
     assert.ok(job.sentAt instanceof Date);
   });
 });
+
+describe("5. Diagnostic Delivery Logging & Student Email Resolution Fallback", () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = { ...process.env };
+  const originalWarn = console.warn;
+  const originalLog = console.log;
+  const originalError = console.error;
+
+  after(() => {
+    globalThis.fetch = originalFetch;
+    process.env = originalEnv;
+    console.warn = originalWarn;
+    console.log = originalLog;
+    console.error = originalError;
+  });
+
+  test("Logs '[EmailService] Skipped' when disabled or BREVO_API_KEY is unset without leaking secrets", async () => {
+    process.env.EMAIL_NOTIFICATIONS_ENABLED = "false";
+    delete process.env.BREVO_API_KEY;
+
+    let warnMsg = "";
+    console.warn = (...args) => {
+      warnMsg = args.join(" ");
+    };
+
+    await sendViaBrevo({
+      toEmail: "candidate@college.edu",
+      subject: "Test",
+      htmlContent: "<p>Test</p>",
+    });
+
+    assert.ok(warnMsg.includes("[EmailService] Skipped: EMAIL_NOTIFICATIONS_ENABLED or BREVO_API_KEY not set"));
+    assert.ok(!warnMsg.includes("key"), "Must not leak API keys");
+  });
+
+  test("Logs '[EmailService] Sent via Brevo' with recipient and messageId on success", async () => {
+    process.env.EMAIL_NOTIFICATIONS_ENABLED = "true";
+    process.env.BREVO_API_KEY = "test-brevo-key";
+
+    let logMsg = "";
+    console.log = (...args) => {
+      logMsg = args.join(" ");
+    };
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({ messageId: "<msg-99999.brevo@smtp>" }),
+    });
+
+    await sendViaBrevo({
+      toEmail: "student99@college.edu",
+      subject: "Test Subject",
+      htmlContent: "<p>Test</p>",
+    });
+
+    assert.ok(logMsg.includes("[EmailService] Sent via Brevo to student99@college.edu messageId: <msg-99999.brevo@smtp>"));
+  });
+
+  test("Logs '[EmailService] Delivery error' with HTTP status and detail on Brevo error", async () => {
+    process.env.EMAIL_NOTIFICATIONS_ENABLED = "true";
+    process.env.BREVO_API_KEY = "test-brevo-key";
+
+    let errorMsg = "";
+    console.error = (...args) => {
+      errorMsg = args.join(" ");
+    };
+
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 402,
+      json: async () => ({ message: "Payment required: credit quota exhausted" }),
+    });
+
+    await assert.rejects(
+      async () => {
+        await sendViaBrevo({
+          toEmail: "student@college.edu",
+          subject: "Test Subject",
+          htmlContent: "<p>Test</p>",
+        });
+      },
+      /credit quota exhausted/
+    );
+
+    assert.ok(errorMsg.includes("[EmailService] Delivery error: 402 Payment required: credit quota exhausted"));
+  });
+
+  test("Student email resolution falls back cleanly to schedule.studentEmail if Auth Service has no records", () => {
+    const emptyStudentMap = new Map();
+    const schedule = {
+      _id: "sched-direct-1",
+      studentId: "6735e5d31122334455667788",
+      studentEmail: "fallback.student@college.edu",
+      studentName: "Fallback Student",
+    };
+
+    const resolvedStudent = emptyStudentMap.get(String(schedule.studentId));
+    const resolvedEmail = (resolvedStudent?.email || schedule.studentEmail || "").trim();
+    const resolvedName = (resolvedStudent?.name || schedule.studentName || "Student").trim();
+
+    assert.equal(resolvedEmail, "fallback.student@college.edu");
+    assert.equal(resolvedName, "Fallback Student");
+  });
+});

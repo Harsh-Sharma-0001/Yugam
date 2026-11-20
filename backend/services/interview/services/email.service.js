@@ -1,3 +1,4 @@
+import "../env.js";
 import EmailNotification from "../models/emailNotification.model.js";
 import { renderInterviewNotificationEmail } from "../templates/interviewNotification.template.js";
 
@@ -22,6 +23,7 @@ export async function sendViaBrevo({
 
   // Gracefully skip if notifications are disabled or API key is not configured
   if (!isEnabled || !apiKey) {
+    console.warn("[EmailService] Skipped: EMAIL_NOTIFICATIONS_ENABLED or BREVO_API_KEY not set");
     return {
       success: true,
       messageId: "MOCK_DISPATCH_BREVO_DISABLED",
@@ -67,13 +69,16 @@ export async function sendViaBrevo({
     } catch {
       errorDetail = await response.text();
     }
+    console.error("[EmailService] Delivery error:", response.status, errorDetail);
     throw new Error(`Brevo API error (${response.status}): ${errorDetail}`);
   }
 
   const data = await response.json();
+  const messageId = data.messageId || "BREVO_SENT";
+  console.log("[EmailService] Sent via Brevo to", toEmail.trim(), "messageId:", messageId);
   return {
     success: true,
-    messageId: data.messageId || "BREVO_SENT",
+    messageId,
   };
 }
 
@@ -97,11 +102,23 @@ async function fetchAuthStudents(institutionId) {
     if (authRes.ok) {
       const data = await authRes.json();
       if (Array.isArray(data?.students)) {
+        if (data.students.length === 0) {
+          console.error("[EmailService] Delivery error:", authRes.status, "Auth Service lookup returned 0 recipients");
+        }
         return data.students;
       }
+    } else {
+      let errText = "";
+      try {
+        const errJson = await authRes.json();
+        errText = errJson.message || JSON.stringify(errJson);
+      } catch {
+        errText = await authRes.text();
+      }
+      console.error("[EmailService] Delivery error:", authRes.status, errText || "Auth Service request failed");
     }
   } catch (err) {
-    console.warn("fetchAuthStudents warning:", err.message);
+    console.error("[EmailService] Delivery error:", "CONNECTION_ERROR", err.message);
   }
   return [];
 }
@@ -133,7 +150,7 @@ export async function enqueueInterviewNotifications({
   for (const [instId, instSchedules] of institutionMap.entries()) {
     const institutionStudents = await fetchAuthStudents(instId);
 
-    // Create a student lookup map by ID and Email
+    // Create a student lookup map by ID, Email, and Roll Number
     const studentMap = new Map();
     for (const stud of institutionStudents) {
       // Guard against cross-institution student record leak
@@ -151,15 +168,21 @@ export async function enqueueInterviewNotifications({
 
     for (const schedule of instSchedules) {
       const studentIdStr = String(schedule.studentId || "");
-      const resolvedStudent = studentMap.get(studentIdStr);
+      const studentEmailInput = String(schedule.studentEmail || "").toLowerCase().trim();
+      const studentRollInput = String(schedule.studentRollNumber || "").toLowerCase().trim();
 
-      // If student was not found in the institution's verified directory
+      const resolvedStudent =
+        studentMap.get(studentIdStr) ||
+        (studentEmailInput ? studentMap.get(studentEmailInput) : null) ||
+        (studentRollInput ? studentMap.get(studentRollInput) : null);
+
+      // Resolve student email, prioritizing auth service verified record with fallback to schedule.studentEmail
       const studentEmail = (resolvedStudent?.email || schedule.studentEmail || "").trim();
       const studentName = (resolvedStudent?.name || schedule.studentName || "Student").trim();
 
       if (!studentEmail || !EMAIL_REGEX.test(studentEmail)) {
         console.warn(
-          `Skipping email notification for schedule ${schedule._id}: student email not found or invalid.`
+          `[EmailService] Skipping email notification for schedule ${schedule._id}: student email not found or invalid.`
         );
         continue;
       }
@@ -167,7 +190,7 @@ export async function enqueueInterviewNotifications({
       // Check cross-institution security constraint
       if (resolvedStudent && resolvedStudent.institutionId && String(resolvedStudent.institutionId) !== String(instId)) {
         console.warn(
-          `Cross-institution mismatch: Student ${resolvedStudent._id} does not belong to ${instId}`
+          `[EmailService] Cross-institution mismatch: Student ${resolvedStudent._id} does not belong to ${instId}`
         );
         continue;
       }
@@ -200,9 +223,13 @@ export async function enqueueInterviewNotifications({
           enqueuedDocs.push(notificationDoc);
         }
       } catch (upsertErr) {
-        console.error(`Failed to enqueue notification for ${idempotencyKey}:`, upsertErr.message);
+        console.error(`[EmailService] Failed to enqueue notification for ${idempotencyKey}:`, upsertErr.message);
       }
     }
+
+    const scheduleIdSummary =
+      instSchedules.length === 1 ? instSchedules[0]._id : instSchedules.map((s) => s._id).join(", ");
+    console.log("[EmailService] Enqueued", enqueuedDocs.length, "notification(s) for schedule", scheduleIdSummary);
   }
 
   // Trigger non-blocking asynchronous processor pass

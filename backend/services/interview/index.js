@@ -1,4 +1,15 @@
-import "dotenv/config";
+import "./env.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Explicitly load backend/.env, then services/interview/.env
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config({ path: path.resolve(__dirname, ".env"), override: true });
+
 import express from "express";
 import http from "http";
 import mongoose from "mongoose";
@@ -52,6 +63,15 @@ const startServer = async () => {
 
         server.listen(PORT, () => {
             console.log(`Interview-service (HTTP + Socket.IO) Started on ${PORT}`);
+
+            const isEmailConfigured =
+                process.env.EMAIL_NOTIFICATIONS_ENABLED === "true" &&
+                Boolean(process.env.BREVO_API_KEY);
+            if (!isEmailConfigured) {
+                console.warn("[EmailService] Skipped: EMAIL_NOTIFICATIONS_ENABLED or BREVO_API_KEY not set");
+            } else {
+                console.log("[EmailService] Configured with Brevo transactional email delivery");
+            }
 
             // Start background worker for pending & retry email notifications
             if (process.env.NODE_ENV !== "test") {

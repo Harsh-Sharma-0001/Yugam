@@ -149,6 +149,10 @@ function ScheduleInterviewModal({
         payload.studentIdentifier = activeIdentifier;
         payload.studentId = activeStudentId || activeIdentifier;
         payload.studentName = selectedStudent?.name || preselected?.name || '';
+        payload.studentEmail =
+          selectedStudent?.email ||
+          preselected?.email ||
+          (activeIdentifier?.includes('@') ? activeIdentifier.trim() : '');
         payload.studentRollNumber =
           selectedStudent?.profile?.rollNumber || preselected?.profile?.rollNumber || '';
         payload.section = selectedStudent?.profile?.section || preselected?.profile?.section || '';

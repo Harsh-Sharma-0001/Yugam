@@ -169,7 +169,11 @@ export const scheduleInterview = async (req, res) => {
 
     const finalStudentId = resolvedStudent ? resolvedStudent._id : rawInput;
     const finalStudentName = (resolvedStudent?.name || studentName || "Student").trim();
-    const finalStudentEmail = (resolvedStudent?.email || "").trim();
+    const finalStudentEmail = (
+      resolvedStudent?.email ||
+      req.body.studentEmail ||
+      (rawInput.includes("@") ? rawInput : "")
+    ).trim();
     const finalStudentRoll = (resolvedStudent?.profile?.rollNumber || studentRollNumber || "").trim();
     const finalSection = (resolvedStudent?.profile?.section || section || "").trim();
 
