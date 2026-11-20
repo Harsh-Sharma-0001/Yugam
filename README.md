@@ -7,17 +7,18 @@
 ### _Institutional Placement, Assessment & Real-Time Live + AI Interview Platform_
 
 [![Microservices Architecture](https://img.shields.io/badge/Architecture-Event--Driven%20Microservices-blueviolet.svg)](#-system-architecture--microservices-topology)
-[![Frontend](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%208%20%7C%20TailwindCSS%20v4-blue.svg)](#frontend-client)
-[![Backend](https://img.shields.io/badge/Backend-Node.js%2020%20%7C%20Express%205-green.svg)](#microservices-deep-dive)
+[![Frontend](https://img.shields.io/badge/Frontend-React%2019%20%7C%20Vite%208%20%7C%20TailwindCSS%20v4-blue.svg)](#-frontend-client--design-system)
+[![Backend](https://img.shields.io/badge/Backend-Node.js%2020%20%7C%20Express%205-green.svg)](#-microservices-deep-dive)
 [![Real-Time](https://img.shields.io/badge/Real--Time-WebRTC%20%7C%20Socket.IO-yellow.svg)](#yugam-live-studio-candidate--interviewer-views)
-[![Testing](https://img.shields.io/badge/Tests-109%2F109%20Passing%20(40%20Suites)-brightgreen.svg)](#-automated-testing-suite-109-tests--40-suites)
+[![Notifications](https://img.shields.io/badge/Notifications-Brevo%20Transactional%20Email-0B996F.svg)](#-automated-institutional-email-notifications-brevo-api)
+[![Testing](https://img.shields.io/badge/Tests-130%2F130%20Passing%20(45%20Suites)-brightgreen.svg)](#-automated-testing-suite-130-tests--45-suites)
 [![AI Orchestration](https://img.shields.io/badge/AI%20Orchestration-LangChain%20%7C%20LangGraph%20%7C%20Groq%20Llama%203.3%2070B-orange.svg)](#ai-interview--anti-gibberish-proctor-engine)
 [![Database & Cache](https://img.shields.io/badge/Storage-MongoDB%20Atlas%20%7C%20Redis-red.svg)](#-data-storage--redis-caching)
 [![Payments](https://img.shields.io/badge/Payments-Razorpay-02042B.svg)](#6-billing--subscription-service-port-8005)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
 <p align="center">
-  <b>Yugam</b> is an enterprise-grade, multi-tenant B2B college placement and technical assessment ecosystem. Engineered for universities and tech academies, Yugam connects <b>College Placement Administrators</b>, <b>Technical Faculty Trainers</b>, and <b>Candidate Students</b> under a unified institutional hierarchy. It powers end-to-end placement readiness—from <b>verifiable 3-tier academic profiles</b> and <b>interactive split-screen career studios</b>, to <b>scheduled faculty-led WebRTC live video interviews</b> with real-time shared coding, and <b>proctored conversational AI mock interviews</b> with deterministic anti-gibberish scoring.
+  <b>Yugam</b> is an enterprise-grade, multi-tenant B2B college placement and technical assessment ecosystem. Engineered for universities and technical academies, Yugam connects <b>College Placement Administrators</b>, <b>Technical Faculty Trainers</b>, and <b>Candidate Students</b> under a unified institutional hierarchy. It powers end-to-end placement readiness—from <b>verifiable 3-tier academic profiles</b> and <b>interactive split-screen career studios</b>, to <b>automated Brevo transactional email notifications</b>, <b>scheduled faculty-led WebRTC live video interviews</b> with real-time shared coding, and <b>proctored conversational AI mock interviews</b> with deterministic anti-gibberish scoring and domain competency tracking (DSA, Technical, Communication).
 </p>
 
 ---
@@ -30,7 +31,7 @@
 - [Core Platform Capabilities (Role-by-Role)](#-core-platform-capabilities-role-by-role)
   - [1. Candidate Student Portal](#1-candidate-student-portal)
     - [Proctored AI Mock Interviews & Anti-Gibberish Proctor](#proctored-ai-mock-interviews--anti-gibberish-proctor)
-    - [Yugam Live Studio (Candidate View)](#yugam-live-studio-candidate-view)
+    - [Yugam Live Studio (Candidate View) & Voice Transcription](#yugam-live-studio-candidate-view--voice-transcription)
     - [Interactive Split-Screen Resume Studio (`/resume`)](#interactive-split-screen-resume-studio-resume)
     - [ATS Resume Scorer Studio (`/scorer`)](#ats-resume-scorer-studio-scorer)
     - [AI Career Roadmap Studio (`/roadmap`)](#ai-career-roadmap-studio-roadmap)
@@ -38,12 +39,18 @@
   - [2. Technical Faculty Trainer Portal](#2-technical-faculty-trainer-portal)
     - [Yugam Live Studio (Interviewer View) & Voice Dictate](#yugam-live-studio-interviewer-view--voice-dictate)
     - [6-Criteria Live Candidate Evaluation Rubric](#6-criteria-live-candidate-evaluation-rubric)
-    - [Live Interview Scheduling & Session Explorer](#live-interview-scheduling--session-explorer)
+    - [Live Interview Scheduling & Candidate Strengths/Improvements](#live-interview-scheduling--candidate-strengthsimprovements)
+    - [Session Explorer & Redacted Private Notes](#session-explorer--redacted-private-notes)
   - [3. Placement Admin & Performance Directory](#3-placement-admin--performance-directory)
     - [Student Performance & Placement Directory](#student-performance--placement-directory)
     - [AI Domain Competencies (DSA, Technical, Communication)](#ai-domain-competencies-dsa-technical-communication)
     - [Advanced Filtering, Top-N Slicing & Formula-Safe Exports (CWE-1236)](#advanced-filtering-top-n-slicing--formula-safe-exports-cwe-1236)
     - [Institutional Governance, Bulk Provisioning & Last Admin Guard](#institutional-governance-bulk-provisioning--last-admin-guard)
+- [Automated Institutional Email Notifications (Brevo API)](#-automated-institutional-email-notifications-brevo-api)
+  - [Architecture & Transactional Event Flow](#architecture--transactional-event-flow)
+  - [Branded Obsidian & Emerald Template Caliber](#branded-obsidian--emerald-template-caliber)
+  - [Persistent Queue, Idempotency & Bounded Retry](#persistent-queue-idempotency--bounded-retry)
+  - [Multi-Tenant Student Email & College Resolution](#multi-tenant-student-email--college-resolution)
 - [System Architecture & Microservices Topology](#-system-architecture--microservices-topology)
   - [High-Level Microservices Architecture Diagram](#high-level-microservices-architecture-diagram)
   - [Microservices Port & Responsibility Table](#microservices-port--responsibility-table)
@@ -53,7 +60,8 @@
   - [1. 3-Tier Institutional RBAC & Tenant Isolation](#1-3-tier-institutional-rbac--tenant-isolation)
   - [2. Financial Atomicity & Idempotency](#2-financial-atomicity--idempotency)
   - [3. AI Evaluation Lease Fencing & Lock Ownership Tokens](#3-ai-evaluation-lease-fencing--lock-ownership-tokens)
-  - [4. Socket.IO & Export Hardening](#4-socketio--export-hardening)
+  - [4. Socket.IO Presence & Peer State Tracking](#4-socketio-presence--peer-state-tracking)
+  - [5. PII Redaction & Modernized Database Driver](#5-pii-redaction--modernized-database-driver)
 - [Microservices Deep-Dive](#-microservices-deep-dive)
   - [1. API Gateway (`gateway` :8000)](#1-api-gateway-port-8000)
   - [2. Authentication & Governance Service (`auth` :8001)](#2-authentication--governance-service-port-8001)
@@ -62,7 +70,7 @@
   - [5. Roadmap & Resource Service (`roadmap` :8004)](#5-roadmap--resource-service-port-8004)
   - [6. Billing & Subscription Service (`billing` :8005)](#6-billing--subscription-service-port-8005)
   - [7. Isolated Code Execution Engine (`codebox` :3000)](#7-isolated-code-execution-engine-port-3000)
-- [Automated Testing Suite (109 Tests / 40 Suites)](#-automated-testing-suite-109-tests--40-suites)
+- [Automated Testing Suite (130 Tests / 45 Suites)](#-automated-testing-suite-130-tests--45-suites)
 - [Frontend Client & Design System](#-frontend-client--design-system)
 - [Token & Coin Economics](#-token--coin-economics)
 - [API Reference Guide](#-api-reference-guide)
@@ -78,16 +86,17 @@
 
 ## 🌟 Executive Overview & Value Proposition
 
-Modern college placement cells and corporate technical recruitment drives require more than generic chatbot practice. They demand a rigorous, audit-compliant institutional infrastructure that bridges verified academic records with live technical evaluation and autonomous AI assessment.
+Modern university placement cells and corporate technical recruitment drives require more than generic practice chatbots. They demand a rigorous, audit-compliant institutional infrastructure that bridges verified academic backgrounds with live faculty evaluation, transactional notification tracking, and autonomous AI grading.
 
 **Yugam** delivers this unified operational paradigm:
 
-1. **Multi-Tenant Institutional Scoping**: All users, performance records, interview schedules, assignments, and audit logs are strictly scoped by `institutionId` (e.g. `"DEFAULT_COLLEGE"`, `"GLA_UNIVERSITY"`), dynamically resolving college identities across all portal headers and reports.
-2. **Tri-Role Institutional Hierarchy**: Dedicated capabilities for **Students** (practice & assessment), **Technical Faculty Trainers** (scheduling, live evaluation & grading), and **College Placement Admins** (governance, verification, provisioning & audit logs).
-3. **Yugam Live Studio (`/live-interview/:scheduleId`)**: Low-latency peer-to-peer WebRTC video studio featuring Socket.IO room signaling, real-time question push with **Voice Dictate**, browser Speech-to-Text dictation, synchronized Monaco code editor with multi-language isolated execution, and weighted rubric grading.
-4. **AI Interview & Anti-Gibberish Proctor Engine**: Multi-turn LangGraph agent powered by Groq `llama-3.3-70b-versatile`, with real-time per-question grading, deterministic anti-gibberish validation (`answerValidator.js` awarding `0/100` on nonsense answers), deterministic overall score aggregation, and downloadable PDF reports.
-5. **Verifiable Academic Directory & Injection-Proof Exports**: Comprehensive performance tracking that keeps Class 10th %, Class 12th %, and B.Tech CGPA as discrete, verified indicators. Full-dataset Excel (`.xlsx`) and CSV (`.csv`) exports hardened against **CWE-1236 spreadsheet formula injection**.
-6. **Career Studio Suite**: Interactive split-screen studios in Yugam's White (`#F8F9FA`) and Obsidian (`#111318`) caliber: **Resume Studio**, **ATS Resume Scorer Studio**, and **AI Career Roadmap Studio**.
+1. **Multi-Tenant Institutional Scoping**: All users, performance records, interview schedules, assignments, notifications, and audit logs are strictly scoped by `institutionId` (e.g. `"GLA_UNIVERSITY"`), dynamically resolving college identities across all portal headers and student communications.
+2. **Tri-Role Institutional Hierarchy**: Dedicated capabilities for **Students** (practice, live assessments & studios), **Technical Faculty Trainers** (scheduling, live room conducting & rubric evaluation), and **College Placement Admins** (governance, academic verification, bulk provisioning & performance analytics).
+3. **Automated Brevo Transactional Email Notifications**: Multi-tenant email dispatch system that reliably notifies students whenever faculty schedules, reschedules, or cancels an interview—complete with Asia/Kolkata date formatting, college name resolution, persistent queueing, and exponential backoff retry.
+4. **Yugam Live Studio (`/live-interview/:scheduleId`)**: Low-latency peer-to-peer WebRTC video studio featuring authoritative Socket.IO room presence (`Peer Connected` vs. `Waiting for Peer...`), real-time question push with **Trainer Voice Dictation**, candidate speech-to-text transcription, synchronized Monaco code editor with multi-language isolated execution, and 6-criteria weighted rubric grading.
+5. **AI Interview & Anti-Gibberish Proctor Engine**: Multi-turn LangGraph agent powered by Groq `llama-3.3-70b-versatile`, with real-time per-question grading, deterministic anti-gibberish proctor validation (`answerValidator.js` awarding `0/100` on nonsense answers), deterministic overall score aggregation, and downloadable PDF reports.
+6. **AI Domain Competency Analytics (DSA, Technical, Communication)**: Automated question and rubric classification categorizing student performance into standard engineering competencies, powering an institutional directory with multi-metric sorting, **Top-N** cohort slicing, and **CWE-1236 spreadsheet injection-proof** exports.
+7. **Interactive Career Studio Suite**: Split-screen studios in Yugam's White (`#F8F9FA`) and Obsidian (`#111318`) design caliber: **Resume Studio**, **ATS Resume Scorer Studio**, and **AI Career Roadmap Studio**.
 
 ---
 
@@ -98,12 +107,13 @@ Modern college placement cells and corporate technical recruitment drives requir
 │                                   YUGAM PLATFORM PORTAL                                   │
 │            [ 🎓 Candidate Student ]    [ 👨‍🏫 Faculty Trainer ]    [ 🛡️ Placement Admin ]   │
 ├──────────────────────────────┬───────────────────────────────┬────────────────────────────┤
-│ • Proctored AI Mock Sessions │ • Yugam Live Studio Host      │ • Institutional Governance │
-│ • Yugam Live Studio Peer     │ • Live Question Voice Dictate │ • Student Perf. Directory  │
-│ • Resume Studio (/resume)    │ • 6-Criteria Rubric Grading   │ • Top-N Competency Slicing │
-│ • ATS Scorer (/scorer)       │ • Confidential Private Notes  │ • Formula-Safe Exports     │
-│ • AI Roadmap (/roadmap)      │ • Session Scheduling Engine   │ • Academic Verification    │
-│ • 3-Tier Academic Records    │ • Conducted History Explorer  │ • Bulk User Provisioning   │
+│ • Proctored AI Mock Interview│ • Live Video Studio (Trainer) │ • Performance Directory    │
+│ • Yugam Live Studio (Student)│ • Real-Time Voice Dictate     │ • AI Domain Competencies   │
+│ • Resume Studio (/resume)    │ • 6-Criteria Rubric Scoring   │ • Top-N Slicing & Exports  │
+│ • Resume Scorer (/scorer)    │ • Strengths & Weaknesses Tags │ • Academic Verification    │
+│ • Career Roadmap (/roadmap)  │ • Brevo Email Notifications   │ • Bulk User Provisioning   │
+│ • 3-Tier Verified Academia   │ • Redacted Faculty Notes      │ • Immutable Audit Logs     │
+│ • Tasks & Assignment Submits │ • Task Creation & Feedback    │ • Last Admin Security Guard│
 └──────────────────────────────┴───────────────────────────────┴────────────────────────────┘
 ```
 
@@ -111,92 +121,76 @@ Modern college placement cells and corporate technical recruitment drives requir
 
 ### 1. Candidate Student Portal
 
-The **Student Portal** equips developers and undergraduates with an end-to-end career acceleration hub:
-
 #### Proctored AI Mock Interviews & Anti-Gibberish Proctor
-- **Dynamic Contextual Synthesis**: Role- and resume-aware technical & HR interviews powered by LangGraph + Groq (`llama-3.3-70b-versatile`).
-- **Real-Time Per-Question Scoring**: Candidate responses receive instant dimensional AI evaluations (`score`, `correctness`, `clarity`, `relevance`, `efficiency`, `communication`, `problemSolving`) with actionable improvements.
-- **Strict Anti-Gibberish Proctor Guard (`answerValidator.js`)**: Non-answers, keyboard mashing (e.g. `"rteyshj"`, `"12345678"`, `"@#$%^&*"`), and off-topic nonsense are deterministically flagged and assigned **`0/100`** with zero pity points.
-- **Deterministic Overall Score Aggregation**: Overall score is strictly bounded and computed from question averages (`questions[].score`), eliminating hallucinated scores and preventing false praise on failed sessions.
-- **Session Recovery & Audit Report**: In-progress sessions can be safely resumed; completed sessions generate rich visual audit reports with radar charts and downloadable PDFs.
+- **Conversational LangGraph Multi-Turn Flow**: Students engage in realistic 6-question simulated technical or HR interviews tailored to target role and experience tier.
+- **Strict Anti-Gibberish Proctor Guard (`answerValidator.js`)**: Evaluates responses for minimum length, character entropy, vowel distribution, and repetition before invoking the LLM:
+  - Random keyboard mashing (`"asdfjkl"`, `"rteyshj"`, `"wzxcg"`), pure numeric/symbol sequences (`"12345678"`, `"@#$%^&*"`), or blank entries receive strictly **`0/100`** with zero pity points (`clarity: 0`, `relevance: 0`, `communication: 0`).
+  - Overall session score is mathematically bounded and coupled directly to question averages (`questions[].score`).
+  - Eliminates hallucinated positive strengths when candidate answers are invalid (averages < 20).
+- **Downloadable PDF Performance Reports**: Instant report generation detailing question-by-question candidate transcripts, model solutions, dimensional scores, and personalized mentor advice.
 
-#### Yugam Live Studio (Candidate View)
-- **P2P Encrypted Video & Audio**: Hardware-accelerated WebRTC media streams with mic/camera toggles and automatic connection recovery.
-- **Real-Time Room Presence**: Synchronized Socket.IO presence indicator flips immediately to **`Peer Connected`** when the trainer enters the room.
-- **Speech-to-Text Live Response**: Candidates can use browser Web Speech API dictation (`Listening...`) or typed responses that stream live to the trainer's workspace (<50ms sync).
-- **Shared Monaco Code Editor**: Collaborative code editor with multi-language syntax highlighting (`JavaScript`, `Python`, `Java`, `C++`), synchronized tab switching, and one-click execution in the isolated **CodeBox** sandbox.
+#### Yugam Live Studio (Candidate View) & Voice Transcription
+- **P2P WebRTC Video Stage**: Ultra-low latency video/audio streaming with remote trainer tile and fallback avatar states.
+- **Authoritative Socket Presence**: Top status bar indicates real-time connectivity (`Peer Connected` vs. `Waiting for Peer...`).
+- **Live Response Canvas with Speech-to-Text**: Candidate speech is captured via the Web Speech API and transcribed in real time into the live answer workspace, synchronized to faculty in under `50ms`.
+- **Shared Monaco Code Editor**: Real-time collaborative code editor with syntax highlighting and isolated sandboxed execution.
 
 #### Interactive Split-Screen Resume Studio (`/resume`)
-- **Interactive 6-Step Pill Stepper**: Clickable navigation (`1. Personal`, `2. Summary`, `3. Skills`, `4. Experience`, `5. Projects`, `6. Education`) with completed checkmarks and obsidian active pills.
-- **Live Resume Completeness Meter**: Dynamic percentage bar with missing field checklist.
-- **Interactive Skill Tag Builder**: Categorized skill chips with single-click removal and category assignments (`Frontend`, `Backend`, `Database`, `DevOps`, `Languages`).
-- **Live A4 ATS Preview & Accent Switcher**: Instant A4 canvas rendering with accent color themes (`Obsidian`, `Navy`, `Emerald`, `Royal Purple`, `Ruby`) and high-resolution PDF export.
+- **6-Step Interactive Stepper**: Personal Info, Professional Summary, Technical Skills, Work Experience, Projects, and Education.
+- **Completeness Meter & Skill Tag Builder**: Visual percentage gauge and interactive chip categorization (`Languages`, `Frameworks`, `Databases`, `Tools`).
+- **Live ATS A4 Preview**: Split-screen A4 canvas reflecting changes instantly with zoom controls (`75%`, `100%`, `125%`) and instant PDF export.
 
 #### ATS Resume Scorer Studio (`/scorer`)
-- **Split-Screen PDF Analyzer**: Upload PDF resumes (`%PDF-` verified) for automated extraction and benchmarking against 11+ industry role profiles.
-- **Required vs. Preferred Matrices**: Separates must-have competencies from bonus skills, calculating deterministic ATS scores out of 100.
-- **Interactive Skill Gap Filters**: Filter matched, missing, and recommended skills with a 1-click handoff to AI Roadmap Studio for instant skill upskilling.
+- **PDF Magic-Byte Verification**: Validates `%PDF-` file signature before parsing to neutralize disguised malicious binaries.
+- **Benchmark Role Calibration**: Scores resumes against target engineering roles (`Frontend`, `Backend`, `Full Stack`, `DevOps`, `Data Science`).
+- **Multidimensional Scoring Matrix**: Evaluates Content Relevance, Quantifiable Impact, ATS Keyword Density, Formatting, and Action Verbs.
 
 #### AI Career Roadmap Studio (`/roadmap`)
-- **LPA-Calibrated Learning Tracks**: Synthesizes modular curricula calibrated from 10 to 40 LPA packages.
-- **Interactive Milestone Progress**: Milestone completion checkboxes with dynamic overall progress percentage.
-- **Authoritative Resources & YouTube Masterclasses**: Curated tutorials retrieved via YouTube Data API v3 and official documentation links allowlisted to trusted domains.
-- **Saved Roadmap Drawer**: View, switch, and delete previously generated career paths.
+- **LPA-Calibrated Curriculums**: Target tier selection calibrated to industry compensation brackets (`6-10 LPA`, `10-18 LPA`, `18-35 LPA`, `35+ LPA`).
+- **Interactive Module Checklists**: Step-by-step topics with interactive progress checkoffs saved to user profile.
+- **Verified Official Resources**: Curated official documentation links and relevant tutorial videos fetched via the YouTube Data API v3.
 
 #### Verified 3-Tier Academic Background & Tasks
-- **Discrete Academic Records**: Class 10th %, Class 12th %, and B.Tech Current CGPA are maintained as three separate, verified indicators. Updates enter a `pendingAcademicUpdate` buffer requiring faculty verification.
-- **Coursework & Tasks**: Receive assignments with hard deadlines, submit code or written solutions, and review faculty marks and remarks.
+- **Discrete Metric Tracking**: Class 10th %, Class 12th %, and B.Tech CGPA maintained as distinct scales without misleading blending.
+- **Institutional Verification Queue**: Student academic edits route to `pendingAcademicUpdate` awaiting official faculty approval.
+- **Assignment Hub**: View deadlines, submit text or code solutions, and receive trainer evaluations.
 
 ---
 
 ### 2. Technical Faculty Trainer Portal
 
-The **Trainer Portal** empowers technical faculty to evaluate cohorts in real time and manage institutional training:
-
 #### Yugam Live Studio (Interviewer View) & Voice Dictate
-- **Live Question Composer with Voice Dictate**:
-  - Live question formulation with a dedicated **Voice Dictate** button (`FiMic` with animated pulsing red listening state) that transcribes spoken questions live into the input textarea.
-  - **1-Click Quick Starter Prompts**: Instant insertion of interview problem statements across `System Design`, `DSA / Complexity`, `Core Concepts`, and `Debugging Scenario`.
-  - Difficulty selection (`Easy`, `Medium`, `Hard`) and real-time push to candidate canvas via `workspace:question-push`.
-- **Live Candidate Observation**: Real-time view of candidate's dictated transcript and synchronized Monaco keystrokes.
-- **Automated Post-Session Groq Scoring**: Upon session conclusion, each asked question is concurrently evaluated by Groq LLM for technical accuracy and problem-solving, populating the official question transcript.
+- **Trainer Cockpit**: Simultaneous view of candidate video feed, active code editor, question history, and rubric workspace.
+- **Real-Time Voice Dictation**: Trainer can dictate interview questions or technical problem statements verbally via Speech-to-Text.
+- **1-Click Starter Prompts**: Instantly inject pre-formulated problem prompts (`System Design`, `DSA / Complexity`, `Core Concepts`, `Debugging Scenario`).
+- **Dynamic Question Push**: Push custom questions with difficulty badges (`Easy`, `Medium`, `Hard`) directly onto the candidate canvas.
 
 #### 6-Criteria Live Candidate Evaluation Rubric
-Trainers evaluate candidates across 6 weighted dimensions saved directly into the student performance record:
+- **Comprehensive Dimensional Scoring**:
+  1. `Problem Solving & Approach` (20%)
+  2. `Code Quality & Clean Architecture` (20%)
+  3. `Technical Knowledge & Fundamentals` (20%)
+  4. `Communication & Articulation` (15%)
+  5. `System Architecture & Scalability` (15%)
+  6. `Debugging & Edge-Case Handling` (10%)
+- **Session-Level Rubric Card**: Displays the calculated 6-dimensional aggregate alongside the overall evaluation score (`/100`).
 
-| Criteria | Weight | Focus Area |
-| :--- | :---: | :--- |
-| **Correctness** | **25%** | Solution accuracy, edge-case coverage, and logical soundness. |
-| **Problem Solving** | **25%** | Algorithmic approach, decomposition, and analytical strategy. |
-| **Efficiency & Complexity** | **15%** | Optimal time and space complexity ($O(N)$, $O(\log N)$, $O(1)$). |
-| **Clarity & Structure** | **15%** | Clean code formatting, naming conventions, and modularity. |
-| **Technical Relevance** | **10%** | Accurate application of language idioms, APIs, and frameworks. |
-| **Communication** | **10%** | Verbal articulation, approach explanation, and technical dialogue. |
+#### Live Interview Scheduling & Candidate Strengths/Improvements
+- **Targeted Scheduling**: Schedule individual candidate sessions or broadcast section-wide technical rounds (`targetType: SECTION`).
+- **Candidate Strengths & Areas for Improvement**: Tag key student strengths and weaknesses with automatic pending input flush on submission.
+- **Brevo Email Alerts**: Schedules automatically trigger branded notification emails with session timing, role, and guidance.
 
-- **Candidate Strengths & Areas for Improvement**: Interactive tag boards with automatic pending-input flushing upon submission.
-- **Confidential Faculty Private Notes (`trainerPrivateNotes`)**: Private faculty notes for institutional placement records. **Strictly stripped and redacted** whenever a student queries the interview report.
-
-#### Live Interview Scheduling & Session Explorer
-- **Session Scheduling**: Schedule AI mock or Live faculty interviews for individual students or full batch sections (e.g., `CS-A`, `IT-B`). College-scheduled sessions are **coin-exempt**.
-- **Session Explorer**: Inspect completed session reports, full question transcripts, submitted code, and dimensional rubrics.
-- **Clean Incomplete Session Handling**: Incomplete live interviews display as **`Not Completed`** with resume buttons cleanly removed, keeping the dashboard uncluttered.
+#### Session Explorer & Redacted Private Notes
+- **Detailed Session Explorer**: Complete candidate response history, submitted code solutions, and dimensional AI criteria scores.
+- **Confidential Faculty Notes**: `trainerPrivateNotes` field securely persisted for faculty/admin review and stripped from student payloads.
 
 ---
 
 ### 3. Placement Admin & Performance Directory
 
-The **Placement Admin Portal** provides comprehensive governance, analytics, and institutional student performance tracking:
-
-#### Student Performance & Placement Directory
-The cross-service performance directory (`/api/interview/students-directory`) aggregates institutional data from MongoDB collections (`User`, `Interview`, `LiveInterview`, `ScheduledInterview`):
-
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ 🎓 STUDENT PERFORMANCE & PLACEMENT DIRECTORY                        [ Export Excel ]  [ Export CSV ]    │
-├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Search: [ Harsh Sharma      ]   Section: [ Section E ▼ ]   Top N: [ 150 ]   CGPA: [ All ▼ ]            │
-├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Sort by: [ Avg. Score ] [ DSA ↓ ] [ Technical ] [ Communication ] [ Current CGPA ] [ Name ] [ Roll No ]│
+│ Student Performance & Placement Directory               [ 1 Enrolled ]     [ Export (.xlsx) ] [ Export (.csv) ]│
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Harsh Sharma  ● Verified              ROLL: 2315000916   SEC: E   INTERVIEW AVG: 65.2/100   CGPA: 7.83 │
 │ harshsharma257@gmail.com • B.Tech CSE                                                                  │
@@ -210,26 +204,103 @@ The cross-service performance directory (`/api/interview/students-directory`) ag
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+#### Student Performance & Placement Directory
+- **Unified Scorecard**: Centralized institutional directory displaying cumulative interview score, live trainer average, AI mock average, discrete 3-tier academic records, and verified enrollment data.
+- **Dynamic Metric Sorting**: Instant sorting across 7 performance vectors (`Avg. Interview Score`, `DSA Score`, `Technical Score`, `Communication Score`, `Current CGPA`, `Name`, `Roll Number`).
+
 #### AI Domain Competencies (DSA, Technical, Communication)
-- **Automatic Domain Classification**: Automatically classifies interview questions and rubric feedback into three standard engineering competencies:
-  - **DSA Score**: Algorithms, data structures, complexity analysis, and coding submissions.
-  - **Technical Score**: System design, databases, APIs, microservices, and core software engineering.
-  - **Communication Score**: Behavioral fluency, clarity, articulate expression, and HR dialogue.
-- **Visual Competency Cards**: Progress bars and score badges rendered inside each student's expandable scorecard.
+- **Automatic Domain Classification (`domainClassifier.js`)**: Evaluates interview questions and rubric feedback into three core industry dimensions:
+  - **DSA Score**: Algorithms, data structures, recursion, dynamic programming, complexity analysis, and submitted code.
+  - **Technical Score**: Architecture, databases, APIs, microservices, backend concurrency, and core software engineering concepts.
+  - **Communication Score**: Articulate expression, behavioral clarity, problem formulation, and structured explanation.
+- **Domain Indicators**: Rendered inside student directory scorecards, report exports, and candidate transcripts.
 
 #### Advanced Filtering, Top-N Slicing & Formula-Safe Exports (CWE-1236)
-- **Multi-Criteria Filter Bar**: Filter by section, course, semester, score range, CGPA range, and academic verification status.
-- **Top N Filtering**: Numeric `Top N (e.g. 150)` input allows sorting and slicing cohorts to the top N candidates across any active metric.
+- **Cohort Slicing & Top N Filtering**: Numeric `Top N (e.g. 150)` input allows placement coordinators to identify the top N candidates across any active metric or section.
 - **Formula-Sanitized Exports (`.xlsx` & `.csv`)**:
   - Automatically neutralizes dangerous spreadsheet formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`) by prefixing with a single quote (`'`).
-  - Appends UTF-8 Byte Order Mark (`\uFEFF`) for seamless Microsoft Excel compatibility.
-  - Appends **DSA Score**, **Technical Score**, and **Communication Score** columns alongside 3-tier academic records.
+  - Prepend UTF-8 Byte Order Mark (`\uFEFF`) for clean Excel compatibility across international systems.
+  - Includes candidate Roll Number, Name, Email, Section, 3-Tier Academics, Overall Score, Live Score, AI Score, **DSA Score**, **Technical Score**, and **Communication Score**.
 
 #### Institutional Governance, Bulk Provisioning & Last Admin Guard
-- **Academic Verification Queue**: Single-click approval or rejection of student CGPA and mark update requests.
+- **Academic Verification Queue**: Review and approve/reject student mark update requests with audit tracking.
 - **Bulk User Provisioning**: CSV/JSON batch onboarding of hundreds of students or faculty in a single operation.
 - **Last Admin Guard**: The platform strictly prohibits demoting or deactivating the last remaining administrator in an institution.
 - **Immutable Institutional AuditLog**: Every administrative action is permanently recorded with actor identity, action type, timestamp, and metadata.
+
+---
+
+## 📧 Automated Institutional Email Notifications (Brevo API)
+
+Yugam integrates an automated transactional email notification engine built directly into `backend/services/interview` utilizing the **Brevo Transactional Email HTTP API (`POST https://api.brevo.com/v3/smtp/email`)**.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Faculty as Faculty Trainer / Admin
+    participant ScheduleCtrl as schedule.controller.js
+    participant EmailSvc as email.service.js
+    participant Queue as MongoDB EmailNotification
+    participant Worker as Background Retry Worker
+    participant Brevo as Brevo HTTP API
+    actor Student as Candidate Student
+
+    Faculty->>ScheduleCtrl: POST /api/interview/schedule (Individual or Section)
+    ScheduleCtrl->>ScheduleCtrl: Persist ScheduledInterview records
+    ScheduleCtrl--)EmailSvc: enqueueInterviewNotifications() [Non-Blocking]
+    ScheduleCtrl-->>Faculty: HTTP 201 Created (Schedule Confirmed)
+
+    EmailSvc->>EmailSvc: Resolve student emails & college name from Auth Service
+    EmailSvc->>Queue: Atomic $setOnInsert with idempotencyKey
+    EmailSvc--)Worker: Trigger async processPendingNotifications() pass
+
+    Worker->>Queue: Atomically claim due pending jobs (status: sending)
+    loop For each job
+        Worker->>Brevo: POST /v3/smtp/email (api-key, sender, to, subject, html)
+        alt Success (201/200)
+            Brevo-->>Worker: HTTP 201 Created (messageId)
+            Worker->>Queue: Mark status = "sent", sentAt = now()
+            Brevo-->>Student: Deliver branded Obsidian & Emerald Email
+        else Failure / Rate Limit / Network
+            Brevo-->>Worker: HTTP Error / Timeout
+            Worker->>Queue: Mark status = "failed", backoff retry (1m / 5m / 15m)
+        end
+        Worker->>Worker: 150ms pacing delay between recipients
+    end
+```
+
+### Architecture & Transactional Event Flow
+
+- **Trigger Events**:
+  1. **`INTERVIEW_SCHEDULED`**: Dispatched immediately upon scheduling an individual or section-wide round.
+  2. **`INTERVIEW_RESCHEDULED`**: Dispatched automatically when session date/time is adjusted by faculty.
+  3. **`INTERVIEW_CANCELLED`**: Dispatched when session status is set to `cancelled` or deleted by authorized faculty/admin.
+- **Non-Blocking Architecture**: Scheduling HTTP requests never block or fail due to email delivery. `schedule.controller.js` enqueues notifications asynchronously and returns `201 Created` / `200 OK` instantly.
+
+### Branded Obsidian & Emerald Template Caliber
+
+- **Visual Caliber**: Templates match Yugam's White (`#F8F9FA`), Obsidian (`#111318`), and Emerald (`#10B981`) identity.
+- **Dual Format**: Sends responsive HTML alongside clean plaintext fallbacks for standard email clients.
+- **Timezone-Calibrated**: Timestamps formatted in `Asia/Kolkata` (`en-IN` standard with `IST` indicator).
+- **XSS Sanitization**: All candidate names, role titles, and trainer instructions are sanitized via `escapeHtml()`.
+
+### Persistent Queue, Idempotency & Bounded Retry
+
+- **Deterministic Idempotency**: Jobs are indexed by unique key `${scheduledInterviewId}:${notificationType}:${version}` using MongoDB `$setOnInsert` upserts, preventing duplicate sends.
+- **Atomic State Transitions**: Jobs transition atomically (`pending` -> `sending` -> `sent` / `failed`) using `findOneAndUpdate({ returnDocument: 'after' })`.
+- **Bounded Exponential Backoff**: Failed deliveries retry on exponential intervals:
+  - Attempt 1 failure: Retry in **`1 minute`**
+  - Attempt 2 failure: Retry in **`5 minutes`**
+  - Attempt 3 failure: Retry in **`15 minutes`**
+  - Exceeding `maxAttempts: 3` halts further dispatch and records the error for auditing.
+- **Rate Limit Protection**: Employs a `150ms` pacing delay between batch deliveries to respect API limits.
+- **Recurring Worker**: An unref'd 60-second background interval (`setInterval`) retries pending or recovering notifications automatically.
+
+### Multi-Tenant Student Email & College Resolution
+
+- **Authoritative Directory Lookup**: Queries Auth Service (`/internal/institution/students`) filtered strictly by `institutionId`, rejecting foreign students to protect tenant boundaries.
+- **College Name Resolution**: Extracts the student's actual college name (`GLA University Mathura`) from their profile, replacing raw tenant slugs (`DEFAULT_COLLEGE`) with graceful fallback to `"Institutional Placement Cell"`.
+- **Resilient Fallback**: Falls back to `schedule.studentEmail` if Auth Service is temporarily restarting or unmocked.
 
 ---
 
@@ -256,9 +327,14 @@ flowchart TB
     subgraph Services ["Backend Microservices Network"]
         AuthSvc["Auth Service :8001<br/>RBAC, Academic Queue, AuditLog & Provisioning"]
         ResumeSvc["Resume Service :8002<br/>PDF Magic-Byte, LangChain Extraction & ATS Scorer"]
-        InterviewSvc["Interview & Live Studio :8003<br/>WebRTC Signaling, Socket.IO, LangGraph & Directory"]
+        InterviewSvc["Interview & Live Studio :8003<br/>WebRTC Signaling, Socket.IO, Brevo Email, LangGraph & Directory"]
         RoadmapSvc["Roadmap Service :8004<br/>LangGraph Career Paths & YouTube API v3"]
         BillingSvc["Billing Service :8005<br/>Razorpay Checkout & Atomic Ledger"]
+    end
+
+    subgraph ExternalServices ["External Cloud Services"]
+        BrevoAPI["Brevo Transactional Email API<br/>(POST /v3/smtp/email)"]
+        GroqCloud["Groq Cloud API<br/>(Llama 3.3 70B Versatile)"]
     end
 
     subgraph ExecutionLayer ["Isolated Execution Sandbox"]
@@ -279,6 +355,8 @@ flowchart TB
     GW -->|"/api/roadmap/* [x-user-id, x-user-role, x-institution-id]"| RoadmapSvc
     GW -->|"/api/billing/* [x-user-id, x-user-role, x-institution-id]"| BillingSvc
 
+    InterviewSvc -->|"Transactional Email"| BrevoAPI
+    InterviewSvc -->|"LLM Evaluation & Feedback"| GroqCloud
     InterviewSvc -->|"Code Run / Poll"| ExecutionEngine
     ResumeSvc -.->|"Internal Coin Deduct / Refund"| AuthSvc
     InterviewSvc -.->|"Internal Coin Deduct / Refund / Audit"| AuthSvc
@@ -300,7 +378,7 @@ flowchart TB
 | **API Gateway** | `8000` | Express 5, `http-proxy-middleware` | Ingress security, header sanitization, Redis session auth, Socket.IO upgrade |
 | **Auth & Governance** | `8001` | Express 5, Mongoose, Firebase | User RBAC, 3-tier academic queue, bulk provisioning, immutable audit logs |
 | **Resume Intelligence** | `8002` | Express 5, LangChain, Groq | PDF magic-byte validation, structured extraction, deterministic ATS scoring |
-| **Interview & Live Studio** | `8003` | Express 5, Socket.IO, LangGraph | WebRTC room discovery, Monaco sync, AI mock engine, Student Directory |
+| **Interview & Live Studio** | `8003` | Express 5, Socket.IO, Brevo, LangGraph | WebRTC room signaling, Monaco sync, Brevo email queue, Student Directory |
 | **Roadmap & Resource** | `8004` | Express 5, LangGraph, YouTube API | LPA-calibrated learning milestones, official docs, tutorial video discovery |
 | **Billing & Wallet** | `8005` | Express 5, Razorpay SDK | Virtual coin wallet, Razorpay payment verification, idempotent settlement |
 | **CodeBox Sandbox** | `3000` | Node.js, Docker isolated runner | Multi-language code execution (`JS`, `Python`, `Java`, `C++`) with rate limits |
@@ -322,7 +400,7 @@ Incoming Request -> [ Strip x-user-* & x-gateway-secret ] -> [ Verify session:<i
 3. **Decoration**: Injects server-verified session headers before proxying requests downstream:
    - `x-user-id`: Verified MongoDB ObjectId.
    - `x-user-role`: `"student"` | `"trainer"` | `"admin"`.
-   - `x-institution-id`: `"DEFAULT_COLLEGE"` | `"GLA_UNIVERSITY"`.
+   - `x-institution-id`: `"GLA_UNIVERSITY"` | `"DEFAULT_COLLEGE"`.
    - `x-user-name`: Full user display name.
    - `x-gateway-secret`: Pre-shared symmetric token preventing direct bypass.
 4. **Role Enforcement (`requireRole`)**: Downstream microservices enforce endpoint access rules, returning `403 Forbidden` on unauthorized access attempts.
@@ -349,24 +427,11 @@ stateDiagram-v2
     AntiGibberishCheck --> ZeroScore: Gibberish / Empty / Masked Input
     AntiGibberishCheck --> LLMEval: Genuine Response
 
-    ZeroScore --> FeedbackRouter: Score = 0 (No pity points)
-    LLMEval --> FeedbackRouter: Dimensional LLM Evaluation
-
-    state FeedbackRouter <<choice>>
-    FeedbackRouter --> summaryAgent: completed == true (Last question answered)
-    FeedbackRouter --> END: completed == false (Next question ready)
-
-    summaryAgent --> END: Compute deterministic overall score & domain metrics
-    END --> [*]
-```
-
-#### 2. Roadmap Generation Pipeline
-
-```mermaid
-flowchart LR
-    Start(["__start__"]) --> RoadmapAgent["Roadmap Agent<br/>(Synthesizes Modules, Timelines & Level)"]
-    RoadmapAgent --> ResourceAgent["Resource Agent<br/>(Fetches Official Docs & YouTube API Tutorials)"]
-    ResourceAgent --> EndNode(["__end__"])
+    ZeroScore --> scoreAggregator: Award 0/100, zero pity points
+    LLMEval --> feedbackNode: Evaluate clarity, relevance, code & communication
+    feedbackNode --> scoreAggregator: Bound overall score to question averages
+    scoreAggregator --> summaryNode: Generate mentor advice (no fake strengths)
+    summaryNode --> END
 ```
 
 ---
@@ -374,72 +439,31 @@ flowchart LR
 ## 🔒 Security, Concurrency & Data Integrity Highlights
 
 ### 1. 3-Tier Institutional RBAC & Tenant Isolation
-- **Role Scoping**: Endpoints enforce role rules (`student`, `trainer`, `admin`). Trainers and Admins cannot create AI mock interviews; Students cannot access faculty directories or scheduling controls.
-- **Suspended Account Enforcement**: Deactivated accounts are rejected at the session layer.
-- **Last Admin Guard**: Prevents an institution from removing or demoting its last remaining administrator.
-- **Tenant Partitioning**: Every database query verifies `institutionId` matching the caller's session.
+- **Role Isolation**: Strict boundaries separate Student, Trainer, and Admin capabilities.
+- **Tenant Scoping**: All queries filter by `institutionId`, preventing cross-college data access.
+- **Role-Scoped UI Routing**: Interview creation buttons and administrative directories are role-guarded at both frontend route and backend middleware levels.
 
 ### 2. Financial Atomicity & Idempotency
-- **MongoDB Replica-Set Transactions (`withTransaction`)**: Coin top-ups, feature deductions, and auto-refunds run inside atomic MongoDB sessions.
-- **Verified Debit Linkage for Refunds**: If an AI interview fails during generation, the system verifies the corresponding debit record before issuing an atomic refund.
-- **Server-Side Pricing Allowlist**: Hardcoded `FEATURE_COIN_COSTS` map prevents client-supplied fee tampering.
-- **Idempotency Keys**: All ledger transactions record unique idempotency keys to prevent double spending.
+- **ACID Double-Entry Transactions**: Coin deductions and top-ups execute inside MongoDB `withTransaction` blocks.
+- **Unique Idempotency Keys**: Feature purchases and coin settlements are keyed to prevent duplicate deductions during network retries.
 
 ### 3. AI Evaluation Lease Fencing & Lock Ownership Tokens
-- **Unique Evaluation Token**: When an answer is submitted, the system atomically reserves the question with a unique `evaluationToken = crypto.randomUUID()`.
-- **90-Second Expiring Lease Window**: Accommodates multi-step Groq LLM feedback without lease starvation.
-- **Token Ownership Verification**: Stale or expired requests cannot overwrite newer active evaluations.
+- **Atomic Lease Fencing**: When a student submits an answer, the session is locked using an atomic `evaluationToken` with a 90-second expiration.
+- **Concurrent Guard**: Concurrent submissions return `409 Conflict`, preventing double evaluation or race conditions.
 
-### 4. Socket.IO & Export Hardening
-- **Authenticated Handshakes**: Socket connections must provide a valid Redis session cookie or token.
-- **Event-Level RBAC**: Only authorized trainers can push questions; only assigned students can update answers.
-- **Array Bounds Checking**: Validates `questionIndex` against actual room question counts before DB writes.
-- **Confidential Note Redaction**: `trainerPrivateNotes` are strictly redacted from student responses.
-- **CWE-1236 Formula Sanitization**: All exported `.xlsx` and `.csv` files neutralize spreadsheet injection payloads.
+### 4. Socket.IO Presence & Peer State Tracking
+- **Authoritative Server Room State**: Tracks peer connection states via server-side room participant maps (`room:presence`).
+- **Resilient Fallback**: Gracefully detects peer connectivity across single-machine testing tabs, restrictive NATs, and active WebRTC media negotiations.
 
----
-
-## 🔬 Microservices Deep-Dive
-
-### 1. API Gateway (Port 8000)
-- **HTTP Reverse Proxy**: Routes traffic to microservices (`/api/auth`, `/api/resume`, `/api/interview`, `/api/roadmap`, `/api/billing`).
-- **WebSocket Upgrade**: Transparently proxies `/socket.io` to Interview Service on `:8003`.
-- **Header Injection Defense**: Deletes client `x-user-*` headers and decorates trusted session metadata.
-
-### 2. Authentication & Governance Service (Port 8001)
-- **Firebase Google OAuth**: Validates Firebase ID tokens and establishes 7-day Redis sessions.
-- **Academic Verification**: Holds mark changes in `pendingAcademicUpdate` until Admin/Trainer approval.
-- **Bulk User Provisioning**: Parses CSV/JSON batches to create student and trainer accounts.
-- **AuditLog**: Appends immutable records for administrative actions.
-
-### 3. Resume Intelligence Service (Port 8002)
-- **PDF Magic-Byte Validation**: Validates the first 5 bytes for `%PDF-`, rejecting spoofed files.
-- **LangChain Structured Parsing**: Converts raw resume text into structured candidate schemas.
-- **ATS Role Matcher**: Evaluates candidate skills against 11+ industry role profiles.
-
-### 4. Interview & Live Studio Service (Port 8003)
-- **Socket.IO Live Room Server**: Handles WebRTC room discovery, SDP/ICE signaling, and Monaco code synchronization.
-- **Student Performance Directory**: Aggregates interview averages, 3-tier academic badges, and domain competency scores.
-- **LangGraph AI Engine**: Coordinates 6-question Technical and HR mock interviews with anti-gibberish proctoring.
-- **Interview Scheduling**: Supports individual and section-wide scheduling for AI and Live sessions.
-
-### 5. Roadmap & Resource Service (Port 8004)
-- **Two-Stage Pipeline**: Synthesizes modular curricula and queries the YouTube Data API v3 for tutorials.
-- **HTTPS & Domain Validation**: Restricts documentation links to an allowlist of trusted developer portals.
-
-### 6. Billing & Subscription Service (Port 8005)
-- **Razorpay Checkout**: Generates orders and verifies HMAC-SHA256 signatures before crediting coins.
-- **Idempotent State Machine**: Transitions orders through `created` → `processing` → `paid`.
-
-### 7. Isolated Code Execution Engine (Port 3000)
-- **Supported Languages**: JavaScript (Node.js 18), Python (3.8), Java (OpenJDK 17), and C++ (GCC 9).
-- **Security**: Requires `CODEBOX_AUTH_TOKEN`, limits users to 15 runs/minute, and binds execution tokens to users.
+### 5. PII Redaction & Modernized Database Driver
+- **Sanitized Logging**: Dotenv banners suppressed via `{ quiet: true }`. Raw student email addresses, ObjectIds, and auth tokens are stripped from server logs.
+- **Modern Mongoose Driver**: Replaced deprecated `{ new: true }` with `{ returnDocument: 'after' }` across all `findOneAndUpdate` operations.
 
 ---
 
-## 🧪 Automated Testing Suite (109 Tests / 40 Suites)
+## 🔬 Automated Testing Suite (130 Tests / 45 Suites)
 
-Yugam includes comprehensive unit, integration, and security regression tests:
+The backend microservices ecosystem includes an automated native test suite (`node:test` + `node:assert/strict`) verifying security, authorization, anti-gibberish proctoring, email notifications, and data integrity:
 
 ```bash
 npm test --prefix backend
@@ -501,10 +525,48 @@ ok 35 - 22. Real-Time Room Presence & Peer State Tracking
   ok 4 - Export headers and rows include DSA, Technical, and Communication columns
 ok 36 - 23. AI Domain Competency Evaluation, Top-N Slicing & Directory Export Validation
 
-1..40
-# tests 109
-# suites 40
-# pass 109
+...
+
+# Subtest: 24. Email Template Rendering & HTML Sanitization (XSS Prevention)
+  ok 1 - escapeHtml neutralizes dangerous script tags, quotes, ampersands, and angle brackets
+  ok 2 - formatDateTime formats dates correctly in specified timeZone (Asia/Kolkata default)
+  ok 3 - renderInterviewNotificationEmail: INTERVIEW_SCHEDULED renders branded Obsidian & Emerald email
+  ok 4 - renderInterviewNotificationEmail: INTERVIEW_RESCHEDULED renders updated schedule and subject
+  ok 5 - renderInterviewNotificationEmail: INTERVIEW_CANCELLED renders cancellation notice without join urgency
+ok 37 - 24. Email Template Rendering & HTML Sanitization (XSS Prevention)
+
+# Subtest: 25. Brevo HTTP API Dispatch Validation (sendViaBrevo)
+  ok 1 - Rejects missing or invalid recipient email addresses
+  ok 2 - Gracefully skips dispatch when EMAIL_NOTIFICATIONS_ENABLED is not 'true'
+  ok 3 - Gracefully skips dispatch when BREVO_API_KEY is missing
+  ok 4 - Dispatches HTTP POST to Brevo API with valid payload and headers
+  ok 5 - Throws descriptive error when Brevo API responds with HTTP 4xx or 5xx
+ok 38 - 25. Brevo HTTP API Dispatch Validation (sendViaBrevo)
+
+# Subtest: 26. Multi-Tenant Institution Isolation & Student Email Verification
+  ok 1 - Filters out students belonging to foreign institutions
+  ok 2 - Generates deterministic idempotency keys per schedule, type, and version
+  ok 3 - Section scheduling fans out into independent notifications per student in section
+ok 39 - 26. Multi-Tenant Institution Isolation & Student Email Verification
+
+# Subtest: 27. Non-Blocking Scheduling Guarantee & Exponential Backoff Retry Logic
+  ok 1 - Non-blocking guarantee: Controller schedule flow catches email notification errors without failing HTTP 201
+  ok 2 - Exponential backoff retry calculation: 1m, 5m, 15m intervals with max 3 attempts
+  ok 3 - Atomic state transition: pending -> sending -> sent marks providerMessageId and sentAt
+ok 40 - 27. Non-Blocking Scheduling Guarantee & Exponential Backoff Retry Logic
+
+# Subtest: 28. Diagnostic Delivery Logging & Student Email Resolution Fallback
+  ok 1 - Logs '[EmailService] Skipped' when disabled or BREVO_API_KEY is unset without leaking secrets
+  ok 2 - Logs '[EmailService] Delivery failed with HTTP' and sanitizes raw PII from console.error
+  ok 3 - Renders student's actual college name and replaces DEFAULT_COLLEGE in email table and footer
+  ok 4 - Falls back gracefully to 'Institutional Placement Cell' when college name is missing or raw slug
+  ok 5 - Student email resolution falls back cleanly to schedule.studentEmail if Auth Service has no records
+ok 41 - 28. Diagnostic Delivery Logging & Student Email Resolution Fallback
+
+1..45
+# tests 130
+# suites 45
+# pass 130
 # fail 0
 ```
 
@@ -512,10 +574,10 @@ ok 36 - 23. AI Domain Competency Evaluation, Top-N Slicing & Directory Export Va
 
 ## 💻 Frontend Client & Design System
 
-The frontend is built with **React 19**, **Vite 8**, and **Tailwind CSS v4**:
+Built on **React 19**, **Vite 8**, and **Tailwind CSS v4**:
 
 - **White & Obsidian Caliber**: Clean `#F8F9FA` canvas background paired with high-contrast `#111318` cards and vibrant pill badges.
-- **Dynamic Institutional Branding**: Automatically resolves and renders college identities across all portal headers and reports.
+- **Dynamic Institutional Branding**: Automatically resolves and renders college identities across all portal headers, student cards, and reports.
 - **Speech Dictation & Synthesis**: Integrated browser Web Speech API for voice answer transcription and trainer question dictation.
 - **Monaco Code Sandbox**: Embedded Monaco Editor with multi-language execution and terminal output.
 
@@ -558,15 +620,15 @@ The frontend is built with **React 19**, **Vite 8**, and **Tailwind CSS v4**:
 | `GET` | `/students-directory` | Fetch paginated student directory with averages & domain scores | `trainer`, `admin` |
 | `GET` | `/students-directory/export` | Export directory as formula-safe `.xlsx` or `.csv` (CWE-1236 hardened) | `trainer`, `admin` |
 
-### Interview Scheduling (`/api/interview`)
+### Interview Scheduling & Email Dispatch (`/api/interview`)
 
 | Method | Endpoint | Description | Allowed Roles |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/schedule` | Schedule an AI or Live interview (Individual or Batch) | `trainer`, `admin` |
+| `POST` | `/schedule` | Schedule an AI or Live interview (Individual or Section) & enqueue email | `trainer`, `admin` |
 | `GET` | `/schedule` | Fetch scheduled interviews for current user or institution | `student`, `trainer`, `admin` |
 | `GET` | `/schedule/:id` | Fetch specific schedule details | `student`, `trainer`, `admin` |
-| `PATCH`| `/schedule/:id/status` | Update scheduled session status | `trainer`, `admin` |
-| `DELETE`| `/schedule/:id` | Delete a scheduled interview session | `trainer`, `admin` |
+| `PATCH`| `/schedule/:id/status` | Update scheduled session status (triggers reschedule/cancellation email) | `trainer`, `admin` |
+| `DELETE`| `/schedule/:id` | Delete a scheduled interview session (triggers cancellation email) | `trainer`, `admin` |
 
 ### Live Video Interview Studio (`/api/interview`)
 
@@ -628,7 +690,8 @@ The frontend is built with **React 19**, **Vite 8**, and **Tailwind CSS v4**:
 
 ### MongoDB Collections
 - `User`: User profiles, Firebase UIDs, emails, roles (`student`, `trainer`, `admin`), `institutionId`, verified academia, and `pendingAcademicUpdate`.
-- `ScheduledInterview`: Scheduled AI and Live sessions with target type (`INDIVIDUAL` vs `SECTION`), assigned trainer, candidate, and date/time.
+- `ScheduledInterview`: Scheduled AI and Live sessions with target type (`INDIVIDUAL` vs `SECTION`), assigned trainer, candidate, college name, and date/time.
+- `EmailNotification`: Persistent transactional email queue tracking `idempotencyKey`, recipient, notification type, status, retry counts, and Brevo message IDs.
 - `LiveInterview`: Live room sessions, WebRTC signaling metadata, dynamic questions pushed, 6-criteria rubric scores, strengths/weaknesses, summary feedback, domain scores, and confidential `trainerPrivateNotes`.
 - `Task`: Assignment definitions, target courses, deadlines, and submission records with grades and feedback.
 - `AuditLog`: Immutable audit trail documenting administrative role updates, academic approvals, bulk user imports, and directory exports.
@@ -674,6 +737,13 @@ RAZORPAY_KEY_SECRET="jrdE..."
 CODEBOX_URL="http://host.docker.internal:3000"
 CODEBOX_AUTH_TOKEN="your_codebox_token"
 FRONTEND_URL="http://localhost:5173"
+
+# Brevo Transactional Email Notifications
+EMAIL_NOTIFICATIONS_ENABLED=true
+BREVO_API_KEY="xkeysib-..."
+EMAIL_FROM_ADDRESS="notifications@yugam.io"
+EMAIL_FROM_NAME="Yugam"
+EMAIL_TIMEZONE="Asia/Kolkata"
 ```
 
 ### `frontend/.env`
@@ -693,7 +763,7 @@ VITE_RAZORPAY_KEY_ID="rzp_test_..."
 - [Node.js](https://nodejs.org/) `>= 20.x`
 - [Docker Desktop](https://www.docker.com/) (for Redis and containerized microservices)
 - [Git](https://git-scm.com/)
-- Active API keys for **Groq Cloud**, **Firebase Admin**, **YouTube Data API v3**, and **Razorpay** (Test Mode).
+- Active API keys for **Groq Cloud**, **Firebase Admin**, **Brevo** (for email alerts), **YouTube Data API v3**, and **Razorpay** (Test Mode).
 
 ---
 
@@ -750,14 +820,14 @@ docker compose -f backend/docker-compose.yml logs -f
 
 ## 🚦 CI/CD Pipeline & Syntax Verification
 
-The repository includes an automated GitHub Actions pipeline (`.github/workflows/ci.yml`) enforcing two mandatory verification gates:
+The repository enforces strict verification gates across both backend and frontend:
 
 ### 1. Backend Syntax & Security Regression Gate
 ```bash
-# 1. Syntax check all 95 backend JavaScript files
+# 1. Syntax check all backend JavaScript files
 find backend -name "*.js" -not -path "*/node_modules/*" -exec node --check {} +
 
-# 2. Run full backend test suite (109 tests / 40 suites)
+# 2. Run full backend test suite (130 tests / 45 suites)
 npm test --prefix backend
 ```
 
