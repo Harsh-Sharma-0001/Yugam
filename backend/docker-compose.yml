@@ -107,6 +107,12 @@ services:
       - CODEBOX_AUTH_TOKEN=${CODEBOX_AUTH_TOKEN:-}
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:?}
       - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:?}
+      - EMAIL_NOTIFICATIONS_ENABLED=${EMAIL_NOTIFICATIONS_ENABLED:-true}
+      - BREVO_API_KEY=${BREVO_API_KEY:-}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-notifications@yugam.io}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Yugam}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - EMAIL_TIMEZONE=${EMAIL_TIMEZONE:-Asia/Kolkata}
     depends_on:
       redis:
         condition: service_healthy

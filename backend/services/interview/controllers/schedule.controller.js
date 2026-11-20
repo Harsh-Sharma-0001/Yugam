@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import ScheduledInterview from "../models/scheduledInterview.model.js";
+import { enqueueInterviewNotifications } from "../services/email.service.js";
 
 /**
  * Helper to fetch institution students from auth service
@@ -103,6 +104,7 @@ export const scheduleInterview = async (req, res) => {
         mode,
         studentId: s._id,
         studentName: s.name || "Student",
+        studentEmail: s.email || "",
         studentRollNumber: s.profile?.rollNumber || "",
         section: s.profile?.section || targetSection,
         trainerId,
@@ -117,6 +119,15 @@ export const scheduleInterview = async (req, res) => {
       }));
 
       const createdRecords = await ScheduledInterview.insertMany(recordsToInsert);
+
+      // Asynchronously enqueue transactional email notifications for section students
+      enqueueInterviewNotifications({
+        schedules: createdRecords,
+        type: "INTERVIEW_SCHEDULED",
+        version: 1,
+      }).catch((err) => {
+        console.error("Failed to enqueue section interview notifications:", err.message);
+      });
 
       return res.status(201).json({
         success: true,
@@ -158,6 +169,7 @@ export const scheduleInterview = async (req, res) => {
 
     const finalStudentId = resolvedStudent ? resolvedStudent._id : rawInput;
     const finalStudentName = (resolvedStudent?.name || studentName || "Student").trim();
+    const finalStudentEmail = (resolvedStudent?.email || "").trim();
     const finalStudentRoll = (resolvedStudent?.profile?.rollNumber || studentRollNumber || "").trim();
     const finalSection = (resolvedStudent?.profile?.section || section || "").trim();
 
@@ -166,6 +178,7 @@ export const scheduleInterview = async (req, res) => {
       mode,
       studentId: finalStudentId,
       studentName: finalStudentName,
+      studentEmail: finalStudentEmail,
       studentRollNumber: finalStudentRoll,
       section: finalSection,
       trainerId,
@@ -177,6 +190,15 @@ export const scheduleInterview = async (req, res) => {
       durationMinutes: Number(durationMinutes) || 45,
       instructions: instructions.trim(),
       status: "scheduled",
+    });
+
+    // Asynchronously enqueue transactional email notification
+    enqueueInterviewNotifications({
+      schedules: [scheduled],
+      type: "INTERVIEW_SCHEDULED",
+      version: 1,
+    }).catch((err) => {
+      console.error("Failed to enqueue individual interview notification:", err.message);
     });
 
     return res.status(201).json({
@@ -275,9 +297,15 @@ export const updateScheduleStatus = async (req, res) => {
       return res.status(403).json({ success: false, message: "Forbidden: Cross-institution action denied." });
     }
 
+    let isStatusChangedToCancelled = false;
+    let isRescheduled = false;
+
     if (status) {
       if (!["scheduled", "in-progress", "completed", "cancelled"].includes(status)) {
         return res.status(400).json({ success: false, message: `Invalid status: ${status}` });
+      }
+      if (status === "cancelled" && scheduled.status !== "cancelled") {
+        isStatusChangedToCancelled = true;
       }
       scheduled.status = status;
     }
@@ -285,6 +313,9 @@ export const updateScheduleStatus = async (req, res) => {
     if (scheduledAt) {
       const parsedDate = new Date(scheduledAt);
       if (!isNaN(parsedDate.getTime())) {
+        if (scheduled.scheduledAt && parsedDate.getTime() !== new Date(scheduled.scheduledAt).getTime()) {
+          isRescheduled = true;
+        }
         scheduled.scheduledAt = parsedDate;
       }
     }
@@ -294,6 +325,25 @@ export const updateScheduleStatus = async (req, res) => {
     }
 
     await scheduled.save();
+
+    // Trigger email notification if cancelled or rescheduled
+    if (isStatusChangedToCancelled) {
+      enqueueInterviewNotifications({
+        schedules: [scheduled],
+        type: "INTERVIEW_CANCELLED",
+        version: Date.now(),
+      }).catch((err) => {
+        console.error("Failed to enqueue cancellation notification:", err.message);
+      });
+    } else if (isRescheduled && scheduled.status !== "cancelled") {
+      enqueueInterviewNotifications({
+        schedules: [scheduled],
+        type: "INTERVIEW_RESCHEDULED",
+        version: Date.now(),
+      }).catch((err) => {
+        console.error("Failed to enqueue reschedule notification:", err.message);
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -389,6 +439,15 @@ export const deleteScheduledInterview = async (req, res) => {
     }
 
     await ScheduledInterview.findByIdAndDelete(id);
+
+    // Asynchronously notify candidate of cancellation on deletion
+    enqueueInterviewNotifications({
+      schedules: [scheduled],
+      type: "INTERVIEW_CANCELLED",
+      version: Date.now(),
+    }).catch((err) => {
+      console.error("Failed to enqueue deletion cancellation notification:", err.message);
+    });
 
     // Asynchronously log to auth service AuditLog
     const authServiceUrl = process.env.AUTH_SERVICE_URL || "http://localhost:8001";

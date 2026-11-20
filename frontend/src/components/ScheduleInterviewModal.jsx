@@ -163,7 +163,11 @@ function ScheduleInterviewModal({
 
       const res = await scheduleInterview(payload);
       if (res?.success) {
-        setSuccessMsg(res.message || 'Interview scheduled successfully!');
+        setSuccessMsg(
+          res.message
+            ? `${res.message} Email notifications are being sent to student(s).`
+            : 'Interview scheduled! Email notifications are being sent to student(s).'
+        );
         if (onScheduled) onScheduled();
         setTimeout(() => {
           onClose();

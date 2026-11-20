@@ -7,6 +7,7 @@ import interviewRouter from "./routes/interview.route.js";
 import { verifyGatewayOrigin } from "./middleware/gatewayAuth.js";
 import redis from "../../shared/redis/redis.js";
 import { initLiveRoomSocket } from "./socket/liveRoom.socket.js";
+import { processPendingNotifications } from "./services/email.service.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -51,6 +52,21 @@ const startServer = async () => {
 
         server.listen(PORT, () => {
             console.log(`Interview-service (HTTP + Socket.IO) Started on ${PORT}`);
+
+            // Start background worker for pending & retry email notifications
+            if (process.env.NODE_ENV !== "test") {
+                processPendingNotifications().catch((err) => {
+                    console.warn("Startup email worker pass warning:", err.message);
+                });
+                const emailWorkerInterval = setInterval(async () => {
+                    try {
+                        await processPendingNotifications();
+                    } catch (err) {
+                        console.warn("Background email notification worker warning:", err.message);
+                    }
+                }, 60_000);
+                emailWorkerInterval.unref();
+            }
         });
     } catch (error) {
         console.error("Interview service startup failed:", error);
